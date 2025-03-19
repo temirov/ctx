@@ -1,31 +1,41 @@
+// Package config loads and parses the .contentignore file into a slice of patterns.
 package config
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"strings"
 )
 
 // LoadContentIgnore reads the .contentignore file (if it exists) and returns a slice of ignore patterns.
 // Blank lines and lines beginning with '#' are skipped.
-func LoadContentIgnore(path string) ([]string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
+//
+// #nosec G304: filePath is intentionally user-provided, as we must open .contentignore in that directory.
+func LoadContentIgnore(filePath string) ([]string, error) {
+	fileHandle, openError := os.Open(filePath)
+	if openError != nil {
+		return nil, openError
 	}
-	defer file.Close()
+	defer func() {
+		closeErr := fileHandle.Close()
+		if closeErr != nil {
+			// We won't fail the entire operation for a close error, but we log it.
+			fmt.Fprintf(os.Stderr, "Warning: failed to close %s: %v\n", filePath, closeErr)
+		}
+	}()
 
 	var patterns []string
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(fileHandle)
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
+		lineValue := strings.TrimSpace(scanner.Text())
+		if lineValue == "" || strings.HasPrefix(lineValue, "#") {
 			continue
 		}
-		patterns = append(patterns, line)
+		patterns = append(patterns, lineValue)
 	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
+	if scanError := scanner.Err(); scanError != nil {
+		return nil, scanError
 	}
 	return patterns, nil
 }

@@ -1,3 +1,5 @@
+// Package commands contains the CLI commands for the 'content' tool,
+// including logic for printing a directory tree with .contentignore exclusions.
 package commands
 
 import (
@@ -5,11 +7,11 @@ import (
 	"os"
 	"path/filepath"
 
+	//nolint:depguard
 	"github.com/temirov/content/utils"
 )
 
-// TreeCommand prints a directory tree for the given rootDir,
-// applying ignore patterns (using full Git‑ignore semantics).
+// TreeCommand prints a directory tree for the given rootDir, applying ignore patterns.
 func TreeCommand(rootDir string, ignorePatterns []string) error {
 	fmt.Printf("Directory tree for: %s\n", rootDir)
 	return printTree(rootDir, "", ignorePatterns, true)
@@ -18,33 +20,41 @@ func TreeCommand(rootDir string, ignorePatterns []string) error {
 // printTree recursively prints the directory tree with proper indentation.
 // The isRoot flag indicates whether the current level is the root (affecting -e flag logic).
 func printTree(currentPath, prefix string, ignorePatterns []string, isRoot bool) error {
-	entries, err := os.ReadDir(currentPath)
-	if err != nil {
-		return err
+	directoryEntries, readError := os.ReadDir(currentPath)
+	if readError != nil {
+		return readError
 	}
 
-	var filteredEntries []os.DirEntry
-	for _, entry := range entries {
-		fullPath := filepath.Join(currentPath, entry.Name())
-		if utils.ShouldIgnore(entry, fullPath, ignorePatterns, isRoot) {
+	// Preallocate with capacity=length for performance & linter
+	filteredEntries := make([]os.DirEntry, 0, len(directoryEntries))
+
+	for _, directoryEntry := range directoryEntries {
+		if utils.ShouldIgnore(directoryEntry, ignorePatterns, isRoot) {
 			continue
 		}
-		filteredEntries = append(filteredEntries, entry)
+		filteredEntries = append(filteredEntries, directoryEntry)
 	}
 
-	for i, entry := range filteredEntries {
-		isLast := i == len(filteredEntries)-1
+	for entryIndex, directoryEntry := range filteredEntries {
+		isLast := entryIndex == len(filteredEntries)-1
+		if isLast {
+			fmt.Printf("%s└── %s\n", prefix, directoryEntry.Name())
+		} else {
+			fmt.Printf("%s├── %s\n", prefix, directoryEntry.Name())
+		}
+
 		var newPrefix string
 		if isLast {
-			fmt.Printf("%s└── %s\n", prefix, entry.Name())
 			newPrefix = prefix + "    "
 		} else {
-			fmt.Printf("%s├── %s\n", prefix, entry.Name())
 			newPrefix = prefix + "│   "
 		}
-		if entry.IsDir() {
-			if err := printTree(filepath.Join(currentPath, entry.Name()), newPrefix, ignorePatterns, false); err != nil {
-				return err
+
+		if directoryEntry.IsDir() {
+			childPath := filepath.Join(currentPath, directoryEntry.Name())
+			callError := printTree(childPath, newPrefix, ignorePatterns, false)
+			if callError != nil {
+				return callError
 			}
 		}
 	}
