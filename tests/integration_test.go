@@ -310,3 +310,42 @@ func TestIgnoreAllPemFilesGlobally(testValue *testing.T) {
 		testValue.Errorf("Should have included keep.txt.\nOutput: %s", output)
 	}
 }
+
+func TestExclusionFlagTrailingSlash(testValue *testing.T) {
+	binary := buildBinary(testValue)
+	tempDir := testValue.TempDir()
+
+	// Create top-level directory "memory-bank" with a file inside.
+	memoryBankDir := filepath.Join(tempDir, "memory-bank")
+	if err := os.Mkdir(memoryBankDir, 0750); err != nil {
+		testValue.Fatalf("Failed to create memory-bank directory: %v", err)
+	}
+	fileInMemoryBank := filepath.Join(memoryBankDir, "file.txt")
+	if err := os.WriteFile(fileInMemoryBank, []byte("should be excluded"), 0600); err != nil {
+		testValue.Fatalf("Failed to create file in memory-bank: %v", err)
+	}
+
+	// Create a file outside "memory-bank" that should always be included.
+	fileOutside := filepath.Join(tempDir, "outside.txt")
+	if err := os.WriteFile(fileOutside, []byte("should be included"), 0600); err != nil {
+		testValue.Fatalf("Failed to create file outside memory-bank: %v", err)
+	}
+
+	// Test with exclusion flag without trailing slash.
+	outputNoSlash := runCommand(testValue, binary, []string{"content", tempDir, "-e", "memory-bank"}, tempDir)
+	if strings.Contains(outputNoSlash, "should be excluded") {
+		testValue.Errorf("Content output should not include content from memory-bank when exclusion flag is 'memory-bank'.\nOutput: %s", outputNoSlash)
+	}
+	if !strings.Contains(outputNoSlash, "should be included") {
+		testValue.Errorf("Content output should include content outside memory-bank when exclusion flag is 'memory-bank'.\nOutput: %s", outputNoSlash)
+	}
+
+	// Test with exclusion flag with trailing slash.
+	outputWithSlash := runCommand(testValue, binary, []string{"content", tempDir, "-e", "memory-bank/"}, tempDir)
+	if strings.Contains(outputWithSlash, "should be excluded") {
+		testValue.Errorf("Content output should not include content from memory-bank when exclusion flag is 'memory-bank/'.\nOutput: %s", outputWithSlash)
+	}
+	if !strings.Contains(outputWithSlash, "should be included") {
+		testValue.Errorf("Content output should include content outside memory-bank when exclusion flag is 'memory-bank/'.\nOutput: %s", outputWithSlash)
+	}
+}

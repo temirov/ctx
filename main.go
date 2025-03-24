@@ -101,7 +101,7 @@ func parseArgsOrExit() (string, string, string, bool, bool) {
 
 // runContentTool validates the root directory, loads ignore patterns,
 // and dispatches to the appropriate command.
-// It loads ".ignore" and/or ".gitignore"
+// It now loads ".ignore" (instead of ".contentignore") and/or ".gitignore"
 // based on the provided flags.
 func runContentTool(commandName, rootDirectory, exclusionFolder string, useGitignore, useIgnoreFile bool) error {
 	if !utils.IsDirectory(rootDirectory) {
@@ -138,10 +138,11 @@ func runContentTool(commandName, rootDirectory, exclusionFolder string, useGitig
 	// Deduplicate patterns.
 	ignorePatterns = deduplicatePatterns(ignorePatterns)
 
-	// Append the additional exclusion flag as a special pattern.
+	// Normalize the exclusion folder (trim trailing slash) and append as a special pattern.
 	trimmedExclusion := strings.TrimSpace(exclusionFolder)
 	if trimmedExclusion != "" {
-		ignorePatterns = append(ignorePatterns, "EXCL:"+trimmedExclusion)
+		normalizedExclusion := strings.TrimSuffix(trimmedExclusion, "/")
+		ignorePatterns = append(ignorePatterns, "EXCL:"+normalizedExclusion)
 	}
 
 	switch commandName {
