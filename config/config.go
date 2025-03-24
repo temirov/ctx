@@ -1,4 +1,4 @@
-// Package config loads and parses the .contentignore file into a slice of patterns.
+// Package config loads and parses the .ignore file into a slice of patterns.
 package config
 
 import (
@@ -8,10 +8,10 @@ import (
 	"strings"
 )
 
-// LoadContentIgnore reads the .contentignore file (if it exists) and returns a slice of ignore patterns.
+// LoadContentIgnore reads the .ignore file (if it exists) and returns a slice of ignore patterns.
 // Blank lines and lines beginning with '#' are skipped.
 //
-// #nosec G304: filePath is intentionally user-provided, as we must open .contentignore in that directory.
+// #nosec G304: filePath is intentionally user-provided, as we must open .ignore in that directory.
 func LoadContentIgnore(filePath string) ([]string, error) {
 	fileHandle, openError := os.Open(filePath)
 	if openError != nil {

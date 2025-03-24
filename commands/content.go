@@ -1,5 +1,5 @@
 // Package commands contains the CLI commands for the 'content' tool,
-// including logic for printing file contents with .contentignore exclusions.
+// including logic for printing file contents with .ignore exclusions.
 package commands
 
 import (
@@ -13,7 +13,7 @@ import (
 )
 
 // ContentCommand traverses the directory tree starting from rootDirectory
-// and prints the contents of files that are not excluded by .contentignore or -e.
+// and prints the contents of files that are not excluded by .ignore or -e.
 func ContentCommand(rootDirectory string, ignorePatterns []string) error {
 	absoluteRootDirectory, absoluteError := filepath.Abs(rootDirectory)
 	if absoluteError != nil {
@@ -51,7 +51,7 @@ func handleContentWalkEntry(
 		return skipDirErr
 	}
 
-	// #2: If it matches typical .contentignore rules, skip
+	// #2: If it matches typical .ignore rules, skip
 	if utils.ShouldIgnoreByPath(relativePath, ignorePatterns) {
 		if directoryEntry.IsDir() {
 			return filepath.SkipDir

@@ -10,7 +10,7 @@ The `content` utility is a command‑line tool written in Go. It provides two pr
 - **content:** Outputs the contents of files within a directory.
 
 The utility filters out files and directories based solely on exclusion patterns specified in a configuration file (
-`.contentignore`) and an optional additional exclusion provided via the `-e` flag.
+`.ignore`) and an optional additional exclusion provided via the `-e` flag.
 
 ---
 
@@ -43,9 +43,9 @@ The utility filters out files and directories based solely on exclusion patterns
 
 - **Source of Exclusions:**
     - No built‑in exclusion patterns exist in the code.
-    - All exclusion rules are solely retrieved from a configuration file named `.contentignore` located in the current
+    - All exclusion rules are solely retrieved from a configuration file named `.ignore` located in the current
       working directory.
-- **`.contentignore` File Format:**
+- **`.ignore` File Format:**
     - Uses full Git‑ignore semantic with one glob pattern per line.
     - Only non-empty lines and lines not beginning with `#` are considered.
 
@@ -58,7 +58,7 @@ The utility filters out files and directories based solely on exclusion patterns
 - The implementation shall be organized into multiple files to promote modularity and maintainability.
 - Suggested structure:
     - `main.go`: Entry point and argument parsing.
-    - `config.go`: Loader for the `.contentignore` file.
+    - `config.go`: Loader for the `.ignore` file.
     - `commands/`: A package containing:
         - `tree.go`: Implementation of the tree command.
         - `content.go`: Implementation of the content command.
@@ -79,10 +79,10 @@ The utility filters out files and directories based solely on exclusion patterns
 - Use functions like `os.Stat` to verify that the specified directory exists and is accessible.
 - Return an error if the directory is invalid.
 
-### Step 3: Load Exclusion Patterns from `.contentignore`
+### Step 3: Load Exclusion Patterns from `.ignore`
 
 - **File Check:**
-    - Look for `.contentignore` in the current working directory.
+    - Look for `.ignore` in the current working directory.
 - **Reading and Parsing:**
     - If the file exists, read it line by line.
     - Skip empty lines and comments (lines beginning with `#`).
@@ -99,7 +99,7 @@ The utility filters out files and directories based solely on exclusion patterns
     - Generate a tree‑like view with proper indentation.
 - **Exclusion Logic:**
     - For each directory or file:
-        - Apply full Git‑ignore semantics for exclusion using the patterns from `.contentignore`.
+        - Apply full Git‑ignore semantics for exclusion using the patterns from `.ignore`.
         - Apply the `-e` flag logic:
             - Exclude the folder only if it is a direct child of the working directory (root provided) that matches the
               exclusion folder.
@@ -109,7 +109,7 @@ The utility filters out files and directories based solely on exclusion patterns
 - **File Traversal:**
     - Recursively traverse the directory to find all files.
 - **Filtering:**
-    - Check each file’s path against the glob patterns from `.contentignore` using full Git‑ignore semantics.
+    - Check each file’s path against the glob patterns from `.ignore` using full Git‑ignore semantics.
     - Additionally, if `-e` is provided, skip files under the `<root>/<exclusionFolder>` directory when that folder is
       in the working directory.
 - **Output:**
@@ -125,7 +125,7 @@ The utility filters out files and directories based solely on exclusion patterns
 - **Directory Validation Function:**
     - Confirm that the provided root directory exists and is accessible.
 - **Configuration Loader:**
-    - Read and parse the `.contentignore` file to return a slice of ignore glob patterns.
+    - Read and parse the `.ignore` file to return a slice of ignore glob patterns.
 - **Matching Functions:**
     - Implement glob matching using full Git‑ignore semantics to decide if a file or folder should be excluded.
 - **Output Functions:**
@@ -166,9 +166,9 @@ The utility filters out files and directories based solely on exclusion patterns
 - **Case 11:** Provided path is not a directory (e.g., a file)
     - **Expectation:** Exits with an error indicating the path is not a directory.
 
-### 3. Configuration File (`.contentignore`) Loading
+### 3. Configuration File (`.ignore`) Loading
 
-- **Case 12:** `.contentignore` exists with valid patterns
+- **Case 12:** `.ignore` exists with valid patterns
     - **Test Data:**
       ```
       # Ignore log directories
@@ -176,17 +176,17 @@ The utility filters out files and directories based solely on exclusion patterns
       *.tmp
       ```
     - **Expectation:** Loader returns slice: `["log/", "*.tmp"]` (ignoring comment and blank lines).
-- **Case 13:** `.contentignore` does not exist
+- **Case 13:** `.ignore` does not exist
     - **Expectation:** Loader returns an empty slice (or nil) so that only the `-e` flag exclusion applies if provided.
-- **Case 14:** `.contentignore` contains only comments or blank lines
+- **Case 14:** `.ignore` contains only comments or blank lines
     - **Expectation:** Loader returns an empty slice.
-- **Case 15:** `.contentignore` contains malformed lines (if applicable)
+- **Case 15:** `.ignore` contains malformed lines (if applicable)
     - **Expectation:** Malformed lines are skipped or handled gracefully without crashing.
 
 ### 4. Glob Matching and Exclusion Logic
 
 - **Case 16:** Directory glob matching using full Git‑ignore semantics
-    - **Example:** Given a pattern `log/` in `.contentignore`, ensure that a directory path like `pkg/log` (with root
+    - **Example:** Given a pattern `log/` in `.ignore`, ensure that a directory path like `pkg/log` (with root
       `"pkg"`) is correctly excluded when `-e log` is specified.
 - **Case 17:** File glob matching using full Git‑ignore semantics
     - **Example:** Given a pattern `*.tmp`, verify that files such as `file.tmp` or `pkg/dir/file.tmp` are excluded.
@@ -198,9 +198,9 @@ The utility filters out files and directories based solely on exclusion patterns
 
 - **Case 19:** Tree output without exclusions
     - **Expectation:** Output displays all files and folders in a tree‑like format.
-- **Case 20:** Tree output with `.contentignore` patterns applied
+- **Case 20:** Tree output with `.ignore` patterns applied
     - **Test Data:**
-        - Create a temporary directory structure with folders matching patterns in `.contentignore` (e.g., a top‑level
+        - Create a temporary directory structure with folders matching patterns in `.ignore` (e.g., a top‑level
           folder `log`).
     - **Expectation:** Output omits directories/files matching the ignore patterns.
 - **Case 21:** Tree command with additional `-e` flag
@@ -211,9 +211,9 @@ The utility filters out files and directories based solely on exclusion patterns
 
 - **Case 22:** File content output without exclusions
     - **Expectation:** All files in the directory tree are output along with their contents and a separator.
-- **Case 23:** Content output with `.contentignore` applied
+- **Case 23:** Content output with `.ignore` applied
     - **Test Data:**
-        - Create a temporary directory with files under a folder that matches an ignore pattern in `.contentignore`.
+        - Create a temporary directory with files under a folder that matches an ignore pattern in `.ignore`.
     - **Expectation:** Files matching the patterns are not output.
 - **Case 24:** Content command with additional `-e` flag
     - **Expectation:** Files under `<root>/<exclusionFolder>` (where the exclusion folder is directly under the working
@@ -227,7 +227,7 @@ The utility filters out files and directories based solely on exclusion patterns
     - **Expectation:** Utility completes execution, possibly with a message indicating no files/folders processed.
 - **Case 27:** Complex directory structure with overlapping glob patterns and `-e` flag
     - **Expectation:** Combined exclusion logic correctly filters out intended directories and files.
-- **Case 28:** Running in a working directory without a `.contentignore` file, using `-e`
+- **Case 28:** Running in a working directory without a `.ignore` file, using `-e`
     - **Expectation:** Only the `-e` flag exclusion is applied.
 
 ### Testing Approach
@@ -236,14 +236,14 @@ The utility filters out files and directories based solely on exclusion patterns
     - Utilize Go’s `testing` package to write tests for:
         - Argument parsing.
         - Directory validation.
-        - `.contentignore` loader.
+        - `.ignore` loader.
         - Glob matching and exclusion functions.
         - Tree output and file content output functions.
 - **Integration Tests:**
     - Create temporary directories/files using functions such as `os.MkdirTemp` or similar.
     - Capture and verify output against expected results.
 - **Edge Cases:**
-    - Include tests for empty directories, malformed `.contentignore` files, and overlapping ignore patterns.
+    - Include tests for empty directories, malformed `.ignore` files, and overlapping ignore patterns.
 
 ---
 
@@ -252,7 +252,7 @@ The utility filters out files and directories based solely on exclusion patterns
 This PRD details the specifications for the `content` utility:
 
 - **Functionality:** Provides `tree` and `content` commands with exclusion capabilities.
-- **Exclusions:** Are defined solely via a `.contentignore` configuration file (using full Git‑ignore semantics) and an
+- **Exclusions:** Are defined solely via a `.ignore` configuration file (using full Git‑ignore semantics) and an
   optional `-e` flag, which excludes a folder only when it appears directly under the working directory.
 - **Coding Plan:** Outlines argument parsing, directory validation, configuration file loading, and command
   implementations using multiple files with helper functions.

@@ -1,7 +1,7 @@
 .idea/
 *.iml
 .git/
-.contentignore
+.ignore
 .gitignore
 LICENSE
 *.txt

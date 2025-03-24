@@ -50,7 +50,7 @@ func runCommand(testValue *testing.T, binary string, args []string, workDir stri
 	return stdoutBuffer.String()
 }
 
-// TestTreeCommandIntegration_NoIgnore verifies that without .contentignore, tree prints all entries.
+// TestTreeCommandIntegration_NoIgnore verifies that without .ignore, tree prints all entries.
 func TestTreeCommandIntegration_NoIgnore(testValue *testing.T) {
 	binary := buildBinary(testValue)
 	tempDir := testValue.TempDir()
@@ -79,7 +79,7 @@ func TestTreeCommandIntegration_NoIgnore(testValue *testing.T) {
 	}
 }
 
-// TestContentCommandIntegration_NoIgnore verifies that without .contentignore, content prints file contents.
+// TestContentCommandIntegration_NoIgnore verifies that without .ignore, content prints file contents.
 func TestContentCommandIntegration_NoIgnore(testValue *testing.T) {
 	binary := buildBinary(testValue)
 	tempDir := testValue.TempDir()
@@ -123,10 +123,10 @@ func TestTreeCommandIntegration_WithIgnore(testValue *testing.T) {
 		testValue.Fatalf("Failed to create included.txt: %v", writeError)
 	}
 
-	ignoreFilePath := filepath.Join(tempDir, ".contentignore")
+	ignoreFilePath := filepath.Join(tempDir, ".ignore")
 	writeError = os.WriteFile(ignoreFilePath, []byte("log/\n"), 0o600)
 	if writeError != nil {
-		testValue.Fatalf("Failed to write .contentignore: %v", writeError)
+		testValue.Fatalf("Failed to write .ignore: %v", writeError)
 	}
 
 	output := runCommand(testValue, binary, []string{"tree", tempDir}, tempDir)
@@ -165,10 +165,10 @@ func TestContentCommandIntegration_WithIgnore(testValue *testing.T) {
 		testValue.Fatalf("Failed to create included.txt: %v", writeError)
 	}
 
-	ignoreFilePath := filepath.Join(tempDir, ".contentignore")
+	ignoreFilePath := filepath.Join(tempDir, ".ignore")
 	writeError = os.WriteFile(ignoreFilePath, []byte("log/\n"), 0o600)
 	if writeError != nil {
-		testValue.Fatalf("Failed to write .contentignore: %v", writeError)
+		testValue.Fatalf("Failed to write .ignore: %v", writeError)
 	}
 
 	output := runCommand(testValue, binary, []string{"content", tempDir}, tempDir)
@@ -205,10 +205,10 @@ func TestExclusionFlagIntegration(testValue *testing.T) {
 		testValue.Fatalf("Failed to create pkg/include.txt: %v", writeError)
 	}
 
-	ignoreFilePath := filepath.Join(tempDir, ".contentignore")
+	ignoreFilePath := filepath.Join(tempDir, ".ignore")
 	writeError = os.WriteFile(ignoreFilePath, []byte(""), 0o600)
 	if writeError != nil {
-		testValue.Fatalf("Failed to write .contentignore: %v", writeError)
+		testValue.Fatalf("Failed to write .ignore: %v", writeError)
 	}
 
 	output := runCommand(testValue, binary, []string{"content", pkgDirectory, "-e", "log"}, tempDir)
@@ -251,10 +251,10 @@ func TestExclusionFlagRootVsNested(testValue *testing.T) {
 		testValue.Fatalf("Failed to create nested log file: %v", writeError)
 	}
 
-	ignoreFilePath := filepath.Join(tempDir, ".contentignore")
+	ignoreFilePath := filepath.Join(tempDir, ".ignore")
 	writeError = os.WriteFile(ignoreFilePath, []byte(""), 0o600)
 	if writeError != nil {
-		testValue.Fatalf("Failed to write .contentignore: %v", writeError)
+		testValue.Fatalf("Failed to write .ignore: %v", writeError)
 	}
 
 	output := runCommand(testValue, binary, []string{"content", tempDir, "-e", "log"}, tempDir)
@@ -293,10 +293,10 @@ func TestIgnoreAllPemFilesGlobally(testValue *testing.T) {
 		testValue.Fatalf("Failed to create keep.txt: %v", writeError)
 	}
 
-	ignoreFilePath := filepath.Join(tempDir, ".contentignore")
+	ignoreFilePath := filepath.Join(tempDir, ".ignore")
 	writeError = os.WriteFile(ignoreFilePath, []byte("*.pem\n"), 0o600)
 	if writeError != nil {
-		testValue.Fatalf("Failed to write .contentignore: %v", writeError)
+		testValue.Fatalf("Failed to write .ignore: %v", writeError)
 	}
 
 	output := runCommand(testValue, binary, []string{"content", tempDir}, tempDir)

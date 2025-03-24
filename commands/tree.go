@@ -1,5 +1,5 @@
 // Package commands contains the CLI commands for the 'content' tool,
-// including logic for printing a directory tree with .contentignore exclusions.
+// including logic for printing a directory tree with .ignore exclusions.
 package commands
 
 import (

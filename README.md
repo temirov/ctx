@@ -1,15 +1,25 @@
 # Content
 
 Content is a command‑line tool written in Go that displays a directory tree view or outputs file contents. It supports
-exclusion patterns via a `.contentignore` file (using full Git‑ignore semantics) and an optional additional exclusion
-flag (`-e`) that omits directories directly under the working directory.
+exclusion patterns via an **.ignore** file (using full Git‑ignore semantics) and a **.gitignore** file by default, as
+well as an optional exclusion flag.
 
 ## Features
 
-- **Tree Command:** Recursively displays the directory structure in a tree-like format.
+- **Tree Command:** Recursively displays the directory structure in a tree‑like format.
 - **Content Command:** Outputs the contents of files within a specified directory.
-- **Exclusion Patterns:** Uses a `.contentignore` file to exclude files and directories based on glob patterns.
-- **Optional `-e` Flag:** Excludes a designated folder (only when it is a direct child of the working directory).
+- **Exclusion Patterns:**
+    - Reads patterns from an **.ignore** file in the working directory (instead of the previous .ignore).
+    - Reads patterns from a **.gitignore** file by default if it is present.
+    - The patterns from both files are combined and deduplicated.
+- **Exclusion Flags:**
+    - **-e / --e:** Excludes a designated folder (only when it is a direct child of the working directory). Both `-e`
+      and `--e` work.
+    - **--no-gitignore:** Disables reading from the **.gitignore** file.
+    - **--no-ignore:** Disables reading from the **.ignore** file.
+- **Command Abbreviations:**
+    - `t` is an alias for `tree`.
+    - `c` is an alias for `content`.
 
 ## Installation
 
@@ -38,27 +48,33 @@ flag (`-e`) that omits directories directly under the working directory.
 The basic syntax for using the utility is:
 
 ```bash
-content <command> [root_directory] [-e exclusion_folder]
+content <tree|t|content|c> [root_directory] [-e|--e exclusion_folder] [--no-gitignore] [--no-ignore]
 ```
 
 ### Commands
 
-- **tree**  
+- **tree (or t):**  
   Displays a directory tree view.
 
-- **content**  
+- **content (or c):**  
   Outputs the contents of files under a specified directory.
 
 ### Arguments
 
-- **root_directory**  
+- **root_directory:**  
   Optional. Defaults to the current directory (`"."`) if not provided.
 
-- **-e exclusion_folder**  
+- **-e or --e exclusion_folder:**  
   Optional flag. Specifies a single additional folder (relative to the working directory) to exclude.
     - When the folder is directly under the working directory (or provided root), it is entirely excluded from
       processing.
     - Nested folders with the same name are not excluded.
+
+- **--no-gitignore:**  
+  Optional flag. Disables loading of the **.gitignore** file.
+
+- **--no-ignore:**  
+  Optional flag. Disables loading of the **.ignore** file.
 
 ### Examples
 
@@ -71,7 +87,7 @@ content <command> [root_directory] [-e exclusion_folder]
 - **Display a tree view of a specific directory (`pkg`) while excluding the `log` folder:**
 
   ```bash
-  content tree pkg -e log
+  content t pkg --e log
   ```
 
 - **Output file contents from the current directory while excluding the `log` folder:**
@@ -80,25 +96,33 @@ content <command> [root_directory] [-e exclusion_folder]
   content content -e log
   ```
 
-- **Output file contents from a specific directory (`pkg`) while excluding the `log` folder:**
+- **Output file contents from a specific directory (`pkg`) while excluding the `log` folder and disabling .gitignore
+  logic:**
 
   ```bash
-  content content pkg -e log
+  content c pkg -e log --no-gitignore
   ```
 
 ## Configuration
 
-The utility reads exclusion patterns from a `.contentignore` file located in your current working directory. The file
-uses Git‑ignore semantics where:
+The utility loads exclusion patterns from two files by default:
 
-- Each non-empty line (that does not start with `#`) is treated as a glob pattern.
-- For example:
+1. **.ignore**
+    - This file uses full Git‑ignore semantics.
+    - Each non‑empty line (that does not start with `#`) is treated as a glob pattern.
+    - For example:
 
-  ```plaintext
-  # Exclude log directories and temporary files
-  log/
-  *.tmp
-  ```
+      ```plaintext
+      # Exclude log directories and temporary files
+      log/
+      *.tmp
+      ```
+
+2. **.gitignore**
+    - This file is read by default and its patterns are combined with those from **.ignore**.
+    - To disable its usage, run the utility with the `--no-gitignore` flag.
+
+Additionally, if you do not wish to use the **.ignore** file, you can disable it with the `--no-ignore` flag.
 
 ## Development
 
@@ -130,4 +154,3 @@ Contributions are welcome. To contribute:
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-[.gitignore](../notify/.gitignore)
