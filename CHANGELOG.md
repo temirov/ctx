@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.0.3] - 2025-03-29
+
+### Features ✨
+
+1. **Multi-Directory Support:**
+   The tool now accepts multiple directory paths as positional arguments.
+   `content <command> [dir1] [dir2] ... [flags]`
+
+- `.ignore` and `.gitignore` files are loaded relative to *each* specified directory.
+- The `-e`/`--e` exclusion flag applies to direct children within *any* of the specified directories.
+- Output for `tree` shows separate trees for each directory.
+- Output for `content` concatenates file contents from all specified directories sequentially.
+- Duplicate input directories (after resolving paths) are processed only once.
+- If no directories are specified, it defaults to the current directory (`.`).
+
 ## [v0.0.2] - 2025-03-23
 
 ### What's New 🎉
