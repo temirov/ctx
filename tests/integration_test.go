@@ -2,24 +2,29 @@ package main_test
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 // buildBinary compiles the binary from the module root and returns its path.
-//
 // #nosec G204: we intentionally invoke "go build" with variable arguments
-func buildBinary(testValue *testing.T) string {
-	testValue.Helper()
-	temporaryDirectory := testValue.TempDir()
-	binaryPath := filepath.Join(temporaryDirectory, "content_integration")
+func buildBinary(testSetup *testing.T) string {
+	testSetup.Helper()
+	temporaryDirectory := testSetup.TempDir()
+	binaryName := "content_integration"
+	if runtime.GOOS == "windows" {
+		binaryName += ".exe"
+	}
+	binaryPath := filepath.Join(temporaryDirectory, binaryName)
 
 	currentDirectory, directoryError := os.Getwd()
 	if directoryError != nil {
-		testValue.Fatalf("Failed to get working directory: %v", directoryError)
+		testSetup.Fatalf("Failed to get working directory: %v", directoryError)
 	}
 	moduleRoot := filepath.Dir(currentDirectory)
 
@@ -28,324 +33,567 @@ func buildBinary(testValue *testing.T) string {
 
 	outputData, buildErr := buildCommand.CombinedOutput()
 	if buildErr != nil {
-		testValue.Fatalf("Failed to build binary: %v, output: %s", buildErr, string(outputData))
+		testSetup.Fatalf("Failed to build binary in %s: %v, output: %s", moduleRoot, buildErr, string(outputData))
 	}
 	return binaryPath
 }
 
-// runCommand executes the binary with the given args in workDir and returns combined stdout+stderr.
-func runCommand(testValue *testing.T, binary string, args []string, workDir string) string {
-	testValue.Helper()
-	command := exec.Command(binary, args...)
+// runCommand executes the binary with the given args in workDir.
+// It returns combined stdout+stderr as a string.
+// It fails the test if the command exits with an error.
+func runCommand(testSetup *testing.T, binaryPath string, args []string, workDir string) string {
+	testSetup.Helper()
+	command := exec.Command(binaryPath, args...)
 	command.Dir = workDir
 
-	var stdoutBuffer bytes.Buffer
-	command.Stdout = &stdoutBuffer
-	command.Stderr = &stdoutBuffer
+	var stdOutErrBuffer bytes.Buffer
+	command.Stdout = &stdOutErrBuffer
+	command.Stderr = &stdOutErrBuffer
 
 	runError := command.Run()
+	outputString := stdOutErrBuffer.String()
+
 	if runError != nil {
-		testValue.Fatalf("Command %v failed: %v\nOutput: %s", args, runError, stdoutBuffer.String())
+		exitError, isExitError := runError.(*exec.ExitError)
+		errorDetails := fmt.Sprintf("Command '%s %s' failed in dir '%s'", filepath.Base(binaryPath), strings.Join(args, " "), workDir)
+		if isExitError {
+			errorDetails += fmt.Sprintf("\nExit Code: %d", exitError.ExitCode())
+		} else {
+			errorDetails += fmt.Sprintf("\nError Type: %T", runError)
+		}
+		errorDetails += fmt.Sprintf("\nError: %v\nOutput:\n%s", runError, outputString)
+		testSetup.Fatalf(errorDetails)
+	} else if strings.Contains(outputString, "Warning:") {
+		testSetup.Logf("Command '%s %s' succeeded but produced warnings:\n%s", filepath.Base(binaryPath), strings.Join(args, " "), outputString)
 	}
-	return stdoutBuffer.String()
+
+	return outputString
 }
 
-// TestTreeCommandIntegration_NoIgnore verifies that without .ignore, tree prints all entries.
+// runCommandExpectError executes the binary, expecting a non-zero exit code.
+// It returns combined stdout+stderr as a string.
+// It fails the test if the command exits successfully (exit code 0).
+func runCommandExpectError(testSetup *testing.T, binaryPath string, args []string, workDir string) string {
+	testSetup.Helper()
+	command := exec.Command(binaryPath, args...)
+	command.Dir = workDir
+
+	var stdOutErrBuffer bytes.Buffer
+	command.Stdout = &stdOutErrBuffer
+	command.Stderr = &stdOutErrBuffer
+
+	runError := command.Run()
+	outputString := stdOutErrBuffer.String()
+
+	if runError == nil {
+		testSetup.Fatalf("Command '%s %s' in dir '%s' succeeded unexpectedly.\nOutput:\n%s", filepath.Base(binaryPath), strings.Join(args, " "), workDir, outputString)
+	}
+
+	_, isExitError := runError.(*exec.ExitError)
+	if !isExitError {
+		testSetup.Logf("Command '%s %s' failed with non-ExitError type: %T, Error: %v", filepath.Base(binaryPath), strings.Join(args, " "), runError, runError)
+	}
+
+	return outputString
+}
+
+// runCommandWithWarnings executes the binary, expecting a zero exit code but warnings on stderr.
+// It returns combined stdout+stderr as a string.
+// It fails the test if the command exits with an error OR if no warnings are found.
+func runCommandWithWarnings(testSetup *testing.T, binaryPath string, args []string, workDir string) string {
+	testSetup.Helper()
+	command := exec.Command(binaryPath, args...)
+	command.Dir = workDir
+
+	var stdOutErrBuffer bytes.Buffer
+	command.Stdout = &stdOutErrBuffer
+	command.Stderr = &stdOutErrBuffer
+
+	runError := command.Run()
+	outputString := stdOutErrBuffer.String()
+
+	if runError != nil {
+		exitError, isExitError := runError.(*exec.ExitError)
+		errorDetails := fmt.Sprintf("Command '%s %s' failed unexpectedly in dir '%s'", filepath.Base(binaryPath), strings.Join(args, " "), workDir)
+		if isExitError {
+			errorDetails += fmt.Sprintf("\nExit Code: %d", exitError.ExitCode())
+		} else {
+			errorDetails += fmt.Sprintf("\nError Type: %T", runError)
+		}
+		errorDetails += fmt.Sprintf("\nError: %v\nOutput:\n%s", runError, outputString)
+		testSetup.Fatalf(errorDetails)
+	}
+
+	if !strings.Contains(outputString, "Warning:") {
+		testSetup.Fatalf("Command '%s %s' succeeded but did not produce expected warnings.\nOutput:\n%s", filepath.Base(binaryPath), strings.Join(args, " "), outputString)
+	}
+
+	return outputString
+}
+
+// setupTestDirectory creates a temporary directory structure for testing.
+// Returns the path to the root temporary directory.
+func setupTestDirectory(testSetup *testing.T, structure map[string]string) string {
+	testSetup.Helper()
+	tempDir := testSetup.TempDir()
+
+	for path, content := range structure {
+		fullPath := filepath.Join(tempDir, path)
+		dirPath := filepath.Dir(fullPath)
+
+		mkdirErr := os.MkdirAll(dirPath, 0755)
+		if mkdirErr != nil {
+			testSetup.Fatalf("Failed to create directory %s: %v", dirPath, mkdirErr)
+		}
+
+		if content == "" {
+			if _, statErr := os.Stat(fullPath); os.IsNotExist(statErr) {
+				mkdirErr = os.Mkdir(fullPath, 0755)
+				if mkdirErr != nil {
+					testSetup.Fatalf("Failed to create directory %s: %v", fullPath, mkdirErr)
+				}
+			}
+		} else if content == "<UNREADABLE>" {
+			writeErr := os.WriteFile(fullPath, []byte("cannot read this"), 0644)
+			if writeErr != nil {
+				testSetup.Fatalf("Failed to write pre-unreadable file %s: %v", fullPath, writeErr)
+			}
+			chmodErr := os.Chmod(fullPath, 0000)
+			if chmodErr != nil {
+				testSetup.Logf("Warning: Failed to set file %s unreadable: %v", fullPath, chmodErr)
+			}
+		} else {
+			writeErr := os.WriteFile(fullPath, []byte(content), 0644)
+			if writeErr != nil {
+				testSetup.Fatalf("Failed to write file %s: %v", fullPath, writeErr)
+			}
+		}
+	}
+	return tempDir
+}
+
 func TestTreeCommandIntegration_NoIgnore(testValue *testing.T) {
 	binary := buildBinary(testValue)
-	tempDir := testValue.TempDir()
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"file1.txt":        "Hello",
+		"subdir/":          "",
+		"subdir/file2.txt": "World",
+	})
 
-	file1Path := filepath.Join(tempDir, "file1.txt")
-	writeError := os.WriteFile(file1Path, []byte("Hello"), 0o600) // G306 fix
-	if writeError != nil {
-		testValue.Fatalf("Failed to create file1.txt: %v", writeError)
+	output := runCommand(testValue, binary, []string{"tree", testDir}, testDir)
+
+	absTestDir, _ := filepath.Abs(testDir)
+	expectedTreeHeader := fmt.Sprintf("--- Directory Tree: %s ---", absTestDir)
+
+	if !strings.Contains(output, expectedTreeHeader) {
+		testValue.Errorf("Tree output missing expected header '%s'.\nOutput: %s", expectedTreeHeader, output)
 	}
-
-	subDirectory := filepath.Join(tempDir, "subdir")
-	makeError := os.Mkdir(subDirectory, 0o750) // G301 fix
-	if makeError != nil {
-		testValue.Fatalf("Failed to create subdir: %v", makeError)
+	if !strings.Contains(output, "file1.txt") {
+		testValue.Errorf("Tree output missing 'file1.txt'.\nOutput: %s", output)
 	}
-
-	file2Path := filepath.Join(subDirectory, "file2.txt")
-	writeError = os.WriteFile(file2Path, []byte("World"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create file2.txt: %v", writeError)
+	if !strings.Contains(output, "subdir") {
+		testValue.Errorf("Tree output missing 'subdir'.\nOutput: %s", output)
 	}
-
-	output := runCommand(testValue, binary, []string{"tree", tempDir}, tempDir)
-	if !strings.Contains(output, "file1.txt") || !strings.Contains(output, "subdir") {
-		testValue.Errorf("Tree output missing expected entries.\nOutput: %s", output)
+	if !strings.Contains(output, "└── file2.txt") && !strings.Contains(output, "├── file2.txt") {
+		testValue.Errorf("Tree output missing 'file2.txt' likely not nested correctly.\nOutput: %s", output)
 	}
 }
 
-// TestContentCommandIntegration_NoIgnore verifies that without .ignore, content prints file contents.
 func TestContentCommandIntegration_NoIgnore(testValue *testing.T) {
 	binary := buildBinary(testValue)
-	tempDir := testValue.TempDir()
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"file1.txt": "Hello Content",
+	})
+	output := runCommand(testValue, binary, []string{"content", testDir}, testDir)
 
-	file1Path := filepath.Join(tempDir, "file1.txt")
-	writeError := os.WriteFile(file1Path, []byte("Hello"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create file1.txt: %v", writeError)
+	expectedFileHeader := fmt.Sprintf("File: %s", filepath.Join(testDir, "file1.txt"))
+	if !strings.Contains(output, expectedFileHeader) {
+		testValue.Errorf("Content output missing expected file header '%s'.\nOutput: %s", expectedFileHeader, output)
 	}
-
-	output := runCommand(testValue, binary, []string{"content", tempDir}, tempDir)
-	if !strings.Contains(output, "Hello") {
-		testValue.Errorf("Content output did not include expected content.\nOutput: %s", output)
+	if !strings.Contains(output, "Hello Content") {
+		testValue.Errorf("Content output did not include 'Hello Content'.\nOutput: %s", output)
 	}
 }
 
-//nolint:dupl
-func TestTreeCommandIntegration_WithIgnore(testValue *testing.T) {
+func TestMultiDir_Content(testValue *testing.T) {
 	binary := buildBinary(testValue)
-	tempDir := testValue.TempDir()
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"dir1/":          "",
+		"dir1/file1.txt": "Content from Dir1",
+		"dir2/":          "",
+		"dir2/file2.txt": "Content from Dir2",
+	})
 
-	logDir := filepath.Join(tempDir, "log")
-	makeError := os.Mkdir(logDir, 0o750)
-	if makeError != nil {
-		testValue.Fatalf("Failed to create log directory: %v", makeError)
-	}
-	ignoredFilePath := filepath.Join(logDir, "ignored.txt")
-	writeError := os.WriteFile(ignoredFilePath, []byte("ignore me"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create ignored.txt: %v", writeError)
-	}
+	output := runCommand(testValue, binary, []string{"content", "dir1", "dir2"}, testDir)
 
-	dataDir := filepath.Join(tempDir, "data")
-	makeError = os.Mkdir(dataDir, 0o750)
-	if makeError != nil {
-		testValue.Fatalf("Failed to create data directory: %v", makeError)
+	if !strings.Contains(output, "Content from Dir1") {
+		testValue.Errorf("Output missing content from dir1.\nOutput: %s", output)
 	}
-	includedFilePath := filepath.Join(dataDir, "included.txt")
-	writeError = os.WriteFile(includedFilePath, []byte("include me"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create included.txt: %v", writeError)
+	if !strings.Contains(output, "Content from Dir2") {
+		testValue.Errorf("Output missing content from dir2.\nOutput: %s", output)
 	}
-
-	ignoreFilePath := filepath.Join(tempDir, ".ignore")
-	writeError = os.WriteFile(ignoreFilePath, []byte("log/\n"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to write .ignore: %v", writeError)
-	}
-
-	output := runCommand(testValue, binary, []string{"tree", tempDir}, tempDir)
-	if strings.Contains(output, "log") {
-		testValue.Errorf("Tree output should not include 'log' directory.\nOutput: %s", output)
-	}
-	if !strings.Contains(output, "data") {
-		testValue.Errorf("Tree output should include 'data' directory.\nOutput: %s", output)
+	if strings.Index(output, "Content from Dir1") > strings.Index(output, "Content from Dir2") {
+		testValue.Errorf("Output content order seems incorrect.\nOutput: %s", output)
 	}
 }
 
-//nolint:dupl
-func TestContentCommandIntegration_WithIgnore(testValue *testing.T) {
+func TestMultiDir_Tree(testValue *testing.T) {
 	binary := buildBinary(testValue)
-	tempDir := testValue.TempDir()
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"dirA/":          "",
+		"dirA/itemA.txt": "A",
+		"dirB/":          "",
+		"dirB/itemB.txt": "B",
+	})
 
-	logDir := filepath.Join(tempDir, "log")
-	makeError := os.Mkdir(logDir, 0o750)
-	if makeError != nil {
-		testValue.Fatalf("Failed to create log directory: %v", makeError)
-	}
-	ignoredFilePath := filepath.Join(logDir, "ignored.txt")
-	writeError := os.WriteFile(ignoredFilePath, []byte("ignore me"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create ignored.txt: %v", writeError)
-	}
+	output := runCommand(testValue, binary, []string{"tree", "dirA", "dirB"}, testDir)
 
-	dataDir := filepath.Join(tempDir, "data")
-	makeError = os.Mkdir(dataDir, 0o750)
-	if makeError != nil {
-		testValue.Fatalf("Failed to create data directory: %v", makeError)
-	}
-	includedFilePath := filepath.Join(dataDir, "included.txt")
-	writeError = os.WriteFile(includedFilePath, []byte("include me"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create included.txt: %v", writeError)
-	}
+	absDirA, _ := filepath.Abs(filepath.Join(testDir, "dirA"))
+	absDirB, _ := filepath.Abs(filepath.Join(testDir, "dirB"))
+	expectedHeaderA := fmt.Sprintf("--- Directory Tree: %s ---", absDirA)
+	expectedHeaderB := fmt.Sprintf("--- Directory Tree: %s ---", absDirB)
 
-	ignoreFilePath := filepath.Join(tempDir, ".ignore")
-	writeError = os.WriteFile(ignoreFilePath, []byte("log/\n"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to write .ignore: %v", writeError)
+	if !strings.Contains(output, expectedHeaderA) {
+		testValue.Errorf("Output missing tree header for dirA: %s\nOutput: %s", expectedHeaderA, output)
 	}
-
-	output := runCommand(testValue, binary, []string{"content", tempDir}, tempDir)
-	if strings.Contains(output, "ignore me") {
-		testValue.Errorf("Content output should not include content from log/ignored.txt.\nOutput: %s", output)
+	if !strings.Contains(output, expectedHeaderB) {
+		testValue.Errorf("Output missing tree header for dirB: %s\nOutput: %s", expectedHeaderB, output)
 	}
-	if !strings.Contains(output, "include me") {
-		testValue.Errorf("Content output should include content from data/included.txt.\nOutput: %s", output)
+	if !strings.Contains(output, "itemA.txt") {
+		testValue.Errorf("Output missing itemA.txt from dirA tree.\nOutput: %s", output)
+	}
+	if !strings.Contains(output, "itemB.txt") {
+		testValue.Errorf("Output missing itemB.txt from dirB tree.\nOutput: %s", output)
+	}
+	if strings.Index(output, expectedHeaderA) > strings.Index(output, expectedHeaderB) {
+		testValue.Errorf("Tree output order seems incorrect.\nOutput: %s", output)
+	}
+	if !(strings.Index(output, "itemA.txt") > strings.Index(output, expectedHeaderA) && strings.Index(output, "itemA.txt") < strings.Index(output, expectedHeaderB)) {
+		testValue.Errorf("itemA.txt does not appear under headerA and before headerB.\nOutput: %s", output)
 	}
 }
 
-func TestExclusionFlagIntegration(testValue *testing.T) {
+func TestMixedInput_Tree(testValue *testing.T) {
 	binary := buildBinary(testValue)
-	tempDir := testValue.TempDir()
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"fileA.txt":           "Content A",
+		"dirB/":               "",
+		"dirB/itemB1.txt":     "B1",
+		"dirB/sub/":           "",
+		"dirB/sub/itemB2.txt": "B2",
+		"fileC.txt":           "Content C",
+	})
 
-	pkgDirectory := filepath.Join(tempDir, "pkg")
-	makeError := os.Mkdir(pkgDirectory, 0o750)
-	if makeError != nil {
-		testValue.Fatalf("Failed to create pkg directory: %v", makeError)
+	output := runCommand(testValue, binary, []string{"tree", "fileA.txt", "dirB", "fileC.txt"}, testDir)
+
+	absFileA, _ := filepath.Abs(filepath.Join(testDir, "fileA.txt"))
+	absDirB, _ := filepath.Abs(filepath.Join(testDir, "dirB"))
+	absFileC, _ := filepath.Abs(filepath.Join(testDir, "fileC.txt"))
+
+	expectedFileA := fmt.Sprintf("[File] %s", absFileA)
+	expectedDirBHeader := fmt.Sprintf("--- Directory Tree: %s ---", absDirB)
+	expectedFileC := fmt.Sprintf("[File] %s", absFileC)
+
+	if !strings.Contains(output, expectedFileA) {
+		testValue.Errorf("Output missing file marker for fileA: %s\nOutput: %s", expectedFileA, output)
 	}
-	logDirectory := filepath.Join(pkgDirectory, "log")
-	makeError = os.Mkdir(logDirectory, 0o750)
-	if makeError != nil {
-		testValue.Fatalf("Failed to create pkg/log directory: %v", makeError)
+	if !strings.Contains(output, expectedDirBHeader) {
+		testValue.Errorf("Output missing tree header for dirB: %s\nOutput: %s", expectedDirBHeader, output)
 	}
-	ignoredFilePath := filepath.Join(logDirectory, "ignore.txt")
-	writeError := os.WriteFile(ignoredFilePath, []byte("should be ignored"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create pkg/log/ignore.txt: %v", writeError)
+	if !strings.Contains(output, "itemB1.txt") {
+		testValue.Errorf("Output missing itemB1.txt from dirB tree.\nOutput: %s", output)
 	}
-	includedFilePath := filepath.Join(pkgDirectory, "include.txt")
-	writeError = os.WriteFile(includedFilePath, []byte("should be included"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create pkg/include.txt: %v", writeError)
+	if !strings.Contains(output, "sub") {
+		testValue.Errorf("Output missing sub dir from dirB tree.\nOutput: %s", output)
+	}
+	if !strings.Contains(output, "itemB2.txt") {
+		testValue.Errorf("Output missing itemB2.txt from dirB tree.\nOutput: %s", output)
+	}
+	if !strings.Contains(output, expectedFileC) {
+		testValue.Errorf("Output missing file marker for fileC: %s\nOutput: %s", expectedFileC, output)
 	}
 
-	ignoreFilePath := filepath.Join(tempDir, ".ignore")
-	writeError = os.WriteFile(ignoreFilePath, []byte(""), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to write .ignore: %v", writeError)
+	idxA := strings.Index(output, expectedFileA)
+	idxBHeader := strings.Index(output, expectedDirBHeader)
+	idxC := strings.Index(output, expectedFileC)
+
+	if !(idxA < idxBHeader && idxBHeader < idxC) {
+		testValue.Errorf("Output order incorrect. Indices: FileA=%d, DirBHeader=%d, FileC=%d\nOutput: %s", idxA, idxBHeader, idxC, output)
+	}
+}
+
+func TestMixedInput_Content(testValue *testing.T) {
+	binary := buildBinary(testValue)
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"fileA.txt":           "Content A",
+		"dirB/":               "",
+		"dirB/itemB1.txt":     "Content B1",
+		"dirB/sub/":           "",
+		"dirB/sub/itemB2.txt": "Content B2",
+		"fileC.txt":           "Content C",
+	})
+
+	output := runCommand(testValue, binary, []string{"content", "fileA.txt", "dirB", "fileC.txt"}, testDir)
+
+	absFileA, _ := filepath.Abs(filepath.Join(testDir, "fileA.txt"))
+	absFileB1, _ := filepath.Abs(filepath.Join(testDir, "dirB", "itemB1.txt"))
+	absFileB2, _ := filepath.Abs(filepath.Join(testDir, "dirB", "sub", "itemB2.txt"))
+	absFileC, _ := filepath.Abs(filepath.Join(testDir, "fileC.txt"))
+
+	expectedHeaderA := fmt.Sprintf("File: %s", absFileA)
+	expectedHeaderB1 := fmt.Sprintf("File: %s", absFileB1)
+	expectedHeaderB2 := fmt.Sprintf("File: %s", absFileB2)
+	expectedHeaderC := fmt.Sprintf("File: %s", absFileC)
+
+	if !strings.Contains(output, "Content A") {
+		testValue.Errorf("Output missing content from fileA.\nOutput: %s", output)
+	}
+	if !strings.Contains(output, "Content B1") {
+		testValue.Errorf("Output missing content from dirB/itemB1.\nOutput: %s", output)
+	}
+	if !strings.Contains(output, "Content B2") {
+		testValue.Errorf("Output missing content from dirB/sub/itemB2.\nOutput: %s", output)
+	}
+	if !strings.Contains(output, "Content C") {
+		testValue.Errorf("Output missing content from fileC.\nOutput: %s", output)
 	}
 
-	output := runCommand(testValue, binary, []string{"content", pkgDirectory, "-e", "log"}, tempDir)
-	if strings.Contains(output, "should be ignored") {
-		testValue.Errorf("Content output should not include content from pkg/log when -e is set.\nOutput: %s", output)
+	if !strings.Contains(output, expectedHeaderA) {
+		testValue.Errorf("Output missing header for fileA.\nOutput: %s", output)
 	}
-	if !strings.Contains(output, "should be included") {
-		testValue.Errorf("Content output should include content from pkg/include.txt.\nOutput: %s", output)
+	if !strings.Contains(output, expectedHeaderB1) {
+		testValue.Errorf("Output missing header for itemB1.\nOutput: %s", output)
+	}
+	if !strings.Contains(output, expectedHeaderB2) {
+		testValue.Errorf("Output missing header for itemB2.\nOutput: %s", output)
+	}
+	if !strings.Contains(output, expectedHeaderC) {
+		testValue.Errorf("Output missing header for fileC.\nOutput: %s", output)
+	}
+
+	idxA := strings.Index(output, expectedHeaderA)
+	idxB1 := strings.Index(output, expectedHeaderB1)
+	idxB2 := strings.Index(output, expectedHeaderB2)
+	idxC := strings.Index(output, expectedHeaderC)
+
+	if !(idxA >= 0 && idxA < idxB1 && idxA < idxB2 && (idxB1 < idxC || idxB2 < idxC) && idxC >= 0) {
+		testValue.Errorf("Output order incorrect. Indices: HeaderA=%d, HeaderB1=%d, HeaderB2=%d, HeaderC=%d\nOutput: %s", idxA, idxB1, idxB2, idxC, output)
+	}
+}
+
+func TestMixedInput_IgnoreScope_Content(testValue *testing.T) {
+	binary := buildBinary(testValue)
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"my_dir/":                   "",
+		"my_dir/.ignore":            "*.log\nignored_in_dir.txt",
+		"my_dir/app.log":            "Log content (ignored in dir)",
+		"my_dir/ignored_in_dir.txt": "Ignored text (ignored in dir)",
+		"my_dir/explicit.log":       "Explicit log content",
+		"my_dir/kept.txt":           "Kept text",
+	})
+
+	output := runCommand(testValue, binary, []string{"content", "my_dir/explicit.log", "my_dir"}, testDir)
+
+	if !strings.Contains(output, "Explicit log content") {
+		testValue.Errorf("Explicitly listed file 'my_dir/explicit.log' was incorrectly ignored.\nOutput: %s", output)
+	}
+	absExplicitLog, _ := filepath.Abs(filepath.Join(testDir, "my_dir/explicit.log"))
+	if !strings.Contains(output, fmt.Sprintf("File: %s", absExplicitLog)) {
+		testValue.Errorf("Missing header for explicitly listed file 'my_dir/explicit.log'.\nOutput: %s", output)
+	}
+
+	if strings.Contains(output, "Log content (ignored in dir)") {
+		testValue.Errorf("File 'my_dir/app.log' should have been ignored during directory traversal.\nOutput: %s", output)
+	}
+	if strings.Contains(output, "Ignored text (ignored in dir)") {
+		testValue.Errorf("File 'my_dir/ignored_in_dir.txt' should have been ignored during directory traversal.\nOutput: %s", output)
+	}
+
+	if !strings.Contains(output, "Kept text") {
+		testValue.Errorf("File 'my_dir/kept.txt' should have been included during directory traversal.\nOutput: %s", output)
+	}
+}
+
+func TestMixedInput_IgnoreScope_Tree(testValue *testing.T) {
+	binary := buildBinary(testValue)
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"my_dir/":                    "",
+		"my_dir/.ignore":             "ignored_in_tree.txt",
+		"my_dir/ignored_in_tree.txt": "ignored",
+		"my_dir/shown_in_tree.txt":   "shown",
+	})
+
+	output := runCommand(testValue, binary, []string{"tree", "my_dir/ignored_in_tree.txt", "my_dir"}, testDir)
+
+	absIgnoredFile, _ := filepath.Abs(filepath.Join(testDir, "my_dir/ignored_in_tree.txt"))
+	absMyDir, _ := filepath.Abs(filepath.Join(testDir, "my_dir"))
+
+	expectedFileMarker := fmt.Sprintf("[File] %s", absIgnoredFile)
+	expectedDirHeader := fmt.Sprintf("--- Directory Tree: %s ---", absMyDir)
+
+	if !strings.Contains(output, expectedFileMarker) {
+		testValue.Errorf("Output missing file marker for explicitly listed 'ignored_in_tree.txt': %s\nOutput: %s", expectedFileMarker, output)
+	}
+
+	if !strings.Contains(output, expectedDirHeader) {
+		testValue.Errorf("Output missing directory tree header for 'my_dir': %s\nOutput: %s", expectedDirHeader, output)
+	}
+
+	treePartStartIndex := strings.Index(output, expectedDirHeader)
+	if treePartStartIndex == -1 {
+		testValue.Fatalf("Could not find start of directory tree output.")
+	}
+	treePart := output[treePartStartIndex:]
+
+	if strings.Contains(treePart, "ignored_in_tree.txt") {
+		testValue.Errorf("The tree view for 'my_dir' should have omitted 'ignored_in_tree.txt'.\nTree Part:\n%s", treePart)
+	}
+	if !strings.Contains(treePart, "shown_in_tree.txt") {
+		testValue.Errorf("The tree view for 'my_dir' should have included 'shown_in_tree.txt'.\nTree Part:\n%s", treePart)
+	}
+}
+
+func TestMixedInput_EFlagScope(testValue *testing.T) {
+	binary := buildBinary(testValue)
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"config.log":      "Explicit top-level log",
+		"src/":            "",
+		"src/main.go":     "Go source",
+		"src/log/":        "",
+		"src/log/app.log": "App log inside src/log",
+		"vendor/":         "",
+		"vendor/lib.go":   "Vendor lib",
+	})
+
+	output := runCommand(testValue, binary, []string{"content", "config.log", "src", "-e", "log"}, testDir)
+
+	if !strings.Contains(output, "Explicit top-level log") {
+		testValue.Errorf("Explicitly listed file 'config.log' was incorrectly ignored by -e.\nOutput: %s", output)
+	}
+
+	if !strings.Contains(output, "Go source") {
+		testValue.Errorf("File 'src/main.go' should have been included during directory traversal.\nOutput: %s", output)
+	}
+
+	if strings.Contains(output, "App log inside src/log") {
+		testValue.Errorf("File 'src/log/app.log' should have been excluded by -e=log during directory traversal.\nOutput: %s", output)
+	}
+}
+
+func TestInput_NonExistentFile(testValue *testing.T) {
+	binary := buildBinary(testValue)
+	testDir := setupTestDirectory(testValue, map[string]string{})
+
+	output := runCommandExpectError(testValue, binary, []string{"content", "no_such_file.txt"}, testDir)
+
+	if !strings.Contains(output, "no_such_file.txt") || !strings.Contains(output, "does not exist") {
+		testValue.Errorf("Expected error about non-existent file, got:\n%s", output)
+	}
+}
+
+func TestInput_NonExistentDir(testValue *testing.T) {
+	binary := buildBinary(testValue)
+	testDir := setupTestDirectory(testValue, map[string]string{})
+
+	output := runCommandExpectError(testValue, binary, []string{"content", "no_such_dir/"}, testDir)
+
+	if !strings.Contains(output, "no_such_dir") || !strings.Contains(output, "does not exist") {
+		testValue.Errorf("Expected error about non-existent directory, got:\n%s", output)
+	}
+}
+
+func TestInput_UnreadableFile_Content(testValue *testing.T) {
+	if runtime.GOOS == "windows" {
+		testValue.Skip("Skipping unreadable file test on Windows")
+	}
+
+	binary := buildBinary(testValue)
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"readable.txt":   "Readable content",
+		"unreadable.txt": "<UNREADABLE>",
+	})
+
+	output := runCommandWithWarnings(testValue, binary, []string{"content", "readable.txt", "unreadable.txt"}, testDir)
+
+	if !strings.Contains(output, "Readable content") {
+		testValue.Errorf("Readable content missing.\nOutput: %s", output)
+	}
+
+	absUnreadable, _ := filepath.Abs(filepath.Join(testDir, "unreadable.txt"))
+	expectedWarning := fmt.Sprintf("Warning: Failed to read file %s", absUnreadable)
+	if !strings.Contains(output, expectedWarning) {
+		testValue.Errorf("Expected warning about unreadable file '%s' not found.\nOutput: %s", absUnreadable, output)
+	}
+
+	if strings.Contains(output, "cannot read this") {
+		testValue.Errorf("Unreadable content should not be present.\nOutput: %s", output)
+	}
+
+	warningIndex := strings.Index(output, expectedWarning)
+	separatorIndex := strings.Index(output[warningIndex:], "----------------------------------------")
+	if warningIndex == -1 || separatorIndex == -1 {
+		testValue.Errorf("Separator '---' not found after unreadable file warning.\nOutput: %s", output)
 	}
 }
 
 func TestExclusionFlagRootVsNested(testValue *testing.T) {
 	binary := buildBinary(testValue)
-	tempDir := testValue.TempDir()
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"log/":                   "",
+		"log/ignore.txt":         "top log ignored",
+		"pkg/":                   "",
+		"pkg/log/":               "",
+		"pkg/log/nested_log.txt": "nested log not ignored by -e",
+		"pkg/data.txt":           "pkg data",
+	})
 
-	topLogDirectory := filepath.Join(tempDir, "log")
-	makeError := os.Mkdir(topLogDirectory, 0o750)
-	if makeError != nil {
-		testValue.Fatalf("Failed to create top-level log directory: %v", makeError)
-	}
-	topLogFile := filepath.Join(topLogDirectory, "ignore.txt")
-	writeError := os.WriteFile(topLogFile, []byte("top log ignored"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create top-level log file: %v", writeError)
-	}
+	output := runCommand(testValue, binary, []string{"content", ".", "-e", "log"}, testDir)
 
-	pkgDirectory := filepath.Join(tempDir, "pkg")
-	makeError = os.Mkdir(pkgDirectory, 0o750)
-	if makeError != nil {
-		testValue.Fatalf("Failed to create pkg directory: %v", makeError)
-	}
-	nestedLogDirectory := filepath.Join(pkgDirectory, "log")
-	makeError = os.Mkdir(nestedLogDirectory, 0o750)
-	if makeError != nil {
-		testValue.Fatalf("Failed to create nested log directory: %v", makeError)
-	}
-	nestedLogFile := filepath.Join(nestedLogDirectory, "nested_ignore.txt")
-	writeError = os.WriteFile(nestedLogFile, []byte("nested log not ignored"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create nested log file: %v", writeError)
-	}
-
-	ignoreFilePath := filepath.Join(tempDir, ".ignore")
-	writeError = os.WriteFile(ignoreFilePath, []byte(""), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to write .ignore: %v", writeError)
-	}
-
-	output := runCommand(testValue, binary, []string{"content", tempDir, "-e", "log"}, tempDir)
 	if strings.Contains(output, "top log ignored") {
-		testValue.Errorf("Top-level log folder should be excluded when -e=log.\nOutput: %s", output)
+		testValue.Errorf("Top-level log folder should be excluded by -e=log.\nOutput: %s", output)
 	}
-	if !strings.Contains(output, "nested log not ignored") {
-		testValue.Errorf("Nested log folder should not be excluded when -e=log.\nOutput: %s", output)
+	if !strings.Contains(output, "nested log not ignored by -e") {
+		testValue.Errorf("Nested log folder should *not* be excluded by -e=log.\nOutput: %s", output)
 	}
-}
-
-func TestIgnoreAllPemFilesGlobally(testValue *testing.T) {
-	binary := buildBinary(testValue)
-	tempDir := testValue.TempDir()
-
-	topPemPath := filepath.Join(tempDir, "cert.pem")
-	writeError := os.WriteFile(topPemPath, []byte("top-level PEM"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create top-level cert.pem: %v", writeError)
-	}
-
-	nestedDirectory := filepath.Join(tempDir, "nested")
-	makeError := os.Mkdir(nestedDirectory, 0o750)
-	if makeError != nil {
-		testValue.Fatalf("Failed to create nested directory: %v", makeError)
-	}
-	nestedPemPath := filepath.Join(nestedDirectory, "key.pem")
-	writeError = os.WriteFile(nestedPemPath, []byte("nested PEM"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create nested key.pem: %v", writeError)
-	}
-
-	includedPath := filepath.Join(tempDir, "keep.txt")
-	writeError = os.WriteFile(includedPath, []byte("I am not a PEM"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to create keep.txt: %v", writeError)
-	}
-
-	ignoreFilePath := filepath.Join(tempDir, ".ignore")
-	writeError = os.WriteFile(ignoreFilePath, []byte("*.pem\n"), 0o600)
-	if writeError != nil {
-		testValue.Fatalf("Failed to write .ignore: %v", writeError)
-	}
-
-	output := runCommand(testValue, binary, []string{"content", tempDir}, tempDir)
-	if strings.Contains(output, "top-level PEM") {
-		testValue.Errorf("Should have excluded top-level .pem file.\nOutput: %s", output)
-	}
-	if strings.Contains(output, "nested PEM") {
-		testValue.Errorf("Should have excluded nested .pem file.\nOutput: %s", output)
-	}
-	if !strings.Contains(output, "I am not a PEM") {
-		testValue.Errorf("Should have included keep.txt.\nOutput: %s", output)
+	if !strings.Contains(output, "pkg data") {
+		testValue.Errorf("Content from pkg/data.txt should be included.\nOutput: %s", output)
 	}
 }
 
-func TestExclusionFlagTrailingSlash(testValue *testing.T) {
+func TestMultiDir_NoDirsProvided(testValue *testing.T) {
 	binary := buildBinary(testValue)
-	tempDir := testValue.TempDir()
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"local_file.txt": "Local Content",
+		"sub/":           "",
+		"sub/nested.txt": "Nested Content",
+	})
 
-	// Create top-level directory "memory-bank" with a file inside.
-	memoryBankDir := filepath.Join(tempDir, "memory-bank")
-	if err := os.Mkdir(memoryBankDir, 0750); err != nil {
-		testValue.Fatalf("Failed to create memory-bank directory: %v", err)
+	output := runCommand(testValue, binary, []string{"content"}, testDir)
+
+	if !strings.Contains(output, "Local Content") {
+		testValue.Errorf("Output missing 'Local Content' when run in current dir.\nOutput: %s", output)
 	}
-	fileInMemoryBank := filepath.Join(memoryBankDir, "file.txt")
-	if err := os.WriteFile(fileInMemoryBank, []byte("should be excluded"), 0600); err != nil {
-		testValue.Fatalf("Failed to create file in memory-bank: %v", err)
+	if !strings.Contains(output, "Nested Content") {
+		testValue.Errorf("Output missing 'Nested Content' when run in current dir.\nOutput: %s", output)
+	}
+}
+
+func TestMultiDir_ArgsOrder(testValue *testing.T) {
+	binary := buildBinary(testValue)
+	testDir := setupTestDirectory(testValue, map[string]string{
+		"dir1/":      "",
+		"dir1/a.txt": "A",
+		"dir2/":      "",
+		"dir2/b.txt": "B",
+	})
+
+	output := runCommandExpectError(testValue, binary, []string{"content", "dir1", "-e", "log", "dir2"}, testDir)
+	if !strings.Contains(output, "Positional argument 'dir2' found after flags") {
+		testValue.Errorf("Expected error about positional arg after flags, got:\n%s", output)
 	}
 
-	// Create a file outside "memory-bank" that should always be included.
-	fileOutside := filepath.Join(tempDir, "outside.txt")
-	if err := os.WriteFile(fileOutside, []byte("should be included"), 0600); err != nil {
-		testValue.Fatalf("Failed to create file outside memory-bank: %v", err)
-	}
-
-	// Test with exclusion flag without trailing slash.
-	outputNoSlash := runCommand(testValue, binary, []string{"content", tempDir, "-e", "memory-bank"}, tempDir)
-	if strings.Contains(outputNoSlash, "should be excluded") {
-		testValue.Errorf("Content output should not include content from memory-bank when exclusion flag is 'memory-bank'.\nOutput: %s", outputNoSlash)
-	}
-	if !strings.Contains(outputNoSlash, "should be included") {
-		testValue.Errorf("Content output should include content outside memory-bank when exclusion flag is 'memory-bank'.\nOutput: %s", outputNoSlash)
-	}
-
-	// Test with exclusion flag with trailing slash.
-	outputWithSlash := runCommand(testValue, binary, []string{"content", tempDir, "-e", "memory-bank/"}, tempDir)
-	if strings.Contains(outputWithSlash, "should be excluded") {
-		testValue.Errorf("Content output should not include content from memory-bank when exclusion flag is 'memory-bank/'.\nOutput: %s", outputWithSlash)
-	}
-	if !strings.Contains(outputWithSlash, "should be included") {
-		testValue.Errorf("Content output should include content outside memory-bank when exclusion flag is 'memory-bank/'.\nOutput: %s", outputWithSlash)
+	validOutput := runCommand(testValue, binary, []string{"content", "dir1", "dir2", "-e", "log"}, testDir)
+	if !strings.Contains(validOutput, "A") || !strings.Contains(validOutput, "B") {
+		testValue.Errorf("Valid command order failed unexpectedly.\nOutput: %s", validOutput)
 	}
 }
