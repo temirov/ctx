@@ -2,18 +2,23 @@
 
 Content is a command‑line tool written in Go that displays a directory tree view or outputs file contents for one or
 more specified files and/or directories. It supports exclusion patterns via **.ignore** and **.gitignore** files within
-each directory, as well as an optional global exclusion flag.
+each directory, as well as an optional global exclusion flag. It can output in raw text format (default) or structured
+JSON.
 
 ## Features
 
 - **Mixed File/Directory Processing:** Accepts one or more file and/or directory paths as input.
+- **Output Formats:** Supports `raw` text output (default) and `json` output using the `--format` flag.
 - **Tree Command:**
-    - Recursively displays the directory structure for each specified directory in a tree‑like format, clearly
-      separated.
-    - Lists explicitly provided file paths prefixed with `[File]`.
+    - `raw` format: Recursively displays the directory structure for each specified directory in a tree‑like format,
+      clearly separated. Lists explicitly provided file paths prefixed with `[File]`.
+    - `json` format: Outputs a JSON array where each element represents an input path. Directories include a nested
+      `children` array.
 - **Content Command:**
-    - Outputs the content of explicitly provided files.
-    - Outputs the concatenated contents of files found within specified directories (respecting ignores).
+    - `raw` format: Outputs the content of explicitly provided files and the concatenated contents of files found within
+      specified directories (respecting ignores), separated by headers and footers.
+    - `json` format: Outputs a JSON array of objects, each containing the `path`, `type`, and `content` of successfully
+      read files.
 - **Exclusion Patterns:**
     - Reads patterns from an **.ignore** file in the root of *each* processed **directory** (can be disabled with
       `--no-ignore`).
@@ -61,15 +66,17 @@ each directory, as well as an optional global exclusion flag.
 The basic syntax for using the utility is:
 
 ```bash
-content <tree|t|content|c> [path1] [path2] ... [-e|--e exclusion_folder] [--no-gitignore] [--no-ignore]
+content <tree|t|content|c> [path1] [path2] ... [-e|--e exclusion_folder] [--no-gitignore] [--no-ignore] [--format <raw|json>]
 ```
 
 ### Commands
 
 - **tree (or t):**
-  Displays a directory tree view for each specified directory and lists specified files.
+  Displays a directory tree view for each specified directory and lists specified files. Output format depends on
+  `--format`.
 - **content (or c):**
-  Outputs the content of specified files and the concatenated contents of files within specified directories.
+  Outputs the content of specified files and the concatenated contents of files within specified directories. Output
+  format depends on `--format`.
 
 ### Arguments
 
@@ -91,43 +98,89 @@ content <tree|t|content|c> [path1] [path2] ... [-e|--e exclusion_folder] [--no-g
   Optional flag. Disables loading of `.gitignore` files from all processed directories.
 - **--no-ignore:**
   Optional flag. Disables loading of `.ignore` files from all processed directories.
+- **--format <raw|json>:**
+  Optional flag. Specifies the output format.
+    - `raw` (Default): Human-readable text output.
+    - `json`: Structured JSON output suitable for machine processing.
 
 ### Examples
 
-- **Display tree for `projectA` dir and list `config.yaml` file, excluding `dist` folders within `projectA`:**
+- **Display raw tree views for `projectA` and `projectB`, excluding `dist` folders:**
 
   ```bash
-  content tree projectA config.yaml -e dist
+  content tree projectA projectB -e dist
+  # Equivalent: content tree projectA projectB -e dist --format raw
   ```
 
-- **Get content of `main.go`, `utils/helpers.go`, and all files within the `pkg` directory, excluding `pkg/logs`:**
+- **Get content of `main.go` and files within `pkg` directory (excluding `pkg/logs`) in JSON format:**
 
   ```bash
-  content c main.go utils/helpers.go pkg -e logs
+  content c main.go pkg -e logs --format json
   ```
 
-- **Get content of `README.md` and files in current dir, ignoring `.gitignore` rules during directory scan:**
-
+- **Display tree structure for current directory and `config.toml` file in JSON format:**
   ```bash
-  content c README.md . --no-gitignore
+  content t . config.toml --format json
   ```
 
-- **Get content of an explicitly listed file, even if ignored by `.ignore`:**
-  *(Assume `my_dir/.ignore` contains `secret.txt`)*
+### JSON Output Format Examples
 
-  ```bash
-  # This WILL print secret.txt because it's listed explicitly
-  content c my_dir/secret.txt
+**`content content --format json`**
 
-  # This will NOT print secret.txt (if found during traversal)
-  content c my_dir
-  ```
+Outputs a JSON array. Each object represents a successfully read file:
 
-- **Display tree of the current directory (default):**
+```json
+[
+  {
+    "path": "/abs/path/to/fileA.txt",
+    "type": "file",
+    "content": "Content of file A...\n...with newlines preserved."
+  },
+  {
+    "path": "/abs/path/to/dirB/itemB1.txt",
+    "type": "file",
+    "content": "Content B1"
+  }
+]
+```
 
-  ```bash
-  content t
-  ```
+**`content tree --format json`**
+
+Outputs a JSON array representing the input paths. Directories contain nested children.
+
+```json
+[
+  {
+    "path": "/abs/path/to/fileA.txt",
+    "name": "fileA.txt",
+    "type": "file"
+  },
+  {
+    "path": "/abs/path/to/dirB",
+    "name": "dirB",
+    "type": "directory",
+    "children": [
+      {
+        "path": "/abs/path/to/dirB/itemB1.txt",
+        "name": "itemB1.txt",
+        "type": "file"
+      },
+      {
+        "path": "/abs/path/to/dirB/sub",
+        "name": "sub",
+        "type": "directory",
+        "children": [
+          {
+            "path": "/abs/path/to/dirB/sub/itemB2.txt",
+            "name": "itemB2.txt",
+            "type": "file"
+          }
+        ]
+      }
+    ]
+  }
+]
+```
 
 ## Configuration (Applies ONLY during Directory Traversal)
 
