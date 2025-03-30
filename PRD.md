@@ -6,7 +6,7 @@
 
 **Purpose:**
 The `content` utility is a command‑line tool written in Go. It provides two primary functions for one or more specified
-file and/or directory paths:
+file and/or directory paths, with configurable output formats:
 
 - **tree:** Displays directory structures and lists specified files.
 - **content:** Outputs the content of specified files and the contents of files within specified directories.
@@ -23,11 +23,9 @@ flag (`-e`/`--e`). Explicitly listed files are never filtered.
 
 - **Primary Commands:**
     - `tree` (or `t`):
-        - For directory paths: Prints a directory tree view.
-        - For file paths: Prints the file's absolute path prefixed with `[File]`.
+        - Processes specified paths. Output depends on `--format`.
     - `content` (or `c`):
-        - For directory paths: Outputs the concatenated contents of non-ignored files found recursively within.
-        - For file paths: Outputs the content of the specified file directly.
+        - Processes specified paths. Output depends on `--format`.
 - **Positional Arguments:**
     - **Input Paths:**
         - Optional. One or more file or directory paths can be provided after the command.
@@ -77,85 +75,72 @@ flag (`-e`/`--e`). Explicitly listed files are never filtered.
 
 ### Project Structure
 
-- `main.go`: Entry point, argument parsing, path validation, orchestration logic.
+- `main.go`: Entry point, argument parsing, path validation, orchestration, output rendering.
+- `types/types.go`: Defines shared data structures (`ValidatedPath`, `FileOutput`, `TreeOutputNode`).
 - `config.go`: Loader for ignore files.
-- `commands/`: Package containing command logic for **directory** processing.
-    - `tree.go`: Implements recursive tree view for a directory.
-    - `content.go`: Implements recursive content gathering for a directory.
-- `utils.go`: Helper functions (ignore pattern matching, directory check).
+- `commands/`: Package containing logic to **collect data** for directory processing.
+    - `tree.go`: Implements `GetTreeData` returning `[]*TreeOutputNode`.
+    - `content.go`: Implements `GetContentData` returning `[]FileOutput`.
+- `utils.go`: Helper functions.
 
 ### Step 1: Argument Parsing (`main.go`)
 
-- **Parse Command‑Line Arguments:**
-    - Identify the command (`tree` or `content`).
-    - Capture all positional arguments *before* flags as `inputPaths []string`.
-    - Default to `inputPaths = []string{"."}` if empty.
-    - Parse global flags (`-e`/`--e`, `--no-gitignore`, `--no-ignore`).
-- **Validation:** Ensure correct command, argument order (paths before flags), flag values. Display usage on error.
+- **Parse Command‑Line Arguments:** Add parsing for `--format` flag, validate its value (`raw` or `json`), store the
+  result, default to `raw`.
 
-### Step 2: Path Validation (`main.go`)
+### Step 2: Define Data Structures (`types/types.go`)
 
-- **Create `resolveAndValidatePaths`:**
-    - Takes `inputPaths []string`.
-    - Returns `[]ValidatedPath`, `error`. (`type ValidatedPath struct { AbsolutePath string; IsDir bool }`).
-    - Iterates `inputPaths`:
-        - Resolve absolute path (`filepath.Abs`).
-        - Clean path (`filepath.Clean`).
-        - Use a map on cleaned absolute paths to detect and skip duplicates.
-        - Use `os.Stat` to check existence (error if not found) and determine `IsDir`.
-        - Append `ValidatedPath` struct to results.
-    - Return unique, validated paths with type information.
+- Create `types` package.
+- Define `ValidatedPath`, `FileOutput`, `TreeOutputNode` structs with necessary fields and JSON tags.
 
-### Step 3: Orchestration (`main.go`)
+### Step 3: Path Validation (`main.go`)
 
-- **Rename `runMultiDirectoryContentTool` to `runContentTool`:**
-    - Call `resolveAndValidatePaths`. Handle error.
-    - Iterate through the `[]ValidatedPath`.
-    - **Switch on `commandName`:**
-        - **`tree`:**
-            - If `IsDir`: Load ignores for dir (using `loadIgnorePatternsForDirectory`), print header, call
-              `commands.TreeCommand`. Handle errors.
-            - If `!IsDir`: Print `[File] path`.
-        - **`content`:**
-            - If `IsDir`: Load ignores for dir (using `loadIgnorePatternsForDirectory`), call `commands.ContentCommand`.
-              Handle errors.
-            - If `!IsDir`: Call `printSingleFileContent(path)`. Handle errors (warnings).
-    - Track the first error encountered for final exit status.
+- Modify `resolveAndValidatePaths` to use/return `types.ValidatedPath`.
 
-### Step 4: Implement File Content Printing (`main.go`)
+### Step 4: Refactor Command Logic (Data Collection) (`commands/`)
 
-- **Create `printSingleFileContent`:**
-    - Takes `filePath string`. Returns `error` (though likely returns `nil` after printing warning).
-    - Prints standard `File: ...` header.
-    - Uses `os.ReadFile`.
-    - On error: Prints warning to `stderr`, prints separator, returns `nil`.
-    - On success: Prints content, prints `End of file: ...` footer, prints separator, returns `nil`.
+- Modify `commands.ContentCommand` to `GetContentData`, returning `[]types.FileOutput, error`. Remove printing logic.
+  Handle read errors by warning and skipping file.
+- Modify `commands.TreeCommand` to `GetTreeData`, returning `[]*types.TreeOutputNode, error`. Implement recursive node
+  building (`buildTreeNodes`). Remove printing logic. Handle read errors by warning and skipping subdirectory.
 
-### Step 5: Update Ignore Loading (`main.go`)
+### Step 5: Orchestration & Data Aggregation (`main.go`)
 
-- **Modify `loadIgnorePatternsForDirectory`:** Ensure it's only called for directories. The logic to add the `EXCL:`
-  prefix for the `-e` flag remains correct within this context.
+- **Modify `runContentTool`:**
+    - Accept `outputFormat` parameter.
+    - Create `collectedResults []interface{}`.
+    - Loop through `validatedPaths`.
+    - Call appropriate `Get*Data` function or create nodes/file output directly for file paths.
+    - Append results (*pointers* to structs where applicable) to `collectedResults`.
+    - Handle and track non-fatal processing errors/warnings.
 
-### Step 6: Command Implementations (`commands/`)
+### Step 6: Implement Output Rendering (`main.go`)
 
-- **`commands.TreeCommand`:** No changes needed (header moved to `main`).
-- **`commands.ContentCommand`:** No changes needed. Works on directories passed to it.
+- **Create `renderJsonOutput`:** Takes `collectedResults`, marshals using `json.MarshalIndent`, prints to `stdout`.
+- **Create `renderRawOutput`:** Takes `commandName`, `collectedResults`. Uses type assertions to determine result type (
+  `*types.FileOutput` or `*types.TreeOutputNode`). Calls `printRawTreeNode` recursively for directory nodes in `tree`
+  mode. Prints file content/markers based on `commandName`.
+- Modify `runContentTool` to call the correct rendering function based on `outputFormat`.
 
-### Step 7: Helper Functions (`utils.go`, `config.go`)
+### Step 7: Helper Functions (`utils.go`, `config.go`, `main.go`)
 
-- No changes needed in `utils` or `config`.
+- Add default ignores for `.ignore`, `.gitignore` in `utils`.
+- Ensure `deduplicatePatterns` is used correctly in `main`.
 
 ---
 
 ## 4. Test Plan
 
-*(Adding new test cases for mixed inputs and scoping)*
+*(Adding tests for formats)*
 
 ### 1. Argument Parsing and Validation
 
-- (Existing cases remain valid for argument order and flag parsing)
-- **Valid Input Case:** `content c file.txt dir1 -e log` (Expect: Command "content", Paths ["file.txt", "dir1"],
-  Exclusion "log")
+- (Existing cases)
+- **Case:** `--format json` valid.
+- **Case:** `--format raw` valid.
+- **Case:** `--format` missing value (Error).
+- **Case:** `--format invalid` (Error).
+- **Case:** Default format (no flag) is `raw`.
 
 ### 2. Path Validation
 
@@ -166,7 +151,7 @@ flag (`-e`/`--e`). Explicitly listed files are never filtered.
 - **Case:** Duplicate file/dir paths: `content c file.txt ./file.txt dir ./dir` (Expect: Processes `file.txt` once,
   `dir` once).
 
-### 3. Configuration File (`.ignore`, `.gitignore`) Loading & Scoping
+### 3. Configuration File Loading & Scoping
 
 - **Case:** Ignore scope for explicit file (Content): `dir/.ignore` has `*.log`. Run `content c dir/app.log dir`. (
   Expect: `dir/app.log` content *is* printed first because explicitly listed; other `.log` files *within* `dir` are
@@ -182,44 +167,52 @@ flag (`-e`/`--e`). Explicitly listed files are never filtered.
 
 ### 5. Tree Command Functionality
 
-- **Case:** Mixed input tree: `content t fileA.txt dirB fileC.txt`. (Expect: `[File] .../fileA.txt`, then
-  `--- Directory Tree: .../dirB ---` + tree, then `[File] .../fileC.txt`). Order matches arguments.
+### 5. Output Format Testing
 
-### 6. Content Command Functionality
+- **Case:** `content content --format json`: Verify output is valid JSON matching the `[]FileOutput` schema. Check
+  content, paths, type. Verify ignored/unreadable files are omitted.
+- **Case:** `content tree --format json`: Verify output is valid JSON matching the `[]TreeOutputNode` schema. Check
+  structure, paths, names, types. Verify ignored files/dirs are omitted from `children`.
+- **Case:** `content content --format raw` / Default: Verify output matches the original raw text format.
+- **Case:** `content tree --format raw` / Default: Verify output matches the original raw text format.
+- **Case:** Mixed input with `--format json` (both commands): Verify structure and content are correct.
+- **Case:** Empty result set with `--format json`: Verify output is `[]`.
 
-- **Case:** Mixed input content: `content c fileA.txt dirB fileC.txt`. (Expect: Content of fileA, then content of files
-  in dirB (respecting ignores), then content of fileC. Order matches arguments).
-- **Case:** Unreadable explicit file: Create unreadable `unreadable.txt`. Run `content c readable.txt unreadable.txt`. (
-  Expect: Content of `readable.txt` printed; warning about `unreadable.txt` on stderr; command finishes successfully).
+### 6. Error/Warning Handling
 
-### 7. Integration and Edge Cases
-
-- (Existing cases remain relevant)
+- (Existing cases for non-existent paths)
+- **Case:** Unreadable file with `--format json`: Verify command succeeds, warning on stderr, file omitted from JSON
+  stdout.
+- **Case:** Unreadable file with `--format raw`: Verify command succeeds, warning on stderr, file content section shows
+  error/is omitted appropriately in raw stdout.
+- **Case:** Unreadable directory during tree build (`--format json`): Verify command succeeds, warning on stderr,
+  directory might appear in JSON but with `children: null` or omitted depending on implementation.
+- **Case:** Unreadable directory during tree build (`--format raw`): Verify command succeeds, warning on stderr, raw
+  tree output indicates issue or skips the branch.
 
 ### Testing Approach
 
-- **Unit Tests:** (Focus on argument parsing, `resolveAndValidatePaths`)
+- **Unit Tests:** (Argument parsing, potentially node building logic if complex).
 - **Integration Tests:**
-    - Add tests specifically for `TestMixedInput_Tree`, `TestMixedInput_Content`.
-    - Add tests for `TestMixedInput_IgnoreScope_Content`, `TestMixedInput_IgnoreScope_Tree`.
-    - Add tests for `TestMixedInput_EFlagScope`.
-    - Add tests for `TestInput_NonExistentFile`, `TestInput_UnreadableFile_Content`.
-    - Ensure existing multi-dir tests still pass.
+    - Add specific tests for `--format json` output validation using `encoding/json.Unmarshal`.
+    - Add tests validating default (`raw`) output.
+    - Add tests for invalid `--format` flag usage.
+    - Ensure warning checks (`runCommandWithWarnings`) correctly separate stdout (for JSON) and stderr (for warnings).
 
 ---
 
 ## 5. Summary
 
-This PRD details the specifications for the `content` utility, now enhanced to handle mixed file and directory inputs:
+This PRD details the specifications for the `content` utility, now enhanced to handle mixed file/directory inputs and
+provide configurable output formats:
 
-- **Functionality:** Provides `tree` and `content` commands processing a list of specified file and/or directory paths.
-- **Behavior:** `tree` lists files and shows directory structures. `content` shows file content directly or recursively
-  scans directories.
-- **Exclusions:** Ignore rules (`.ignore`, `.gitignore`, `-e`) apply **only** during directory traversal and do not
-  filter explicitly listed files. Flags `--no-ignore` and `--no-gitignore` disable loading ignore files during directory
-  scans.
-- **Coding Plan:** Outlines changes primarily in `main.go` for argument parsing, path validation (
-  `resolveAndValidatePaths`), and orchestration logic dispatching to commands or direct file printing (
-  `printSingleFileContent`). Command packages remain focused on directory processing.
-- **Test Plan:** Expanded with comprehensive tests covering mixed inputs, ignore scoping rules, and error handling for
-  different path types.
+- **Functionality:** Provides `tree` and `content` commands processing files/directories. Supports `raw` (default) and
+  `json` output formats via `--format` flag.
+- **Behavior:** `tree` lists files/shows directory structures. `content` shows file content/scans directories. Output
+  adapts to format.
+- **Exclusions:** Ignore rules apply **only** during directory traversal. Explicit files are never ignored.
+- **Coding Plan:** Outlines refactoring to separate data collection (`commands/`) from output rendering (`main.go`).
+  Introduces `types` package and `--format` flag parsing. Implements `renderJsonOutput` and `renderRawOutput`. Updates
+  ignore logic in `utils`.
+- **Test Plan:** Expanded with tests for format flag usage, JSON output validation, raw output regression, and error
+  handling across formats.
