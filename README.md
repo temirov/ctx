@@ -1,46 +1,59 @@
 # Content
 
-Content is a command‑line tool written in Go that displays a directory tree view or outputs file contents. It supports
-exclusion patterns via an **.ignore** file (using full Git‑ignore semantics) and a **.gitignore** file by default, as
-well as an optional exclusion flag.
+Content is a command‑line tool written in Go that displays a directory tree view or outputs file contents for one or
+more specified files and/or directories. It supports exclusion patterns via **.ignore** and **.gitignore** files within
+each directory, as well as an optional global exclusion flag.
 
 ## Features
 
-- **Tree Command:** Recursively displays the directory structure in a tree‑like format.
-- **Content Command:** Outputs the contents of files within a specified directory.
+- **Mixed File/Directory Processing:** Accepts one or more file and/or directory paths as input.
+- **Tree Command:**
+    - Recursively displays the directory structure for each specified directory in a tree‑like format, clearly
+      separated.
+    - Lists explicitly provided file paths prefixed with `[File]`.
+- **Content Command:**
+    - Outputs the content of explicitly provided files.
+    - Outputs the concatenated contents of files found within specified directories (respecting ignores).
 - **Exclusion Patterns:**
-    - Reads patterns from an **.ignore** file in the working directory (instead of the previous .ignore).
-    - Reads patterns from a **.gitignore** file by default if it is present.
-    - The patterns from both files are combined and deduplicated.
+    - Reads patterns from an **.ignore** file in the root of *each* processed **directory** (can be disabled with
+      `--no-ignore`).
+    - Reads patterns from a **.gitignore** file by default in the root of *each* processed **directory** (can be
+      disabled with `--no-gitignore`).
+    - Patterns from `.ignore` and `.gitignore` within a specific directory are combined, deduplicated, and applied
+      **only** during the traversal of that directory.
+    - **Important:** Ignore rules *do not* filter out explicitly listed file paths. If you provide
+      `path/to/ignored_file.txt` as an argument, its content will be shown by the `content` command.
 - **Exclusion Flags:**
-    - **-e / --e:** Excludes a designated folder (only when it is a direct child of the working directory). Both `-e`
-      and `--e` work.
-    - **--no-gitignore:** Disables reading from the **.gitignore** file.
-    - **--no-ignore:** Disables reading from the **.ignore** file.
+    - **-e / --e:** Excludes a designated folder name if it appears as a direct child within *any* of the specified
+      root **directories**. Both `-e` and `--e` work. Has no effect on explicitly listed files.
+    - **--no-gitignore:** Disables reading from **.gitignore** files in all processed directories.
+    - **--no-ignore:** Disables reading from the **.ignore** files in all processed directories.
 - **Command Abbreviations:**
     - `t` is an alias for `tree`.
     - `c` is an alias for `content`.
+- **Deduplication:** Duplicate input paths (after resolving to absolute paths) are processed only once.
 
 ## Installation
 
-1. **Ensure you have Go installed:**  
+1. **Ensure you have Go installed:**
    Download and install Go from [golang.org](https://golang.org/dl/).
 
-2. **Set up your environment:**  
+2. **Set up your environment:**
    Make sure your `GOBIN` (or `$GOPATH/bin`) is in your system's `PATH`.
 
-3. **Install the utility:**  
+3. **Install the utility:**
    Run the following command to install the latest version:
 
    ```bash
    go install github.com/temirov/content@latest
    ```
 
-4. **Verify installation:**  
+4. **Verify installation:**
    Confirm that the `content` binary is available in your `GOBIN` directory by running:
 
    ```bash
    content --help
+   # Or just 'content' to see usage
    ```
 
 ## Usage
@@ -48,81 +61,92 @@ well as an optional exclusion flag.
 The basic syntax for using the utility is:
 
 ```bash
-content <tree|t|content|c> [root_directory] [-e|--e exclusion_folder] [--no-gitignore] [--no-ignore]
+content <tree|t|content|c> [path1] [path2] ... [-e|--e exclusion_folder] [--no-gitignore] [--no-ignore]
 ```
 
 ### Commands
 
-- **tree (or t):**  
-  Displays a directory tree view.
-
-- **content (or c):**  
-  Outputs the contents of files under a specified directory.
+- **tree (or t):**
+  Displays a directory tree view for each specified directory and lists specified files.
+- **content (or c):**
+  Outputs the content of specified files and the concatenated contents of files within specified directories.
 
 ### Arguments
 
-- **root_directory:**  
-  Optional. Defaults to the current directory (`"."`) if not provided.
-
-- **-e or --e exclusion_folder:**  
-  Optional flag. Specifies a single additional folder (relative to the working directory) to exclude.
-    - When the folder is directly under the working directory (or provided root), it is entirely excluded from
-      processing.
-    - Nested folders with the same name are not excluded.
-
-- **--no-gitignore:**  
-  Optional flag. Disables loading of the **.gitignore** file.
-
-- **--no-ignore:**  
-  Optional flag. Disables loading of the **.ignore** file.
+- **path1, path2, ...:**
+  Optional. One or more paths (files or directories) you want to process.
+    - If no paths are provided, it defaults to the current directory (`"."`).
+    - Paths can be relative or absolute.
+    - Duplicate paths (after resolution) are ignored.
+- **-e or --e exclusion_folder:**
+  Optional flag. Specifies a single folder *name* to exclude globally during **directory** traversal.
+    - If a folder with this exact name exists directly under any of the specified **directory** arguments, it will be
+      entirely excluded from processing for that specific directory.
+    - Example: `content c proj1 proj2 -e node_modules` excludes `proj1/node_modules` and `proj2/node_modules` during
+      traversal.
+    - This only applies to direct children of specified directories; nested folders with the same name are *not*
+      affected by this flag.
+    - This flag has **no effect** on explicitly listed **file** arguments.
+- **--no-gitignore:**
+  Optional flag. Disables loading of `.gitignore` files from all processed directories.
+- **--no-ignore:**
+  Optional flag. Disables loading of `.ignore` files from all processed directories.
 
 ### Examples
 
-- **Display a tree view of the current directory while excluding the `log` folder:**
+- **Display tree for `projectA` dir and list `config.yaml` file, excluding `dist` folders within `projectA`:**
 
   ```bash
-  content tree -e log
+  content tree projectA config.yaml -e dist
   ```
 
-- **Display a tree view of a specific directory (`pkg`) while excluding the `log` folder:**
+- **Get content of `main.go`, `utils/helpers.go`, and all files within the `pkg` directory, excluding `pkg/logs`:**
 
   ```bash
-  content t pkg --e log
+  content c main.go utils/helpers.go pkg -e logs
   ```
 
-- **Output file contents from the current directory while excluding the `log` folder:**
+- **Get content of `README.md` and files in current dir, ignoring `.gitignore` rules during directory scan:**
 
   ```bash
-  content content -e log
+  content c README.md . --no-gitignore
   ```
 
-- **Output file contents from a specific directory (`pkg`) while excluding the `log` folder and disabling .gitignore
-  logic:**
+- **Get content of an explicitly listed file, even if ignored by `.ignore`:**
+  *(Assume `my_dir/.ignore` contains `secret.txt`)*
 
   ```bash
-  content c pkg -e log --no-gitignore
+  # This WILL print secret.txt because it's listed explicitly
+  content c my_dir/secret.txt
+
+  # This will NOT print secret.txt (if found during traversal)
+  content c my_dir
   ```
 
-## Configuration
+- **Display tree of the current directory (default):**
 
-The utility loads exclusion patterns from two files by default:
+  ```bash
+  content t
+  ```
+
+## Configuration (Applies ONLY during Directory Traversal)
+
+Exclusion patterns are loaded from configuration files found within *each* **directory** being processed:
 
 1. **.ignore**
-    - This file uses full Git‑ignore semantics.
-    - Each non‑empty line (that does not start with `#`) is treated as a glob pattern.
-    - For example:
-
-      ```plaintext
-      # Exclude log directories and temporary files
-      log/
-      *.tmp
-      ```
+    - Located at the root of a processed directory (e.g., `projectA/.ignore`).
+    - Uses standard Gitignore pattern syntax.
+    - Patterns only apply when traversing the contents of that specific directory.
+    - Loading can be disabled globally using `--no-ignore`.
 
 2. **.gitignore**
-    - This file is read by default and its patterns are combined with those from **.ignore**.
-    - To disable its usage, run the utility with the `--no-gitignore` flag.
+    - Located at the root of a processed directory (e.g., `projectA/.gitignore`).
+    - Read by default.
+    - Patterns only apply when traversing the contents of that specific directory.
+    - Loading can be disabled globally using `--no-gitignore`.
 
-Additionally, if you do not wish to use the **.ignore** file, you can disable it with the `--no-ignore` flag.
+Patterns from both files (if loaded) within the same directory are combined and deduplicated for processing that
+directory traversal. **These patterns do not affect explicitly listed file arguments.**
 
 ## Development
 

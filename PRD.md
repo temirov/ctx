@@ -2,15 +2,18 @@
 
 ## 1. Overview
 
-**Utility Name:** `content`  
-**Purpose:**  
-The `content` utility is a command‑line tool written in Go. It provides two primary functions:
+**Utility Name:** `content`
 
-- **tree:** Displays a directory tree view.
-- **content:** Outputs the contents of files within a directory.
+**Purpose:**
+The `content` utility is a command‑line tool written in Go. It provides two primary functions for one or more specified
+file and/or directory paths:
 
-The utility filters out files and directories based solely on exclusion patterns specified in a configuration file (
-`.ignore`) and an optional additional exclusion provided via the `-e` flag.
+- **tree:** Displays directory structures and lists specified files.
+- **content:** Outputs the content of specified files and the contents of files within specified directories.
+
+The utility filters files and directories *during directory traversal* based on exclusion patterns specified in
+configuration files (`.ignore`, `.gitignore`) located within each processed directory, and an optional global exclusion
+flag (`-e`/`--e`). Explicitly listed files are never filtered.
 
 ---
 
@@ -19,35 +22,54 @@ The utility filters out files and directories based solely on exclusion patterns
 ### Commands & Arguments
 
 - **Primary Commands:**
-    - `tree`:
-        - Prints a directory tree view.
-    - `content`:
-        - Outputs the contents of files under a specified directory.
+    - `tree` (or `t`):
+        - For directory paths: Prints a directory tree view.
+        - For file paths: Prints the file's absolute path prefixed with `[File]`.
+    - `content` (or `c`):
+        - For directory paths: Outputs the concatenated contents of non-ignored files found recursively within.
+        - For file paths: Outputs the content of the specified file directly.
 - **Positional Arguments:**
-    - **Root Directory:**
-        - Optional. Defaults to the current directory (`"."`) if not provided.
+    - **Input Paths:**
+        - Optional. One or more file or directory paths can be provided after the command.
+        - If no paths are specified, defaults to the current directory (`"."`).
+        - Duplicate paths (after resolving to absolute paths) are processed only once.
+        - Order of processing matches the order of arguments.
 - **Flags:**
-    - **`-e` flag:**
-        - Specifies a single additional folder (relative to the working directory) to exclude.
+    - **`-e` or `--e` flag:**
+        - Specifies a single folder name to exclude globally **during directory traversal**.
         - **Behavior:**
-            - For both the `content` and `tree` commands:
-                - When the exclusion folder is located directly under the working directory (i.e. the root provided), it
-                  is entirely excluded.
-                - For example:
-                    - `content.sh content pkg -e log` will skip processing all files under `pkg/log`.
-                    - `content.sh tree pkg -e log` will exclude the `pkg/log` folder and its entire structure.
-                    - `content.sh tree -e log` will exclude the `log` folder in the current directory (while nested
-                      instances of a folder named `log` in subdirectories are not excluded).
+            - If a folder with this name exists as a *direct child* of *any* specified **directory** argument, it is
+              entirely excluded from the traversal of that specific directory.
+            - Nested folders with the same name are *not* excluded by this flag.
+            - This flag has **no effect** on explicitly listed **file** arguments.
+            - Example: `content c file.log dir1 dir2 -e log` will process `file.log`, skip traversal of `dir1/log` and
+              `dir2/log` (if they exist), but not skip `dir1/subdir/log`.
+    - **`--no-gitignore` flag:**
+        - Optional. Disables loading of `.gitignore` files when processing **directory** arguments.
+    - **`--no-ignore` flag:**
+        - Optional. Disables loading of `.ignore` files when processing **directory** arguments.
 
-### Exclusion Patterns
+### Exclusion Patterns (During Directory Traversal ONLY)
 
 - **Source of Exclusions:**
-    - No built‑in exclusion patterns exist in the code.
-    - All exclusion rules are solely retrieved from a configuration file named `.ignore` located in the current
-      working directory.
-- **`.ignore` File Format:**
-    - Uses full Git‑ignore semantic with one glob pattern per line.
-    - Only non-empty lines and lines not beginning with `#` are considered.
+    - Exclusion rules apply *only* when recursively processing specified **directory** paths.
+    - Rules are retrieved from:
+        1. `.ignore` file located in the root of *each* processed directory (if `--no-ignore` is not used).
+        2. `.gitignore` file located in the root of *each* processed directory (if `--no-gitignore` is not used).
+        3. The global `-e`/`--e` flag (applies to direct children directories).
+    - Patterns from `.ignore` and `.gitignore` within a specific directory are combined and deduplicated for processing
+      the traversal of *that directory only*.
+- **Scope:**
+    - Ignore rules **do not** filter explicitly listed **file** arguments.
+- **`.ignore` / `.gitignore` File Format:**
+    - Uses standard Gitignore semantics (glob patterns). One pattern per line. Non-empty lines not beginning with `#`
+      considered.
+
+### Error Handling
+
+- Non-existent paths provided as arguments cause immediate program termination with an error.
+- Unreadable files provided explicitly as arguments to the `content` command result in a warning printed to `stderr`,
+  but the program continues processing other paths.
 
 ---
 
@@ -55,206 +77,149 @@ The utility filters out files and directories based solely on exclusion patterns
 
 ### Project Structure
 
-- The implementation shall be organized into multiple files to promote modularity and maintainability.
-- Suggested structure:
-    - `main.go`: Entry point and argument parsing.
-    - `config.go`: Loader for the `.ignore` file.
-    - `commands/`: A package containing:
-        - `tree.go`: Implementation of the tree command.
-        - `content.go`: Implementation of the content command.
-    - `utils.go`: Helper functions such as directory validation and glob matching using full Git‑ignore semantics.
+- `main.go`: Entry point, argument parsing, path validation, orchestration logic.
+- `config.go`: Loader for ignore files.
+- `commands/`: Package containing command logic for **directory** processing.
+    - `tree.go`: Implements recursive tree view for a directory.
+    - `content.go`: Implements recursive content gathering for a directory.
+- `utils.go`: Helper functions (ignore pattern matching, directory check).
 
-### Step 1: Argument Parsing
+### Step 1: Argument Parsing (`main.go`)
 
 - **Parse Command‑Line Arguments:**
     - Identify the command (`tree` or `content`).
-    - Capture the optional root directory; default to `"."` if not provided.
-    - Parse and validate the optional `-e` flag and its folder name.
-- **Validation:**
-    - Ensure the correct number and order of arguments.
-    - Display usage instructions on error.
+    - Capture all positional arguments *before* flags as `inputPaths []string`.
+    - Default to `inputPaths = []string{"."}` if empty.
+    - Parse global flags (`-e`/`--e`, `--no-gitignore`, `--no-ignore`).
+- **Validation:** Ensure correct command, argument order (paths before flags), flag values. Display usage on error.
 
-### Step 2: Validate the Root Directory
+### Step 2: Path Validation (`main.go`)
 
-- Use functions like `os.Stat` to verify that the specified directory exists and is accessible.
-- Return an error if the directory is invalid.
+- **Create `resolveAndValidatePaths`:**
+    - Takes `inputPaths []string`.
+    - Returns `[]ValidatedPath`, `error`. (`type ValidatedPath struct { AbsolutePath string; IsDir bool }`).
+    - Iterates `inputPaths`:
+        - Resolve absolute path (`filepath.Abs`).
+        - Clean path (`filepath.Clean`).
+        - Use a map on cleaned absolute paths to detect and skip duplicates.
+        - Use `os.Stat` to check existence (error if not found) and determine `IsDir`.
+        - Append `ValidatedPath` struct to results.
+    - Return unique, validated paths with type information.
 
-### Step 3: Load Exclusion Patterns from `.ignore`
+### Step 3: Orchestration (`main.go`)
 
-- **File Check:**
-    - Look for `.ignore` in the current working directory.
-- **Reading and Parsing:**
-    - If the file exists, read it line by line.
-    - Skip empty lines and comments (lines beginning with `#`).
-    - Store valid glob patterns in a slice using full Git‑ignore semantics.
-- **Integration:**
-    - The collected glob patterns serve as the sole exclusion rules, which are merged with the additional exclusion
-      provided by the `-e` flag.
+- **Rename `runMultiDirectoryContentTool` to `runContentTool`:**
+    - Call `resolveAndValidatePaths`. Handle error.
+    - Iterate through the `[]ValidatedPath`.
+    - **Switch on `commandName`:**
+        - **`tree`:**
+            - If `IsDir`: Load ignores for dir (using `loadIgnorePatternsForDirectory`), print header, call
+              `commands.TreeCommand`. Handle errors.
+            - If `!IsDir`: Print `[File] path`.
+        - **`content`:**
+            - If `IsDir`: Load ignores for dir (using `loadIgnorePatternsForDirectory`), call `commands.ContentCommand`.
+              Handle errors.
+            - If `!IsDir`: Call `printSingleFileContent(path)`. Handle errors (warnings).
+    - Track the first error encountered for final exit status.
 
-### Step 4: Implement the Tree Command
+### Step 4: Implement File Content Printing (`main.go`)
 
-- **Directory Traversal:**
-    - Use recursive methods (e.g., `filepath.WalkDir`) to traverse the directory structure.
-- **Output Formatting:**
-    - Generate a tree‑like view with proper indentation.
-- **Exclusion Logic:**
-    - For each directory or file:
-        - Apply full Git‑ignore semantics for exclusion using the patterns from `.ignore`.
-        - Apply the `-e` flag logic:
-            - Exclude the folder only if it is a direct child of the working directory (root provided) that matches the
-              exclusion folder.
+- **Create `printSingleFileContent`:**
+    - Takes `filePath string`. Returns `error` (though likely returns `nil` after printing warning).
+    - Prints standard `File: ...` header.
+    - Uses `os.ReadFile`.
+    - On error: Prints warning to `stderr`, prints separator, returns `nil`.
+    - On success: Prints content, prints `End of file: ...` footer, prints separator, returns `nil`.
 
-### Step 5: Implement the Content Command
+### Step 5: Update Ignore Loading (`main.go`)
 
-- **File Traversal:**
-    - Recursively traverse the directory to find all files.
-- **Filtering:**
-    - Check each file’s path against the glob patterns from `.ignore` using full Git‑ignore semantics.
-    - Additionally, if `-e` is provided, skip files under the `<root>/<exclusionFolder>` directory when that folder is
-      in the working directory.
-- **Output:**
-    - For each file that passes the filters:
-        - Print the file path.
-        - Print the file’s contents.
-        - Output a separator (e.g., a dashed line) after each file.
+- **Modify `loadIgnorePatternsForDirectory`:** Ensure it's only called for directories. The logic to add the `EXCL:`
+  prefix for the `-e` flag remains correct within this context.
 
-### Step 6: Helper Functions and Utilities
+### Step 6: Command Implementations (`commands/`)
 
-- **Argument Parsing Function:**
-    - Handle extraction and validation of the command, directory, and `-e` flag.
-- **Directory Validation Function:**
-    - Confirm that the provided root directory exists and is accessible.
-- **Configuration Loader:**
-    - Read and parse the `.ignore` file to return a slice of ignore glob patterns.
-- **Matching Functions:**
-    - Implement glob matching using full Git‑ignore semantics to decide if a file or folder should be excluded.
-- **Output Functions:**
-    - Write separate functions to generate the tree view and output file contents, applying the exclusion logic.
+- **`commands.TreeCommand`:** No changes needed (header moved to `main`).
+- **`commands.ContentCommand`:** No changes needed. Works on directories passed to it.
+
+### Step 7: Helper Functions (`utils.go`, `config.go`)
+
+- No changes needed in `utils` or `config`.
 
 ---
 
 ## 4. Test Plan
 
+*(Adding new test cases for mixed inputs and scoping)*
+
 ### 1. Argument Parsing and Validation
 
-- **Valid Input Cases:**
-    - **Case 1:** `content tree pkg`
-        - **Expectation:** Command parsed as `"tree"`, directory set to `"pkg"`, no additional exclusion.
-    - **Case 2:** `content content pkg`
-        - **Expectation:** Command parsed as `"content"`, directory set to `"pkg"`, no additional exclusion.
-    - **Case 3:** `content tree pkg -e log`
-        - **Expectation:** Command `"tree"`, directory `"pkg"`, exclusion flag set to `"log"`.
-    - **Case 4:** `content content pkg -e log`
-        - **Expectation:** Command `"content"`, directory `"pkg"`, exclusion flag set to `"log"`.
-    - **Case 5:** `content tree -e log`
-        - **Expectation:** Command `"tree"`, directory defaults to `"."`, exclusion flag set to `"log"`.
+- (Existing cases remain valid for argument order and flag parsing)
+- **Valid Input Case:** `content c file.txt dir1 -e log` (Expect: Command "content", Paths ["file.txt", "dir1"],
+  Exclusion "log")
 
-- **Error/Invalid Cases:**
-    - **Case 6:** Too many arguments (e.g., `content tree pkg extra -e log`)
-        - **Expectation:** Utility displays usage instructions or an error.
-    - **Case 7:** Wrong flag order or missing flag value (e.g., `content tree pkg -e`)
-        - **Expectation:** Returns an error or displays usage information.
-    - **Case 8:** Invalid command (e.g., `content invalid pkg`)
-        - **Expectation:** Displays usage message indicating valid commands.
+### 2. Path Validation
 
-### 2. Directory Validation
+- **Case:** Mixed valid paths: `content c existing_file.txt existing_dir` (Expect: Proceeds, `resolveAndValidatePaths`
+  returns list with correct `IsDir` flags).
+- **Case:** Non-existent file: `content c non_existent_file.txt` (Expect: Error exit from `resolveAndValidatePaths`).
+- **Case:** Mixed with non-existent: `content c valid_dir non_existent_file.txt` (Expect: Error exit).
+- **Case:** Duplicate file/dir paths: `content c file.txt ./file.txt dir ./dir` (Expect: Processes `file.txt` once,
+  `dir` once).
 
-- **Case 9:** Existing directory provided
-    - **Expectation:** Utility proceeds without error.
-- **Case 10:** Non-existent directory provided
-    - **Expectation:** Exits with an error message.
-- **Case 11:** Provided path is not a directory (e.g., a file)
-    - **Expectation:** Exits with an error indicating the path is not a directory.
+### 3. Configuration File (`.ignore`, `.gitignore`) Loading & Scoping
 
-### 3. Configuration File (`.ignore`) Loading
+- **Case:** Ignore scope for explicit file (Content): `dir/.ignore` has `*.log`. Run `content c dir/app.log dir`. (
+  Expect: `dir/app.log` content *is* printed first because explicitly listed; other `.log` files *within* `dir` are
+  *not* printed during `dir` traversal).
+- **Case:** Ignore scope for explicit file (Tree): `dir/.ignore` has `ignored.log`. Run
+  `content t dir/ignored.log dir`. (Expect: Output includes `[File] .../dir/ignored.log` line; Tree output for `dir`
+  *omits* `ignored.log`).
 
-- **Case 12:** `.ignore` exists with valid patterns
-    - **Test Data:**
-      ```
-      # Ignore log directories
-      log/
-      *.tmp
-      ```
-    - **Expectation:** Loader returns slice: `["log/", "*.tmp"]` (ignoring comment and blank lines).
-- **Case 13:** `.ignore` does not exist
-    - **Expectation:** Loader returns an empty slice (or nil) so that only the `-e` flag exclusion applies if provided.
-- **Case 14:** `.ignore` contains only comments or blank lines
-    - **Expectation:** Loader returns an empty slice.
-- **Case 15:** `.ignore` contains malformed lines (if applicable)
-    - **Expectation:** Malformed lines are skipped or handled gracefully without crashing.
+### 4. Glob Matching and Exclusion Logic (Scoping)
 
-### 4. Glob Matching and Exclusion Logic
-
-- **Case 16:** Directory glob matching using full Git‑ignore semantics
-    - **Example:** Given a pattern `log/` in `.ignore`, ensure that a directory path like `pkg/log` (with root
-      `"pkg"`) is correctly excluded when `-e log` is specified.
-- **Case 17:** File glob matching using full Git‑ignore semantics
-    - **Example:** Given a pattern `*.tmp`, verify that files such as `file.tmp` or `pkg/dir/file.tmp` are excluded.
-- **Case 18:** Additional `-e` flag verification
-    - **Expectation:** The folder specified by `-e` is excluded only when it is directly under the working directory (
-      either the current directory or the specified root).
+- **Case:** `-e` flag scope: `dir/log` exists. Run `content c file.log dir -e log`. (Expect: Content of `file.log` is
+  printed; traversal of `dir` excludes the `log` subdirectory).
 
 ### 5. Tree Command Functionality
 
-- **Case 19:** Tree output without exclusions
-    - **Expectation:** Output displays all files and folders in a tree‑like format.
-- **Case 20:** Tree output with `.ignore` patterns applied
-    - **Test Data:**
-        - Create a temporary directory structure with folders matching patterns in `.ignore` (e.g., a top‑level
-          folder `log`).
-    - **Expectation:** Output omits directories/files matching the ignore patterns.
-- **Case 21:** Tree command with additional `-e` flag
-    - **Expectation:** When the exclusion folder is directly under the working directory, the tree output omits that
-      folder and its entire structure regardless of whether the root is the current directory or a specified folder.
+- **Case:** Mixed input tree: `content t fileA.txt dirB fileC.txt`. (Expect: `[File] .../fileA.txt`, then
+  `--- Directory Tree: .../dirB ---` + tree, then `[File] .../fileC.txt`). Order matches arguments.
 
 ### 6. Content Command Functionality
 
-- **Case 22:** File content output without exclusions
-    - **Expectation:** All files in the directory tree are output along with their contents and a separator.
-- **Case 23:** Content output with `.ignore` applied
-    - **Test Data:**
-        - Create a temporary directory with files under a folder that matches an ignore pattern in `.ignore`.
-    - **Expectation:** Files matching the patterns are not output.
-- **Case 24:** Content command with additional `-e` flag
-    - **Expectation:** Files under `<root>/<exclusionFolder>` (where the exclusion folder is directly under the working
-      directory) are skipped.
+- **Case:** Mixed input content: `content c fileA.txt dirB fileC.txt`. (Expect: Content of fileA, then content of files
+  in dirB (respecting ignores), then content of fileC. Order matches arguments).
+- **Case:** Unreadable explicit file: Create unreadable `unreadable.txt`. Run `content c readable.txt unreadable.txt`. (
+  Expect: Content of `readable.txt` printed; warning about `unreadable.txt` on stderr; command finishes successfully).
 
 ### 7. Integration and Edge Cases
 
-- **Case 25:** Empty directory
-    - **Expectation:** Utility handles an empty directory gracefully without errors.
-- **Case 26:** Directory structure where no files pass the exclusion filters
-    - **Expectation:** Utility completes execution, possibly with a message indicating no files/folders processed.
-- **Case 27:** Complex directory structure with overlapping glob patterns and `-e` flag
-    - **Expectation:** Combined exclusion logic correctly filters out intended directories and files.
-- **Case 28:** Running in a working directory without a `.ignore` file, using `-e`
-    - **Expectation:** Only the `-e` flag exclusion is applied.
+- (Existing cases remain relevant)
 
 ### Testing Approach
 
-- **Unit Tests:**
-    - Utilize Go’s `testing` package to write tests for:
-        - Argument parsing.
-        - Directory validation.
-        - `.ignore` loader.
-        - Glob matching and exclusion functions.
-        - Tree output and file content output functions.
+- **Unit Tests:** (Focus on argument parsing, `resolveAndValidatePaths`)
 - **Integration Tests:**
-    - Create temporary directories/files using functions such as `os.MkdirTemp` or similar.
-    - Capture and verify output against expected results.
-- **Edge Cases:**
-    - Include tests for empty directories, malformed `.ignore` files, and overlapping ignore patterns.
+    - Add tests specifically for `TestMixedInput_Tree`, `TestMixedInput_Content`.
+    - Add tests for `TestMixedInput_IgnoreScope_Content`, `TestMixedInput_IgnoreScope_Tree`.
+    - Add tests for `TestMixedInput_EFlagScope`.
+    - Add tests for `TestInput_NonExistentFile`, `TestInput_UnreadableFile_Content`.
+    - Ensure existing multi-dir tests still pass.
 
 ---
 
 ## 5. Summary
 
-This PRD details the specifications for the `content` utility:
+This PRD details the specifications for the `content` utility, now enhanced to handle mixed file and directory inputs:
 
-- **Functionality:** Provides `tree` and `content` commands with exclusion capabilities.
-- **Exclusions:** Are defined solely via a `.ignore` configuration file (using full Git‑ignore semantics) and an
-  optional `-e` flag, which excludes a folder only when it appears directly under the working directory.
-- **Coding Plan:** Outlines argument parsing, directory validation, configuration file loading, and command
-  implementations using multiple files with helper functions.
-- **Test Plan:** Comprehensive unit and integration tests cover all main use cases and edge cases, ensuring robust
-  behavior.
+- **Functionality:** Provides `tree` and `content` commands processing a list of specified file and/or directory paths.
+- **Behavior:** `tree` lists files and shows directory structures. `content` shows file content directly or recursively
+  scans directories.
+- **Exclusions:** Ignore rules (`.ignore`, `.gitignore`, `-e`) apply **only** during directory traversal and do not
+  filter explicitly listed files. Flags `--no-ignore` and `--no-gitignore` disable loading ignore files during directory
+  scans.
+- **Coding Plan:** Outlines changes primarily in `main.go` for argument parsing, path validation (
+  `resolveAndValidatePaths`), and orchestration logic dispatching to commands or direct file printing (
+  `printSingleFileContent`). Command packages remain focused on directory processing.
+- **Test Plan:** Expanded with comprehensive tests covering mixed inputs, ignore scoping rules, and error handling for
+  different path types.
