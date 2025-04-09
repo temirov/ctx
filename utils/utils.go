@@ -1,4 +1,4 @@
-// Package utils contains helper functions for ignoring paths and checking directories.
+// Package utils contains helper functions for ignoring paths based on patterns.
 package utils
 
 import (
@@ -7,20 +7,21 @@ import (
 	"strings"
 )
 
-// IsDirectory returns true if the given path exists and is a directory.
-func IsDirectory(pathValue string) bool {
-	fileInformation, statError := os.Stat(pathValue)
-	if statError != nil {
-		return false
-	}
-	return fileInformation.IsDir()
+var serviceFiles = map[string]struct{}{
+	".gitignore": {},
+	".ignore":    {},
 }
 
-// ShouldIgnore is used by the tree command.
+// ShouldIgnore checks if a directory entry should be ignored based on name patterns and defaults.
+// It is primarily used during the tree building process.
 func ShouldIgnore(directoryEntry os.DirEntry, ignorePatterns []string, isRoot bool) bool {
 	entryName := directoryEntry.Name()
+
+	if _, exists := serviceFiles[entryName]; exists {
+		return true
+	}
+
 	for _, patternValue := range ignorePatterns {
-		// EXCL: means this is the -e special folder exclusion.
 		if strings.HasPrefix(patternValue, "EXCL:") {
 			exclusionValue := strings.TrimPrefix(patternValue, "EXCL:")
 			if isRoot && directoryEntry.IsDir() && entryName == exclusionValue {
@@ -28,10 +29,13 @@ func ShouldIgnore(directoryEntry os.DirEntry, ignorePatterns []string, isRoot bo
 			}
 			continue
 		}
+
 		if strings.HasSuffix(patternValue, "/") {
 			patternDirectory := strings.TrimSuffix(patternValue, "/")
-			if isRoot && directoryEntry.IsDir() && entryName == patternDirectory {
-				return true
+			if directoryEntry.IsDir() {
+				if isRoot && entryName == patternDirectory {
+					return true
+				}
 			}
 		} else {
 			isMatched, matchError := filepath.Match(patternValue, entryName)
@@ -43,36 +47,47 @@ func ShouldIgnore(directoryEntry os.DirEntry, ignorePatterns []string, isRoot bo
 	return false
 }
 
-// ShouldIgnoreByPath is used by the content command.
+// ShouldIgnoreByPath checks if a path relative to its processing root should be ignored.
+// It considers EXCL: patterns, directory patterns (ending in /), and filename patterns.
+// It also includes default ignores for .gitignore and .ignore files.
+// Used by the content command's walk function.
 func ShouldIgnoreByPath(relativePath string, ignorePatterns []string) bool {
 	normalizedPath := filepath.ToSlash(relativePath)
 	pathComponents := strings.Split(normalizedPath, "/")
+	fileName := ""
+	if len(pathComponents) > 0 {
+		fileName = pathComponents[len(pathComponents)-1]
+	}
 
-	for _, patternValue := range ignorePatterns {
-		if strings.HasPrefix(patternValue, "EXCL:") {
-			exclusionValue := strings.TrimPrefix(patternValue, "EXCL:")
+	if _, exists := serviceFiles[fileName]; exists {
+		return true
+	}
+
+	for _, pattern := range ignorePatterns {
+		if strings.HasPrefix(pattern, "EXCL:") {
+			exclusionValue := strings.TrimPrefix(pattern, "EXCL:")
 			if len(pathComponents) >= 1 && pathComponents[0] == exclusionValue {
 				return true
 			}
 			continue
 		}
-		if strings.HasSuffix(patternValue, "/") {
-			patternDirectory := strings.TrimSuffix(patternValue, "/")
-			if len(pathComponents) > 0 && pathComponents[0] == patternDirectory {
+
+		isDirPattern := strings.HasSuffix(pattern, "/")
+		cleanedPattern := strings.TrimSuffix(pattern, "/")
+
+		if !strings.Contains(cleanedPattern, "/") {
+			match, _ := filepath.Match(cleanedPattern, fileName)
+			if match {
 				return true
 			}
 		} else {
-			// If no slash in the pattern, match only the last component
-			if !strings.Contains(patternValue, "/") {
-				lastComponent := pathComponents[len(pathComponents)-1]
-				isMatched, matchError := filepath.Match(patternValue, lastComponent)
-				if matchError == nil && isMatched {
+			if isDirPattern {
+				if strings.HasPrefix(normalizedPath, cleanedPattern+"/") || normalizedPath == cleanedPattern {
 					return true
 				}
 			} else {
-				// If pattern includes slash, match entire path
-				isMatched, matchError := filepath.Match(patternValue, normalizedPath)
-				if matchError == nil && isMatched {
+				match, _ := filepath.Match(pattern, normalizedPath)
+				if match {
 					return true
 				}
 			}

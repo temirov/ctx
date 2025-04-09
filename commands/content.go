@@ -1,5 +1,3 @@
-// Package commands contains the CLI commands for the 'content' tool,
-// including logic for printing file contents with .ignore exclusions.
 package commands
 
 import (
@@ -9,108 +7,105 @@ import (
 	"strings"
 
 	//nolint:depguard
+	"github.com/temirov/content/types"
+	//nolint:depguard
 	"github.com/temirov/content/utils"
 )
 
-// ContentCommand traverses the directory tree starting from rootDirectory
-// and prints the contents of files that are not excluded by .ignore or -e.
-func ContentCommand(rootDirectory string, ignorePatterns []string) error {
-	absoluteRootDirectory, absoluteError := filepath.Abs(rootDirectory)
-	if absoluteError != nil {
-		return absoluteError
+// GetContentData traverses the directory tree starting from rootDirectory
+// and collects FileOutput data for files that are not excluded.
+// It prints warnings to stderr for unreadable files/dirs but attempts to continue.
+// Returns a slice of successfully read file data and the first fatal error encountered during walk.
+func GetContentData(rootDirectory string, ignorePatterns []string) ([]types.FileOutput, error) {
+	var results []types.FileOutput
+	var firstFatalError error // To capture the first actual error stopping the walk
+
+	absoluteRootDirectory, absErr := filepath.Abs(rootDirectory)
+	if absErr != nil {
+		return nil, fmt.Errorf("failed to get absolute path for %s: %w", rootDirectory, absErr)
 	}
 	cleanRootDirectory := filepath.Clean(absoluteRootDirectory)
 
-	walkError := filepath.WalkDir(cleanRootDirectory, func(path string, entry os.DirEntry, err error) error {
-		return handleContentWalkEntry(path, entry, err, cleanRootDirectory, ignorePatterns)
+	walkErr := filepath.WalkDir(cleanRootDirectory, func(path string, entry os.DirEntry, err error) error {
+		// Handle errors accessing the entry itself (permissions, etc.)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Error accessing path %s: %v\n", path, err)
+			// Try to skip the problematic entry if possible
+			if entry != nil && entry.IsDir() {
+				return filepath.SkipDir
+			}
+			// If it's a file or WalkDir had a more general error, just continue if possible
+			return nil
+		}
+
+		// Skip the root directory itself
+		relativePath := relativeOrSelf(path, cleanRootDirectory)
+		if relativePath == "." {
+			return nil
+		}
+
+		// Handle -e folder exclusion
+		// Note: utils.ShouldIgnoreByPath also handles EXCL patterns for nested checks
+		if entry.IsDir() && filepath.Dir(relativePath) == "." { // Check if top-level item
+			for _, pattern := range ignorePatterns {
+				if strings.HasPrefix(pattern, "EXCL:") {
+					exclusionName := strings.TrimPrefix(pattern, "EXCL:")
+					if relativePath == exclusionName {
+						return filepath.SkipDir
+					}
+				}
+			}
+		}
+
+		// Handle .ignore/.gitignore patterns
+		if utils.ShouldIgnoreByPath(relativePath, ignorePatterns) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil // Skip ignored file
+		}
+
+		// Process files: read content and add to results
+		if !entry.IsDir() {
+			fileData, readErr := os.ReadFile(path)
+			if readErr != nil {
+				// Warn about read errors but continue the walk
+				fmt.Fprintf(os.Stderr, "Warning: Failed to read file %s: %v\n", path, readErr)
+				return nil // Don't stop the walk for one unreadable file
+			}
+
+			// Ensure absolute path in the result
+			absPath, _ := filepath.Abs(path)
+			results = append(results, types.FileOutput{
+				Path:    absPath,
+				Type:    "file",
+				Content: string(fileData),
+			})
+		}
+
+		return nil // Continue walking
 	})
 
-	return walkError
+	// Capture the first fatal error from WalkDir itself
+	if walkErr != nil {
+		firstFatalError = walkErr
+	}
+
+	return results, firstFatalError
 }
 
-// handleContentWalkEntry is broken out into smaller sub‑checks to keep complexity <= 10.
-func handleContentWalkEntry(
-	currentPath string,
-	directoryEntry os.DirEntry,
-	entryError error,
-	cleanRoot string,
-	ignorePatterns []string,
-) error {
-	if entryError != nil {
-		return entryError
-	}
-
-	relativePath := relativeOrSelf(currentPath, cleanRoot)
-	if relativePath == "." {
-		return nil // Skip the root directory itself
-	}
-
-	// #1: If it's a top-level directory that matches an EXCL: pattern, skip
-	skipDir, skipDirErr := handleExclusionFolder(directoryEntry, relativePath, ignorePatterns)
-	if skipDirErr != nil || skipDir {
-		return skipDirErr
-	}
-
-	// #2: If it matches typical .ignore rules, skip
-	if utils.ShouldIgnoreByPath(relativePath, ignorePatterns) {
-		if directoryEntry.IsDir() {
-			return filepath.SkipDir
-		}
-		return nil
-	}
-
-	// #3: If it's a file, print it
-	if !directoryEntry.IsDir() {
-		return printFileContents(currentPath)
-	}
-	return nil
-}
-
-// relativeOrSelf returns relative path or the path itself on error.
+// relativeOrSelf calculates the relative path from root to fullPath.
+// Returns fullPath if relative calculation fails.
 func relativeOrSelf(fullPath, root string) string {
 	cleanPath := filepath.Clean(fullPath)
-	relativePath, relErr := filepath.Rel(root, cleanPath)
+	// Ensure root is absolute for reliable relative path calculation
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return cleanPath // Fallback if root path is invalid
+	}
+	relativePath, relErr := filepath.Rel(absRoot, cleanPath)
 	if relErr != nil {
-		return cleanPath
+		return cleanPath // Fallback if relative fails
 	}
 	return relativePath
-}
-
-// handleExclusionFolder checks if the directory is excluded by the "EXCL:" or "log/" logic for direct children.
-func handleExclusionFolder(
-	directoryEntry os.DirEntry,
-	relativePath string,
-	ignorePatterns []string,
-) (bool, error) {
-	// Only apply if it is a directory and a top-level item.
-	if !directoryEntry.IsDir() || filepath.Dir(relativePath) != "." {
-		return false, nil
-	}
-	for _, patternValue := range ignorePatterns {
-		if strings.HasPrefix(patternValue, "EXCL:") {
-			exclusionName := strings.TrimPrefix(patternValue, "EXCL:")
-			if relativePath == exclusionName {
-				return true, filepath.SkipDir
-			}
-		} else if strings.HasSuffix(patternValue, "/") {
-			patternDirectory := strings.TrimSuffix(patternValue, "/")
-			if relativePath == patternDirectory {
-				return true, filepath.SkipDir
-			}
-		}
-	}
-	return false, nil
-}
-
-// printFileContents prints the file's path and data.
-func printFileContents(path string) error {
-	fmt.Printf("File: %s\n", path)
-	fileData, readErr := os.ReadFile(path)
-	if readErr != nil {
-		return readErr
-	}
-	fmt.Println(string(fileData))
-	fmt.Printf("End of file: %s\n", path)
-	fmt.Println("----------------------------------------")
-	return nil
 }
