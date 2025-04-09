@@ -5,39 +5,86 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 
 	"github.com/temirov/content/commands"
 	"github.com/temirov/content/config"
-	"github.com/temirov/content/types" // Import the new types package
+	"github.com/temirov/content/types"
 )
 
-// printUsage displays the command-line usage instructions and exits.
+// GetApplicationVersion returns the application version. If the build metadata contains a non-development version,
+// that version is returned. Otherwise, if a .git directory is present, Git is used to describe the current commit.
+// If neither method yields a version, "unknown" is returned.
+func GetApplicationVersion() string {
+	buildInfo, buildInfoAvailable := debug.ReadBuildInfo()
+	if buildInfoAvailable && buildInfo.Main.Version != "" && buildInfo.Main.Version != "(devel)" {
+		return buildInfo.Main.Version
+	}
+	gitDirectory, gitDirectoryError := findGitDirectory(".")
+	if gitDirectoryError == nil && gitDirectory != "" {
+		gitExactOutput, errorGitExact := exec.Command("git", "describe", "--tags", "--exact-match").Output()
+		if errorGitExact == nil && len(gitExactOutput) > 0 {
+			return strings.TrimSpace(string(gitExactOutput))
+		}
+		gitLongOutput, errorGitLong := exec.Command("git", "describe", "--tags", "--long", "--dirty").Output()
+		if errorGitLong == nil && len(gitLongOutput) > 0 {
+			return strings.TrimSpace(string(gitLongOutput))
+		}
+	}
+	return "unknown"
+}
+
+// findGitDirectory searches upward from the starting directory for a .git folder.
+func findGitDirectory(startDirectory string) (string, error) {
+	absoluteStartDirectory, errorAbs := filepath.Abs(startDirectory)
+	if errorAbs != nil {
+		return "", errorAbs
+	}
+	currentDirectory := absoluteStartDirectory
+	for {
+		gitPath := filepath.Join(currentDirectory, ".git")
+		fileInfo, statError := os.Stat(gitPath)
+		if statError == nil && fileInfo.IsDir() {
+			return currentDirectory, nil
+		}
+		parentDirectory := filepath.Dir(currentDirectory)
+		if parentDirectory == currentDirectory {
+			break
+		}
+		currentDirectory = parentDirectory
+	}
+	return "", fmt.Errorf(".git directory not found")
+}
+
+func main() {
+	for _, currentArgument := range os.Args[1:] {
+		if currentArgument == "--version" {
+			fmt.Println("Application Version:", GetApplicationVersion())
+			os.Exit(0)
+		}
+	}
+	commandName, inputPaths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat := parseArgsOrExit()
+	executionError := runContentTool(commandName, inputPaths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat)
+	if executionError != nil {
+		log.Fatalf("Error: %v", executionError)
+	}
+}
+
 func printUsage() {
 	fmt.Println("Usage:")
-	fmt.Println("  content <tree|t|content|c> [path1] [path2] ... [-e|--e exclusion_folder] [--no-gitignore] [--no-ignore] [--format <raw|json>]")
-	fmt.Println("\nPaths can be files or directories.")
+	fmt.Println("  content <tree|t|content|c> [path1] [path2] ... [-e|--e exclusion_folder] [--no-gitignore] [--no-ignore] [--format <raw|json>] [--version]")
+	fmt.Println("Paths can be files or directories.")
 	fmt.Println("Default format is 'raw'.")
 	os.Exit(1)
 }
 
-func main() {
-	commandName, inputPaths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat := parseArgsOrExit()
-	// Use the parsed outputFormat
-	err := runContentTool(commandName, inputPaths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat)
-	if err != nil {
-		// Only log fatal errors that prevent processing/rendering
-		log.Fatalf("Error: %v", err)
-	}
-}
-
-// parseArgsOrExit parses the command-line arguments including the new --format flag.
 func parseArgsOrExit() (string, []string, string, bool, bool, string) {
 	if len(os.Args) < 2 {
 		printUsage()
 	}
-
 	rawCommand := os.Args[1]
 	var commandName string
 	switch rawCommand {
@@ -49,166 +96,138 @@ func parseArgsOrExit() (string, []string, string, bool, bool, string) {
 		fmt.Printf("Invalid command: %s\n", rawCommand)
 		printUsage()
 	}
-
 	var inputPaths []string
 	exclusionFolder := ""
 	useGitignore := true
 	useIgnoreFile := true
-	outputFormat := "raw" // Default format
-
-	args := os.Args[2:]
-	index := 0
+	outputFormat := "raw"
+	arguments := os.Args[2:]
+	argumentIndex := 0
 	parsingFlags := false
-
-	for index < len(args) {
-		currentArg := args[index]
-
-		isFlag := strings.HasPrefix(currentArg, "-")
-
-		if isFlag {
+	for argumentIndex < len(arguments) {
+		currentArgument := arguments[argumentIndex]
+		if strings.HasPrefix(currentArgument, "-") {
 			parsingFlags = true
-			switch currentArg {
+			switch currentArgument {
 			case "-e", "--e":
-				if index+1 >= len(args) {
+				if argumentIndex+1 >= len(arguments) {
 					fmt.Println("Error: Missing exclusion folder value after -e/--e")
 					printUsage()
 				}
-				exclusionFolder = args[index+1]
-				index += 2
+				exclusionFolder = arguments[argumentIndex+1]
+				argumentIndex += 2
 			case "--no-gitignore":
 				useGitignore = false
-				index++
+				argumentIndex++
 			case "--no-ignore":
 				useIgnoreFile = false
-				index++
-			case "--format": // Parse the format flag
-				if index+1 >= len(args) {
+				argumentIndex++
+			case "--format":
+				if argumentIndex+1 >= len(arguments) {
 					fmt.Println("Error: Missing format value after --format")
 					printUsage()
 				}
-				outputFormat = strings.ToLower(args[index+1])
+				outputFormat = strings.ToLower(arguments[argumentIndex+1])
 				if outputFormat != "raw" && outputFormat != "json" {
 					fmt.Printf("Error: Invalid format value '%s'. Must be 'raw' or 'json'.\n", outputFormat)
 					printUsage()
 				}
-				index += 2
+				argumentIndex += 2
 			default:
-				fmt.Printf("Error: Unknown flag or misplaced argument: %s\n", currentArg)
+				fmt.Printf("Error: Unknown flag or misplaced argument: %s\n", currentArgument)
 				printUsage()
 			}
 		} else {
 			if parsingFlags {
-				fmt.Printf("Error: Positional argument '%s' found after flags.\n", currentArg)
+				fmt.Printf("Error: Positional argument '%s' found after flags.\n", currentArgument)
 				printUsage()
 			}
-			inputPaths = append(inputPaths, currentArg)
-			index++
+			inputPaths = append(inputPaths, currentArgument)
+			argumentIndex++
 		}
 	}
-
 	if len(inputPaths) == 0 {
 		inputPaths = []string{"."}
 	}
-
-	// Return the parsed outputFormat
 	return commandName, inputPaths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat
 }
 
 // runContentTool orchestrates processing and output generation based on format.
 func runContentTool(commandName string, inputPaths []string, exclusionFolder string, useGitignore bool, useIgnoreFile bool, outputFormat string) error {
-	validatedPaths, validationErr := resolveAndValidatePaths(inputPaths)
-	if validationErr != nil {
-		return validationErr // Fatal error during path validation
+	validatedPaths, validationError := resolveAndValidatePaths(inputPaths)
+	if validationError != nil {
+		return validationError
 	}
-
-	// collectedResults holds either *types.FileOutput or *types.TreeOutputNode
 	var collectedResults []interface{}
-	var firstProcessingWarning error // Track first non-fatal warning/error
-
-	for _, pathInfo := range validatedPaths {
-		var processingErr error // Error specific to this path's processing
-
-		if pathInfo.IsDir {
-			// Load ignores only for directory processing
-			ignorePatterns, loadErr := loadIgnorePatternsForDirectory(pathInfo.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile)
-			if loadErr != nil {
-				// Treat failure to load ignores as a warning for this dir
-				fmt.Fprintf(os.Stderr, "Warning: Skipping directory %s due to error loading ignore patterns: %v\n", pathInfo.AbsolutePath, loadErr)
+	var firstProcessingWarning error
+	for _, pathInformation := range validatedPaths {
+		var processingError error
+		if pathInformation.IsDir {
+			ignorePatterns, errorLoadingIgnores := loadIgnorePatternsForDirectory(pathInformation.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile)
+			if errorLoadingIgnores != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Error loading ignore patterns for %s: %v\n", pathInformation.AbsolutePath, errorLoadingIgnores)
 				if firstProcessingWarning == nil {
-					firstProcessingWarning = loadErr
+					firstProcessingWarning = errorLoadingIgnores
 				}
-				continue // Skip this directory
+				continue
 			}
-
-			// Process Directory
 			switch commandName {
 			case "tree":
-				treeNodes, treeErr := commands.GetTreeData(pathInfo.AbsolutePath, ignorePatterns)
-				if treeErr != nil {
-					processingErr = treeErr // Track error for this path
+				treeNodes, errorGeneratingTree := commands.GetTreeData(pathInformation.AbsolutePath, ignorePatterns)
+				if errorGeneratingTree != nil {
+					processingError = errorGeneratingTree
 				} else if len(treeNodes) > 0 {
-					collectedResults = append(collectedResults, treeNodes[0]) // Add the root node
+					collectedResults = append(collectedResults, treeNodes[0])
 				}
 			case "content":
-				fileOutputs, contentErr := commands.GetContentData(pathInfo.AbsolutePath, ignorePatterns)
-				if contentErr != nil {
-					processingErr = contentErr // Track error for this path
+				fileOutputs, errorGeneratingContent := commands.GetContentData(pathInformation.AbsolutePath, ignorePatterns)
+				if errorGeneratingContent != nil {
+					processingError = errorGeneratingContent
 				} else {
-					for i := range fileOutputs {
-						collectedResults = append(collectedResults, &fileOutputs[i])
+					for outputIndex := range fileOutputs {
+						collectedResults = append(collectedResults, &fileOutputs[outputIndex])
 					}
 				}
 			default:
-				processingErr = fmt.Errorf("internal error: unhandled command '%s'", commandName)
+				processingError = fmt.Errorf("internal error: unhandled command '%s'", commandName)
 			}
 		} else {
-			// Process File
 			switch commandName {
 			case "tree":
 				fileNode := &types.TreeOutputNode{
-					Path: pathInfo.AbsolutePath,
-					Name: filepath.Base(pathInfo.AbsolutePath),
+					Path: pathInformation.AbsolutePath,
+					Name: filepath.Base(pathInformation.AbsolutePath),
 					Type: "file",
 				}
 				collectedResults = append(collectedResults, fileNode)
 			case "content":
-				// getSingleFileContent handles its own warnings
-				fileOutput, _ := getSingleFileContent(pathInfo.AbsolutePath)
-				if fileOutput != nil { // Only add if read was successful
+				fileOutput, _ := getSingleFileContent(pathInformation.AbsolutePath)
+				if fileOutput != nil {
 					collectedResults = append(collectedResults, fileOutput)
 				}
-				// Don't assign error here, warning is printed within getSingleFileContent
 			default:
-				processingErr = fmt.Errorf("internal error: unhandled command '%s'", commandName)
+				processingError = fmt.Errorf("internal error: unhandled command '%s'", commandName)
 			}
 		}
-
-		// Track the first non-fatal processing error
-		if processingErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Error processing path %s: %v\n", pathInfo.AbsolutePath, processingErr)
+		if processingError != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Error processing path %s: %v\n", pathInformation.AbsolutePath, processingError)
 			if firstProcessingWarning == nil {
-				firstProcessingWarning = processingErr
+				firstProcessingWarning = processingError
 			}
 		}
 	}
-
-	// Render the final output based on the chosen format
-	var renderErr error
+	var renderingError error
 	switch outputFormat {
 	case "json":
-		renderErr = renderJsonOutput(collectedResults)
+		renderingError = renderJsonOutput(collectedResults)
 	case "raw":
-		renderErr = renderRawOutput(commandName, collectedResults)
+		renderingError = renderRawOutput(commandName, collectedResults)
 	default:
-		renderErr = fmt.Errorf("internal error: unhandled output format '%s'", outputFormat)
+		renderingError = fmt.Errorf("internal error: unhandled output format '%s'", outputFormat)
 	}
-
-	if renderErr != nil {
-		// If rendering fails, that's a fatal error
-		return fmt.Errorf("error generating output: %w", renderErr)
+	if renderingError != nil {
+		return fmt.Errorf("error generating output: %w", renderingError)
 	}
-
-	// Return the first processing warning/error encountered, if any
 	return firstProcessingWarning
 }
 
@@ -217,87 +236,72 @@ func runContentTool(commandName string, inputPaths []string, exclusionFolder str
 func resolveAndValidatePaths(inputPaths []string) ([]types.ValidatedPath, error) {
 	uniquePaths := make(map[string]struct{})
 	var validatedPaths []types.ValidatedPath
-
 	for _, inputPath := range inputPaths {
-		absolutePath, absErr := filepath.Abs(inputPath)
-		if absErr != nil {
-			return nil, fmt.Errorf("error getting absolute path for '%s': %w", inputPath, absErr)
+		absolutePath, errorGettingAbsolute := filepath.Abs(inputPath)
+		if errorGettingAbsolute != nil {
+			return nil, fmt.Errorf("error getting absolute path for '%s': %w", inputPath, errorGettingAbsolute)
 		}
-
 		cleanPath := filepath.Clean(absolutePath)
-
 		if _, exists := uniquePaths[cleanPath]; exists {
 			continue
 		}
-
-		fileInfo, statErr := os.Stat(cleanPath)
-		if statErr != nil {
-			if os.IsNotExist(statErr) {
+		fileInformation, errorStat := os.Stat(cleanPath)
+		if errorStat != nil {
+			if os.IsNotExist(errorStat) {
 				return nil, fmt.Errorf("error: path '%s' (resolved to '%s') does not exist", inputPath, cleanPath)
 			}
-			return nil, fmt.Errorf("error stating path '%s' (resolved to '%s'): %w", inputPath, cleanPath, statErr)
+			return nil, fmt.Errorf("error stating path '%s' (resolved to '%s'): %w", inputPath, cleanPath, errorStat)
 		}
-
 		uniquePaths[cleanPath] = struct{}{}
 		validatedPaths = append(validatedPaths, types.ValidatedPath{
 			AbsolutePath: cleanPath,
-			IsDir:        fileInfo.IsDir(),
+			IsDir:        fileInformation.IsDir(),
 		})
 	}
-
 	if len(validatedPaths) == 0 {
-		// This case should be rare now that "." is default, but keep for safety
 		return nil, fmt.Errorf("error: no valid paths found to process")
 	}
-
 	return validatedPaths, nil
 }
 
-// loadIgnorePatternsForDirectory loads ignore patterns for a specific directory path.
-func loadIgnorePatternsForDirectory(absoluteDirectoryPath string, exclusionFolder string, useGitignore bool, useIgnoreFile bool) ([]string, error) {
+func loadIgnorePatternsForDirectory(directoryPath string, exclusionFolder string, useGitignore bool, useIgnoreFile bool) ([]string, error) {
 	var ignorePatterns []string
-
 	if useIgnoreFile {
-		ignoreFilePath := filepath.Join(absoluteDirectoryPath, ".ignore")
-		loadedIgnorePatterns, loadError := config.LoadContentIgnore(ignoreFilePath)
-		if loadError != nil && !os.IsNotExist(loadError) {
-			return nil, fmt.Errorf("loading .ignore from %s: %w", absoluteDirectoryPath, loadError)
+		ignoreFilePath := filepath.Join(directoryPath, ".ignore")
+		loadedIgnorePatterns, errorLoadingIgnore := config.LoadContentIgnore(ignoreFilePath)
+		if errorLoadingIgnore != nil && !os.IsNotExist(errorLoadingIgnore) {
+			return nil, fmt.Errorf("loading .ignore from %s: %w", directoryPath, errorLoadingIgnore)
 		}
 		ignorePatterns = append(ignorePatterns, loadedIgnorePatterns...)
 	}
-
 	if useGitignore {
-		gitIgnoreFilePath := filepath.Join(absoluteDirectoryPath, ".gitignore")
-		loadedGitignorePatterns, gitignoreErr := config.LoadContentIgnore(gitIgnoreFilePath)
-		if gitignoreErr != nil && !os.IsNotExist(gitignoreErr) {
-			return nil, fmt.Errorf("loading .gitignore from %s: %w", absoluteDirectoryPath, gitignoreErr)
+		gitIgnoreFilePath := filepath.Join(directoryPath, ".gitignore")
+		loadedGitignorePatterns, errorLoadingGitignore := config.LoadContentIgnore(gitIgnoreFilePath)
+		if errorLoadingGitignore != nil && !os.IsNotExist(errorLoadingGitignore) {
+			return nil, fmt.Errorf("loading .gitignore from %s: %w", directoryPath, errorLoadingGitignore)
 		}
 		ignorePatterns = append(ignorePatterns, loadedGitignorePatterns...)
 	}
-
 	ignorePatterns = deduplicatePatterns(ignorePatterns)
-
 	trimmedExclusion := strings.TrimSpace(exclusionFolder)
 	if trimmedExclusion != "" {
 		normalizedExclusion := strings.TrimSuffix(trimmedExclusion, "/")
 		ignorePatterns = append(ignorePatterns, "EXCL:"+normalizedExclusion)
 	}
-
 	return ignorePatterns, nil
 }
 
 // getSingleFileContent reads content for a single file path.
 // Returns nil FileOutput if reading fails (warning printed to stderr).
 func getSingleFileContent(filePath string) (*types.FileOutput, error) {
-	fileData, readErr := os.ReadFile(filePath)
-	if readErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to read file %s: %v\n", filePath, readErr)
-		return nil, nil // Indicate skip, not fatal error
+	fileData, errorReadingFile := os.ReadFile(filePath)
+	if errorReadingFile != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to read file %s: %v\n", filePath, errorReadingFile)
+		return nil, nil
 	}
-
-	absPath, _ := filepath.Abs(filePath)
+	absolutePath, _ := filepath.Abs(filePath)
 	return &types.FileOutput{
-		Path:    absPath,
+		Path:    absolutePath,
 		Type:    "file",
 		Content: string(fileData),
 	}, nil
@@ -306,12 +310,12 @@ func getSingleFileContent(filePath string) (*types.FileOutput, error) {
 // renderJsonOutput marshals the collected results and prints to stdout.
 func renderJsonOutput(results []interface{}) error {
 	if len(results) == 0 {
-		fmt.Println("[]") // Print empty JSON array if no results
+		fmt.Println("[]")
 		return nil
 	}
-	jsonData, err := json.MarshalIndent(results, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal results to JSON: %w", err)
+	jsonData, errorMarshalingJson := json.MarshalIndent(results, "", "  ")
+	if errorMarshalingJson != nil {
+		return fmt.Errorf("failed to marshal results to JSON: %w", errorMarshalingJson)
 	}
 	fmt.Println(string(jsonData))
 	return nil
@@ -320,60 +324,48 @@ func renderJsonOutput(results []interface{}) error {
 // renderRawOutput iterates through results and prints in the original text format.
 func renderRawOutput(commandName string, results []interface{}) error {
 	for _, result := range results {
-		switch item := result.(type) {
+		switch resultTyped := result.(type) {
 		case *types.FileOutput:
-			// Only print file content if the command is 'content'
 			if commandName == "content" {
-				fmt.Printf("File: %s\n", item.Path)
-				fmt.Println(item.Content)
-				fmt.Printf("End of file: %s\n", item.Path)
+				fmt.Printf("File: %s\n", resultTyped.Path)
+				fmt.Println(resultTyped.Content)
+				fmt.Printf("End of file: %s\n", resultTyped.Path)
 				fmt.Println("----------------------------------------")
 			} else {
-				// Should not happen for 'tree' command if logic is correct
-				fmt.Fprintf(os.Stderr, "Warning: Unexpected FileOutput during raw 'tree' render for path %s\n", item.Path)
+				fmt.Fprintf(os.Stderr, "Warning: Unexpected FileOutput during raw 'tree' render for path %s\n", resultTyped.Path)
 			}
 		case *types.TreeOutputNode:
-			// Only print tree nodes if the command is 'tree'
 			if commandName == "tree" {
-				if item.Type == "file" {
-					fmt.Printf("[File] %s\n", item.Path)
-				} else if item.Type == "directory" {
-					// Add a blank line before directory trees for better separation
-					fmt.Printf("\n--- Directory Tree: %s ---\n", item.Path)
-					printRawTreeNode(item, "") // Start recursive print
+				if resultTyped.Type == "file" {
+					fmt.Printf("[File] %s\n", resultTyped.Path)
+				} else if resultTyped.Type == "directory" {
+					fmt.Printf("\n--- Directory Tree: %s ---\n", resultTyped.Path)
+					printRawTreeNode(resultTyped, "")
 				}
 			} else {
-				// Should not happen for 'content' command if logic is correct
-				fmt.Fprintf(os.Stderr, "Warning: Unexpected TreeOutputNode during raw 'content' render for path %s\n", item.Path)
+				fmt.Fprintf(os.Stderr, "Warning: Unexpected TreeOutputNode during raw 'content' render for path %s\n", resultTyped.Path)
 			}
 		default:
-			fmt.Fprintf(os.Stderr, "Warning: Skipping unexpected result type during raw render: %T\n", item)
+			fmt.Fprintf(os.Stderr, "Warning: Skipping unexpected result type during raw render: %T\n", resultTyped)
 		}
 	}
 	return nil
 }
 
-// printRawTreeNode recursively prints the tree structure for raw output.
-func printRawTreeNode(node *types.TreeOutputNode, prefix string) {
-	// Base case: node is nil or not a directory with children
-	if node == nil || node.Type != "directory" || len(node.Children) == 0 {
+func printRawTreeNode(treeNode *types.TreeOutputNode, prefix string) {
+	if treeNode == nil || treeNode.Type != "directory" || len(treeNode.Children) == 0 {
 		return
 	}
-
-	numChildren := len(node.Children)
-	for index, child := range node.Children {
-		isLast := index == numChildren-1
-
+	numberOfChildren := len(treeNode.Children)
+	for index, child := range treeNode.Children {
+		isLastChild := index == numberOfChildren-1
 		connector := "├── "
 		newPrefix := prefix + "│   "
-		if isLast {
+		if isLastChild {
 			connector = "└── "
 			newPrefix = prefix + "    "
 		}
-
 		fmt.Printf("%s%s%s\n", prefix, connector, child.Name)
-
-		// Recurse only if the child is a directory
 		if child.Type == "directory" {
 			printRawTreeNode(child, newPrefix)
 		}
