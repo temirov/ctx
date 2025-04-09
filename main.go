@@ -62,7 +62,7 @@ func findGitDirectory(startDirectory string) (string, error) {
 func main() {
 	for _, currentArgument := range os.Args[1:] {
 		if currentArgument == "--version" {
-			fmt.Println("Application Version:", GetApplicationVersion())
+			fmt.Println("content version:", GetApplicationVersion())
 			os.Exit(0)
 		}
 	}
