@@ -1,4 +1,4 @@
-// Package utils contains helper functions for ignoring paths based on patterns.
+// Package utils contains general helper functions used across the content tool.
 package utils
 
 import (
@@ -7,24 +7,78 @@ import (
 	"strings"
 )
 
+// Constants related to ignore file handling.
+const (
+	IgnoreFileName    = ".ignore"
+	GitIgnoreFileName = ".gitignore"
+	ExclusionPrefix   = "EXCL:"
+)
+
 var serviceFiles = map[string]struct{}{
-	".gitignore": {},
-	".ignore":    {},
+	IgnoreFileName:    {},
+	GitIgnoreFileName: {},
 }
 
-// ShouldIgnore checks if a directory entry should be ignored based on name patterns and defaults.
-// It is primarily used during the tree building process.
-func ShouldIgnore(directoryEntry os.DirEntry, ignorePatterns []string, isRoot bool) bool {
+// DeduplicatePatterns removes duplicate patterns from a slice while preserving order.
+// The first occurrence of each unique pattern is kept.
+func DeduplicatePatterns(patterns []string) []string {
+	encounteredPatterns := make(map[string]struct{})
+	result := make([]string, 0, len(patterns))
+	for _, pattern := range patterns {
+		if _, exists := encounteredPatterns[pattern]; !exists {
+			encounteredPatterns[pattern] = struct{}{}
+			result = append(result, pattern)
+		}
+	}
+	return result
+}
+
+// ContainsString checks if a slice of strings contains a specific target string.
+func ContainsString(stringSlice []string, targetString string) bool {
+	for _, currentString := range stringSlice {
+		if currentString == targetString {
+			return true
+		}
+	}
+	return false
+}
+
+// RelativePathOrSelf calculates the relative path from root to fullPath.
+// Returns the cleaned fullPath if relative calculation fails.
+// Returns "." if fullPath and root resolve to the same directory.
+func RelativePathOrSelf(fullPath, root string) string {
+	cleanPath := filepath.Clean(fullPath)
+	absoluteRoot, err := filepath.Abs(root)
+	if err != nil {
+		return cleanPath
+	}
+	cleanAbsoluteRoot := filepath.Clean(absoluteRoot)
+
+	if cleanPath == cleanAbsoluteRoot {
+		return "."
+	}
+
+	relativePath, relErr := filepath.Rel(cleanAbsoluteRoot, cleanPath)
+	if relErr != nil {
+		return cleanPath
+	}
+	return filepath.ToSlash(relativePath)
+}
+
+// ShouldIgnore checks if a directory entry should be ignored based on its name and type,
+// relative to a set of ignore patterns and whether it's at the root level of processing.
+// Used primarily during tree building (os.ReadDir).
+func ShouldIgnore(directoryEntry os.DirEntry, ignorePatterns []string, isRootLevel bool) bool {
 	entryName := directoryEntry.Name()
 
-	if _, exists := serviceFiles[entryName]; exists {
+	if _, isServiceFile := serviceFiles[entryName]; isServiceFile {
 		return true
 	}
 
 	for _, patternValue := range ignorePatterns {
-		if strings.HasPrefix(patternValue, "EXCL:") {
-			exclusionValue := strings.TrimPrefix(patternValue, "EXCL:")
-			if isRoot && directoryEntry.IsDir() && entryName == exclusionValue {
+		if strings.HasPrefix(patternValue, ExclusionPrefix) {
+			exclusionName := strings.TrimPrefix(patternValue, ExclusionPrefix)
+			if isRootLevel && directoryEntry.IsDir() && entryName == exclusionName {
 				return true
 			}
 			continue
@@ -32,10 +86,8 @@ func ShouldIgnore(directoryEntry os.DirEntry, ignorePatterns []string, isRoot bo
 
 		if strings.HasSuffix(patternValue, "/") {
 			patternDirectory := strings.TrimSuffix(patternValue, "/")
-			if directoryEntry.IsDir() {
-				if isRoot && entryName == patternDirectory {
-					return true
-				}
+			if directoryEntry.IsDir() && entryName == patternDirectory {
+				return true
 			}
 		} else {
 			isMatched, matchError := filepath.Match(patternValue, entryName)
@@ -48,50 +100,47 @@ func ShouldIgnore(directoryEntry os.DirEntry, ignorePatterns []string, isRoot bo
 }
 
 // ShouldIgnoreByPath checks if a path relative to its processing root should be ignored.
-// It considers EXCL: patterns, directory patterns (ending in /), and filename patterns.
-// It also includes default ignores for .gitignore and .ignore files.
-// Used by the content command's walk function.
+// It considers exclusion patterns, directory patterns, filename patterns, and service files.
+// Used by the content command's walk function (filepath.WalkDir).
 func ShouldIgnoreByPath(relativePath string, ignorePatterns []string) bool {
 	normalizedPath := filepath.ToSlash(relativePath)
 	pathComponents := strings.Split(normalizedPath, "/")
-	fileName := ""
+	entryName := ""
 	if len(pathComponents) > 0 {
-		fileName = pathComponents[len(pathComponents)-1]
+		entryName = pathComponents[len(pathComponents)-1]
 	}
 
-	if _, exists := serviceFiles[fileName]; exists {
+	if _, isServiceFile := serviceFiles[entryName]; isServiceFile {
 		return true
 	}
 
 	for _, pattern := range ignorePatterns {
-		if strings.HasPrefix(pattern, "EXCL:") {
-			exclusionValue := strings.TrimPrefix(pattern, "EXCL:")
-			if len(pathComponents) >= 1 && pathComponents[0] == exclusionValue {
+		if strings.HasPrefix(pattern, ExclusionPrefix) {
+			exclusionName := strings.TrimPrefix(pattern, ExclusionPrefix)
+			if len(pathComponents) >= 1 && pathComponents[0] == exclusionName {
 				return true
 			}
 			continue
 		}
 
-		isDirPattern := strings.HasSuffix(pattern, "/")
+		isDirectoryPattern := strings.HasSuffix(pattern, "/")
 		cleanedPattern := strings.TrimSuffix(pattern, "/")
 
 		if !strings.Contains(cleanedPattern, "/") {
-			match, _ := filepath.Match(cleanedPattern, fileName)
-			if match {
+			isMatched, _ := filepath.Match(cleanedPattern, entryName)
+			if isMatched {
 				return true
 			}
 		} else {
-			if isDirPattern {
-				if strings.HasPrefix(normalizedPath, cleanedPattern+"/") || normalizedPath == cleanedPattern {
-					return true
-				}
-			} else {
-				match, _ := filepath.Match(pattern, normalizedPath)
-				if match {
-					return true
-				}
+			isMatched, _ := filepath.Match(pattern, normalizedPath)
+			if isMatched {
+				return true
+			}
+			if isDirectoryPattern && strings.HasPrefix(normalizedPath, cleanedPattern+"/") {
+				return true
 			}
 		}
 	}
+
 	return false
 }

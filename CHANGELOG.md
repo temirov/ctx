@@ -1,6 +1,32 @@
 # Changelog
 
-## [v0.0.4] - 2025-03-29
+## [v0.0.7] - 2025-04-13
+
+### Features ✨
+
+1. **Call Chain Analysis Command (`callchain`, `cc`):**
+    - Added a new command `callchain` (alias `cc`) to analyze the call graph for a specified function within the
+      repository.
+    - Usage: `content callchain <function_name> [--format <raw|json>]`
+    - The `<function_name>` argument should be a fully qualified name (e.g., `github.com/org/repo/pkg.MyFunction`) or a
+      unique suffix.
+    - **Raw Output (`--format raw` or default):** Displays the target function, its direct callers, and its direct
+      callees in a human-readable format, followed by the source code of these functions.
+    - **JSON Output (`--format json`):** Outputs a JSON object containing the `targetFunction`, arrays of `callers` and
+      `callees` (fully qualified names), and a `functions` map where keys are function names and values are their source
+      code strings.
+
+## [v0.0.6] - 2025-04-08
+
+### Features ✨
+
+1. **Version Flag:** Added a `--version` flag to display the application version.
+
+### Bug Fixes 🐛
+
+1. **Version Verbiage:** Corrected the wording used when displaying the version information.
+
+## [v0.0.5] - 2025-03-29
 
 ### Features ✨
 
@@ -55,9 +81,8 @@
    appears as a direct child of the working directory.
 
 4. **Disabling Ignore File Logic:**
-
-- **--no-gitignore:** Prevents the tool from reading the **.gitignore** file.
-- **--no-ignore:** Prevents the tool from reading the **.ignore** file.
+    - **--no-gitignore:** Prevents the tool from reading the **.gitignore** file.
+    - **--no-ignore:** Prevents the tool from reading the **.ignore** file.
 
 5. **Command Abbreviations:**
    Short forms **t** for **tree** and **c** for **content** are now supported.
