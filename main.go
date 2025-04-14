@@ -15,9 +15,7 @@ import (
 	"github.com/temirov/content/types"
 )
 
-// GetApplicationVersion returns the application version. If the build metadata contains a non-development version,
-// that version is returned. Otherwise, if a .git directory is present, Git is used to describe the current commit.
-// If neither method yields a version, "unknown" is returned.
+// GetApplicationVersion returns the application version.
 func GetApplicationVersion() string {
 	buildInfo, buildInfoAvailable := debug.ReadBuildInfo()
 	if buildInfoAvailable && buildInfo.Main.Version != "" && buildInfo.Main.Version != "(devel)" {
@@ -39,15 +37,15 @@ func GetApplicationVersion() string {
 
 // findGitDirectory searches upward from the starting directory for a .git folder.
 func findGitDirectory(startDirectory string) (string, error) {
-	absoluteStartDirectory, errorAbs := filepath.Abs(startDirectory)
-	if errorAbs != nil {
-		return "", errorAbs
+	absoluteStartDirectory, errorAbsolute := filepath.Abs(startDirectory)
+	if errorAbsolute != nil {
+		return "", errorAbsolute
 	}
 	currentDirectory := absoluteStartDirectory
 	for {
 		gitPath := filepath.Join(currentDirectory, ".git")
-		fileInfo, statError := os.Stat(gitPath)
-		if statError == nil && fileInfo.IsDir() {
+		fileInformation, errorStat := os.Stat(gitPath)
+		if errorStat == nil && fileInformation.IsDir() {
 			return currentDirectory, nil
 		}
 		parentDirectory := filepath.Dir(currentDirectory)
@@ -60,8 +58,8 @@ func findGitDirectory(startDirectory string) (string, error) {
 }
 
 func main() {
-	for _, currentArgument := range os.Args[1:] {
-		if currentArgument == "--version" {
+	for _, argumentValue := range os.Args[1:] {
+		if argumentValue == "--version" {
 			fmt.Println("content version:", GetApplicationVersion())
 			os.Exit(0)
 		}
@@ -75,9 +73,8 @@ func main() {
 
 func printUsage() {
 	fmt.Println("Usage:")
-	fmt.Println("  content <tree|t|content|c> [path1] [path2] ... [-e|--e exclusion_folder] [--no-gitignore] [--no-ignore] [--format <raw|json>] [--version]")
-	fmt.Println("Paths can be files or directories.")
-	fmt.Println("Default format is 'raw'.")
+	fmt.Println("  content <tree|t|content|c|callchain|cc> [arguments...] [flags] [--format <raw|json>] [--version]")
+	fmt.Println("Paths can be files or directories (for 'tree' and 'content') or a fully qualified function name (for 'callchain').")
 	os.Exit(1)
 }
 
@@ -92,6 +89,8 @@ func parseArgsOrExit() (string, []string, string, bool, bool, string) {
 		commandName = "tree"
 	case "content", "c":
 		commandName = "content"
+	case "callchain", "cc":
+		commandName = "callchain"
 	default:
 		fmt.Printf("Invalid command: %s\n", rawCommand)
 		printUsage()
@@ -154,67 +153,92 @@ func parseArgsOrExit() (string, []string, string, bool, bool, string) {
 
 // runContentTool orchestrates processing and output generation based on format.
 func runContentTool(commandName string, inputPaths []string, exclusionFolder string, useGitignore bool, useIgnoreFile bool, outputFormat string) error {
+	if commandName == "callchain" {
+		if len(inputPaths) != 1 {
+			return fmt.Errorf("callchain command requires exactly one function name argument")
+		}
+		callChainData, errorCallChain := commands.GetCallChainData(inputPaths[0])
+		if errorCallChain != nil {
+			return errorCallChain
+		}
+		if outputFormat == "json" {
+			jsonOutput, jsonError := commands.RenderCallChainJSON(callChainData)
+			if jsonError != nil {
+				return fmt.Errorf("error generating JSON output: %w", jsonError)
+			}
+			fmt.Println(jsonOutput)
+		} else {
+			fmt.Println(commands.RenderCallChainRaw(callChainData))
+		}
+		return nil
+	}
 	validatedPaths, validationError := resolveAndValidatePaths(inputPaths)
 	if validationError != nil {
 		return validationError
 	}
 	var collectedResults []interface{}
 	var firstProcessingWarning error
-	for _, pathInformation := range validatedPaths {
-		var processingError error
-		if pathInformation.IsDir {
-			ignorePatterns, errorLoadingIgnores := loadIgnorePatternsForDirectory(pathInformation.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile)
-			if errorLoadingIgnores != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Error loading ignore patterns for %s: %v\n", pathInformation.AbsolutePath, errorLoadingIgnores)
-				if firstProcessingWarning == nil {
-					firstProcessingWarning = errorLoadingIgnores
+	switch commandName {
+	case "tree":
+		for _, pathInformation := range validatedPaths {
+			if pathInformation.IsDir {
+				ignorePatterns, errorLoadingIgnores := loadIgnorePatternsForDirectory(pathInformation.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile)
+				if errorLoadingIgnores != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Error loading ignore patterns for %s: %v\n", pathInformation.AbsolutePath, errorLoadingIgnores)
+					if firstProcessingWarning == nil {
+						firstProcessingWarning = errorLoadingIgnores
+					}
+					continue
 				}
-				continue
-			}
-			switch commandName {
-			case "tree":
 				treeNodes, errorGeneratingTree := commands.GetTreeData(pathInformation.AbsolutePath, ignorePatterns)
 				if errorGeneratingTree != nil {
-					processingError = errorGeneratingTree
+					fmt.Fprintf(os.Stderr, "Warning: Error processing path %s: %v\n", pathInformation.AbsolutePath, errorGeneratingTree)
+					if firstProcessingWarning == nil {
+						firstProcessingWarning = errorGeneratingTree
+					}
 				} else if len(treeNodes) > 0 {
 					collectedResults = append(collectedResults, treeNodes[0])
 				}
-			case "content":
-				fileOutputs, errorGeneratingContent := commands.GetContentData(pathInformation.AbsolutePath, ignorePatterns)
-				if errorGeneratingContent != nil {
-					processingError = errorGeneratingContent
-				} else {
-					for outputIndex := range fileOutputs {
-						collectedResults = append(collectedResults, &fileOutputs[outputIndex])
-					}
-				}
-			default:
-				processingError = fmt.Errorf("internal error: unhandled command '%s'", commandName)
-			}
-		} else {
-			switch commandName {
-			case "tree":
+			} else {
 				fileNode := &types.TreeOutputNode{
 					Path: pathInformation.AbsolutePath,
 					Name: filepath.Base(pathInformation.AbsolutePath),
 					Type: "file",
 				}
 				collectedResults = append(collectedResults, fileNode)
-			case "content":
+			}
+		}
+	case "content":
+		for _, pathInformation := range validatedPaths {
+			if pathInformation.IsDir {
+				ignorePatterns, errorLoadingIgnores := loadIgnorePatternsForDirectory(pathInformation.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile)
+				if errorLoadingIgnores != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Error loading ignore patterns for %s: %v\n", pathInformation.AbsolutePath, errorLoadingIgnores)
+					if firstProcessingWarning == nil {
+						firstProcessingWarning = errorLoadingIgnores
+					}
+					continue
+				}
+				fileOutputs, errorGeneratingContent := commands.GetContentData(pathInformation.AbsolutePath, ignorePatterns)
+				if errorGeneratingContent != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Error processing path %s: %v\n", pathInformation.AbsolutePath, errorGeneratingContent)
+					if firstProcessingWarning == nil {
+						firstProcessingWarning = errorGeneratingContent
+					}
+				} else {
+					for outputIndex := range fileOutputs {
+						collectedResults = append(collectedResults, &fileOutputs[outputIndex])
+					}
+				}
+			} else {
 				fileOutput, _ := getSingleFileContent(pathInformation.AbsolutePath)
 				if fileOutput != nil {
 					collectedResults = append(collectedResults, fileOutput)
 				}
-			default:
-				processingError = fmt.Errorf("internal error: unhandled command '%s'", commandName)
 			}
 		}
-		if processingError != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Error processing path %s: %v\n", pathInformation.AbsolutePath, processingError)
-			if firstProcessingWarning == nil {
-				firstProcessingWarning = processingError
-			}
-		}
+	default:
+		return fmt.Errorf("internal error: unhandled command '%s'", commandName)
 	}
 	var renderingError error
 	switch outputFormat {
@@ -375,7 +399,7 @@ func printRawTreeNode(treeNode *types.TreeOutputNode, prefix string) {
 // deduplicatePatterns removes duplicate patterns from a slice while preserving order.
 func deduplicatePatterns(patterns []string) []string {
 	patternSet := make(map[string]struct{})
-	result := make([]string, 0, len(patterns))
+	var result []string
 	for _, pattern := range patterns {
 		if _, exists := patternSet[pattern]; !exists {
 			patternSet[pattern] = struct{}{}
