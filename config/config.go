@@ -1,27 +1,38 @@
-// Package config loads and parses the .ignore file into a slice of patterns.
+// Package config loads and parses ignore files into slices of patterns.
 package config
 
 import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/temirov/content/utils"
 )
 
-// LoadContentIgnore reads the .ignore file (if it exists) and returns a slice of ignore patterns.
+const (
+	ignoreFileName    = ".ignore"
+	gitIgnoreFileName = ".gitignore"
+	exclusionPrefix   = "EXCL:"
+)
+
+// LoadIgnoreFilePatterns reads a specified ignore file (if it exists) and returns a slice of ignore patterns.
 // Blank lines and lines beginning with '#' are skipped.
 //
-// #nosec G304: filePath is intentionally user-provided, as we must open .ignore in that directory.
-func LoadContentIgnore(filePath string) ([]string, error) {
-	fileHandle, openError := os.Open(filePath)
+// #nosec G304
+func LoadIgnoreFilePatterns(ignoreFilePath string) ([]string, error) {
+	fileHandle, openError := os.Open(ignoreFilePath)
 	if openError != nil {
+		if os.IsNotExist(openError) {
+			return nil, nil
+		}
 		return nil, openError
 	}
 	defer func() {
 		closeErr := fileHandle.Close()
 		if closeErr != nil {
-			// We won't fail the entire operation for a close error, but we log it.
-			fmt.Fprintf(os.Stderr, "Warning: failed to close %s: %v\n", filePath, closeErr)
+			fmt.Fprintf(os.Stderr, "Warning: failed to close %s: %v\n", ignoreFilePath, closeErr)
 		}
 	}()
 
@@ -38,4 +49,48 @@ func LoadContentIgnore(filePath string) ([]string, error) {
 		return nil, scanError
 	}
 	return patterns, nil
+}
+
+// LoadCombinedIgnorePatterns loads patterns from .ignore and/or .gitignore files within a directory,
+// adds the exclusion folder pattern if specified, and returns the combined, deduplicated list.
+func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder string, useGitignore bool, useIgnoreFile bool) ([]string, error) {
+	var combinedPatterns []string
+
+	if useIgnoreFile {
+		ignoreFilePath := filepath.Join(absoluteDirectoryPath, ignoreFileName)
+		ignoreFilePatterns, loadError := LoadIgnoreFilePatterns(ignoreFilePath)
+		if loadError != nil {
+			return nil, fmt.Errorf("loading %s from %s: %w", ignoreFileName, absoluteDirectoryPath, loadError)
+		}
+		combinedPatterns = append(combinedPatterns, ignoreFilePatterns...)
+	}
+
+	if useGitignore {
+		gitIgnoreFilePath := filepath.Join(absoluteDirectoryPath, gitIgnoreFileName)
+		gitignoreFilePatterns, loadError := LoadIgnoreFilePatterns(gitIgnoreFilePath)
+		if loadError != nil {
+			return nil, fmt.Errorf("loading %s from %s: %w", gitIgnoreFileName, absoluteDirectoryPath, loadError)
+		}
+		combinedPatterns = append(combinedPatterns, gitignoreFilePatterns...)
+	}
+
+	deduplicatedFilePatterns := utils.DeduplicatePatterns(combinedPatterns)
+
+	trimmedExclusion := strings.TrimSpace(exclusionFolder)
+	if trimmedExclusion != "" {
+		normalizedExclusion := strings.TrimSuffix(trimmedExclusion, "/")
+		exclusionPattern := exclusionPrefix + normalizedExclusion
+		isPresent := false
+		for _, pattern := range deduplicatedFilePatterns {
+			if pattern == exclusionPattern {
+				isPresent = true
+				break
+			}
+		}
+		if !isPresent {
+			deduplicatedFilePatterns = append(deduplicatedFilePatterns, exclusionPattern)
+		}
+	}
+
+	return deduplicatedFilePatterns, nil
 }

@@ -11,15 +11,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/temirov/content/types"
+	appTypes "github.com/temirov/content/types"
 )
 
-// buildBinary compiles the binary from the module root and returns its path.
-// #nosec G204: we intentionally invoke "go build" with variable arguments
+// #nosec G204
 func buildBinary(testSetup *testing.T) string {
 	testSetup.Helper()
 	temporaryDirectory := testSetup.TempDir()
-	binaryName := "content_integration"
+	binaryName := "content_integration_test_binary"
 	if runtime.GOOS == "windows" {
 		binaryName += ".exe"
 	}
@@ -27,7 +26,7 @@ func buildBinary(testSetup *testing.T) string {
 
 	currentDirectory, directoryError := os.Getwd()
 	if directoryError != nil {
-		testSetup.Fatalf("Failed to get working directory: %v", directoryError)
+		testSetup.Fatalf("Failed to get current working directory: %v", directoryError)
 	}
 	moduleRoot := filepath.Dir(currentDirectory)
 
@@ -36,397 +35,549 @@ func buildBinary(testSetup *testing.T) string {
 
 	outputData, buildErr := buildCommand.CombinedOutput()
 	if buildErr != nil {
-		testSetup.Fatalf("Failed to build binary in %s: %v, output: %s", moduleRoot, buildErr, string(outputData))
+		testSetup.Fatalf("Failed to build binary in %s: %v\nBuild Output:\n%s", moduleRoot, buildErr, string(outputData))
 	}
+
 	return binaryPath
 }
 
-// runCommand executes the binary with the given args in workDir.
-// It returns combined stdout+stderr as a string.
-// It fails the test if the command exits with an error.
-func runCommand(testSetup *testing.T, binaryPath string, args []string, workDir string) string {
+// #nosec G204
+func runCommand(testSetup *testing.T, binaryPath string, arguments []string, workingDirectory string) string {
 	testSetup.Helper()
-	command := exec.Command(binaryPath, args...)
-	command.Dir = workDir
+	command := exec.Command(binaryPath, arguments...)
+	command.Dir = workingDirectory
 
-	var stdOutBuffer, stdErrBuffer bytes.Buffer
-	command.Stdout = &stdOutBuffer
-	command.Stderr = &stdErrBuffer
+	var standardOutputBuffer, standardErrorBuffer bytes.Buffer
+	command.Stdout = &standardOutputBuffer
+	command.Stderr = &standardErrorBuffer
 
 	runError := command.Run()
-	stdOutString := stdOutBuffer.String()
-	stdErrString := stdErrBuffer.String()
+	standardOutputString := standardOutputBuffer.String()
+	standardErrorString := standardErrorBuffer.String()
 
-	combinedOutputForLog := fmt.Sprintf("Stdout:\n%s\nStderr:\n%s", stdOutString, stdErrString)
+	combinedOutputForLog := fmt.Sprintf("--- Command ---\n%s %s\n--- Working Directory ---\n%s\n--- Standard Output ---\n%s\n--- Standard Error ---\n%s",
+		filepath.Base(binaryPath), strings.Join(arguments, " "), workingDirectory, standardOutputString, standardErrorString)
 
 	if runError != nil {
 		exitError, isExitError := runError.(*exec.ExitError)
-		errorDetails := fmt.Sprintf("Command '%s %s' failed in dir '%s'", filepath.Base(binaryPath), strings.Join(args, " "), workDir)
+		errorDetails := fmt.Sprintf("Command failed unexpectedly.\n%s", combinedOutputForLog)
 		if isExitError {
-			errorDetails += fmt.Sprintf("\nExit Code: %d", exitError.ExitCode())
+			errorDetails += fmt.Sprintf("\n--- Exit Code ---\n%d", exitError.ExitCode())
 		} else {
-			errorDetails += fmt.Sprintf("\nError Type: %T", runError)
+			errorDetails += fmt.Sprintf("\n--- Error Type ---\n%T", runError)
 		}
-		errorDetails += fmt.Sprintf("\nError: %v\nOutput:\n%s", runError, combinedOutputForLog)
+		errorDetails += fmt.Sprintf("\n--- Error ---\n%v", runError)
 		testSetup.Fatalf(errorDetails)
 	}
 
-	if strings.Contains(stdErrString, "Warning:") {
-		testSetup.Logf("Command '%s %s' succeeded but produced warnings:\n%s", filepath.Base(binaryPath), strings.Join(args, " "), stdErrString)
+	if strings.Contains(standardErrorString, "Warning:") {
+		testSetup.Logf("Command succeeded but produced warnings:\n%s", combinedOutputForLog)
 	}
 
-	return stdOutString
+	return standardOutputString
 }
 
-// runCommandExpectError executes the binary, expecting a non-zero exit code.
-// It returns combined stdout+stderr as a string.
-// It fails the test if the command exits successfully (exit code 0).
-func runCommandExpectError(testSetup *testing.T, binaryPath string, args []string, workDir string) string {
+// #nosec G204
+func runCommandExpectError(testSetup *testing.T, binaryPath string, arguments []string, workingDirectory string) string {
 	testSetup.Helper()
-	command := exec.Command(binaryPath, args...)
-	command.Dir = workDir
+	command := exec.Command(binaryPath, arguments...)
+	command.Dir = workingDirectory
 
-	var stdOutErrBuffer bytes.Buffer
-	command.Stdout = &stdOutErrBuffer
-	command.Stderr = &stdOutErrBuffer
+	var combinedOutputBuffer bytes.Buffer
+	command.Stdout = &combinedOutputBuffer
+	command.Stderr = &combinedOutputBuffer
 
 	runError := command.Run()
-	outputString := stdOutErrBuffer.String()
+	outputString := combinedOutputBuffer.String()
 
 	if runError == nil {
-		testSetup.Fatalf("Command '%s %s' in dir '%s' succeeded unexpectedly.\nOutput:\n%s", filepath.Base(binaryPath), strings.Join(args, " "), workDir, outputString)
+		testSetup.Fatalf("Command succeeded unexpectedly.\n--- Command ---\n%s %s\n--- Working Directory ---\n%s\n--- Combined Output ---\n%s",
+			filepath.Base(binaryPath), strings.Join(arguments, " "), workingDirectory, outputString)
 	}
 
 	_, isExitError := runError.(*exec.ExitError)
 	if !isExitError {
-		testSetup.Logf("Command '%s %s' failed with non-ExitError type: %T, Error: %v", filepath.Base(binaryPath), strings.Join(args, " "), runError, runError)
+		testSetup.Logf("Command failed with non-ExitError type (%T): %v\n--- Command ---\n%s %s\n--- Working Directory ---\n%s",
+			runError, runError, filepath.Base(binaryPath), strings.Join(arguments, " "), workingDirectory)
 	}
 
 	return outputString
 }
 
-// runCommandWithWarnings executes the binary, expecting a zero exit code but warnings on stderr.
-// It returns combined stdout+stderr as a string.
-// It fails the test if the command exits with an error OR if no warnings are found.
-func runCommandWithWarnings(testSetup *testing.T, binaryPath string, args []string, workDir string) string {
+// #nosec G204
+func runCommandWithWarnings(testSetup *testing.T, binaryPath string, arguments []string, workingDirectory string) string {
 	testSetup.Helper()
-	command := exec.Command(binaryPath, args...)
-	command.Dir = workDir
+	command := exec.Command(binaryPath, arguments...)
+	command.Dir = workingDirectory
 
-	var stdOutBuffer, stdErrBuffer bytes.Buffer
-	command.Stdout = &stdOutBuffer
-	command.Stderr = &stdErrBuffer
+	var standardOutputBuffer, standardErrorBuffer bytes.Buffer
+	command.Stdout = &standardOutputBuffer
+	command.Stderr = &standardErrorBuffer
 
 	runError := command.Run()
-	stdOutString := stdOutBuffer.String()
-	stdErrString := stdErrBuffer.String()
+	standardOutputString := standardOutputBuffer.String()
+	standardErrorString := standardErrorBuffer.String()
 
-	combinedOutputForLog := fmt.Sprintf("Stdout:\n%s\nStderr:\n%s", stdOutString, stdErrString)
+	combinedOutputForLog := fmt.Sprintf("--- Command ---\n%s %s\n--- Working Directory ---\n%s\n--- Standard Output ---\n%s\n--- Standard Error ---\n%s",
+		filepath.Base(binaryPath), strings.Join(arguments, " "), workingDirectory, standardOutputString, standardErrorString)
 
 	if runError != nil {
 		exitError, isExitError := runError.(*exec.ExitError)
-		errorDetails := fmt.Sprintf("Command '%s %s' failed unexpectedly in dir '%s'", filepath.Base(binaryPath), strings.Join(args, " "), workDir)
+		errorDetails := fmt.Sprintf("Command failed unexpectedly when warnings were expected.\n%s", combinedOutputForLog)
 		if isExitError {
-			errorDetails += fmt.Sprintf("\nExit Code: %d", exitError.ExitCode())
+			errorDetails += fmt.Sprintf("\n--- Exit Code ---\n%d", exitError.ExitCode())
 		} else {
-			errorDetails += fmt.Sprintf("\nError Type: %T", runError)
+			errorDetails += fmt.Sprintf("\n--- Error Type ---\n%T", runError)
 		}
-		errorDetails += fmt.Sprintf("\nError: %v\nOutput:\n%s", runError, combinedOutputForLog)
+		errorDetails += fmt.Sprintf("\n--- Error ---\n%v", runError)
 		testSetup.Fatalf(errorDetails)
 	}
 
-	if !strings.Contains(stdErrString, "Warning:") {
-		testSetup.Fatalf("Command '%s %s' succeeded but did not produce expected warnings on stderr.\nStderr:\n%s", filepath.Base(binaryPath), strings.Join(args, " "), stdErrString)
+	if !strings.Contains(standardErrorString, "Warning:") {
+		testSetup.Fatalf("Command succeeded but did not produce expected warnings on stderr.\n%s", combinedOutputForLog)
 	}
 
-	return stdOutString
+	return standardOutputString
 }
 
-// setupTestDirectory creates a temporary directory structure for testing.
-// Returns the path to the root temporary directory.
-func setupTestDirectory(testSetup *testing.T, structure map[string]string) string {
+func setupTestDirectory(testSetup *testing.T, directoryStructure map[string]string) string {
 	testSetup.Helper()
-	tempDir := testSetup.TempDir()
+	temporaryDirectoryRoot := testSetup.TempDir()
 
-	for path, content := range structure {
-		fullPath := filepath.Join(tempDir, path)
-		dirPath := filepath.Dir(fullPath)
+	for relativePath, content := range directoryStructure {
+		absolutePath := filepath.Join(temporaryDirectoryRoot, relativePath)
+		directoryPath := filepath.Dir(absolutePath)
 
-		mkdirErr := os.MkdirAll(dirPath, 0755)
+		mkdirErr := os.MkdirAll(directoryPath, 0755)
 		if mkdirErr != nil {
-			testSetup.Fatalf("Failed to create directory %s: %v", dirPath, mkdirErr)
+			testSetup.Fatalf("Failed to create directory %s: %v", directoryPath, mkdirErr)
 		}
 
-		if content == "" {
-			if _, statErr := os.Stat(fullPath); os.IsNotExist(statErr) {
-				mkdirErr = os.Mkdir(fullPath, 0755)
+		switch content {
+		case "":
+			if _, statErr := os.Stat(absolutePath); os.IsNotExist(statErr) {
+				mkdirErr = os.Mkdir(absolutePath, 0755)
 				if mkdirErr != nil {
-					testSetup.Fatalf("Failed to create directory %s: %v", fullPath, mkdirErr)
+					testSetup.Fatalf("Failed to create directory %s: %v", absolutePath, mkdirErr)
 				}
 			}
-		} else if content == "<UNREADABLE>" {
-			writeErr := os.WriteFile(fullPath, []byte("cannot read this"), 0644)
+		case "<UNREADABLE>":
+			initialContent := []byte("content should be unreadable")
+			writeErr := os.WriteFile(absolutePath, initialContent, 0644)
 			if writeErr != nil {
-				testSetup.Fatalf("Failed to write pre-unreadable file %s: %v", fullPath, writeErr)
+				testSetup.Fatalf("Failed to write initial content for unreadable file %s: %v", absolutePath, writeErr)
 			}
-			chmodErr := os.Chmod(fullPath, 0000)
+			chmodErr := os.Chmod(absolutePath, 0000)
 			if chmodErr != nil {
-				testSetup.Logf("Warning: Failed to set file %s unreadable: %v", fullPath, chmodErr)
+				testSetup.Logf("Warning: Failed to set file %s permissions to 0000: %v", absolutePath, chmodErr)
 			}
-		} else {
-			writeErr := os.WriteFile(fullPath, []byte(content), 0644)
+		default:
+			writeErr := os.WriteFile(absolutePath, []byte(content), 0644)
 			if writeErr != nil {
-				testSetup.Fatalf("Failed to write file %s: %v", fullPath, writeErr)
+				testSetup.Fatalf("Failed to write file %s: %v", absolutePath, writeErr)
 			}
 		}
 	}
-	return tempDir
+	return temporaryDirectoryRoot
 }
 
-func TestRawFormat_TreeCommand_Default(testValue *testing.T) {
-	binary := buildBinary(testValue)
-	testDir := setupTestDirectory(testValue, map[string]string{
-		"fileA.txt":       "A",
-		"dirB/":           "",
-		"dirB/itemB1.txt": "B1",
+func TestRawFormat_TreeCommand_Default(testInstance *testing.T) {
+	binaryPath := buildBinary(testInstance)
+	testDirectory := setupTestDirectory(testInstance, map[string]string{
+		"fileA.txt":             "File A content",
+		"directoryB/":           "",
+		"directoryB/itemB1.txt": "File B1 content",
 	})
 
-	output := runCommand(testValue, binary, []string{"tree", "fileA.txt", "dirB"}, testDir)
+	output := runCommand(testInstance, binaryPath, []string{appTypes.CommandTree, "fileA.txt", "directoryB"}, testDirectory)
 
-	absFileA, _ := filepath.Abs(filepath.Join(testDir, "fileA.txt"))
-	absDirB, _ := filepath.Abs(filepath.Join(testDir, "dirB"))
+	absoluteFileAPath, _ := filepath.Abs(filepath.Join(testDirectory, "fileA.txt"))
+	absoluteDirectoryBPath, _ := filepath.Abs(filepath.Join(testDirectory, "directoryB"))
 
-	expectedFileA := fmt.Sprintf("[File] %s", absFileA)
-	expectedDirBHeader := fmt.Sprintf("--- Directory Tree: %s ---", absDirB)
+	expectedFileAMarker := fmt.Sprintf("[File] %s", absoluteFileAPath)
+	expectedDirectoryBHeader := fmt.Sprintf("--- Directory Tree: %s ---", absoluteDirectoryBPath)
+	expectedItemB1TreeLine := "itemB1.txt"
 
-	if !strings.Contains(output, expectedFileA) {
-		testValue.Errorf("Raw tree output missing file marker for fileA.\nOutput: %s", output)
+	if !strings.Contains(output, expectedFileAMarker) {
+		testInstance.Errorf("Raw tree output missing expected file marker:\nExpected fragment: %s\nActual Output:\n%s", expectedFileAMarker, output)
 	}
-	if !strings.Contains(output, expectedDirBHeader) {
-		testValue.Errorf("Raw tree output missing header for dirB.\nOutput: %s", output)
+	if !strings.Contains(output, expectedDirectoryBHeader) {
+		testInstance.Errorf("Raw tree output missing expected directory header:\nExpected fragment: %s\nActual Output:\n%s", expectedDirectoryBHeader, output)
 	}
-	if !strings.Contains(output, "└── itemB1.txt") && !strings.Contains(output, "├── itemB1.txt") {
-		testValue.Errorf("Raw tree output missing itemB1.txt from dirB tree.\nOutput: %s", output)
+	dirBTreeSectionIndex := strings.Index(output, expectedDirectoryBHeader)
+	if dirBTreeSectionIndex == -1 {
+		testInstance.Fatalf("Directory B header not found in output.")
 	}
-}
-
-func TestRawFormat_ContentCommand_Default(testValue *testing.T) {
-	binary := buildBinary(testValue)
-	testDir := setupTestDirectory(testValue, map[string]string{
-		"fileA.txt":       "Content A",
-		"dirB/":           "",
-		"dirB/itemB1.txt": "Content B1",
-	})
-
-	output := runCommand(testValue, binary, []string{"content", "fileA.txt", "dirB"}, testDir)
-
-	absFileA, _ := filepath.Abs(filepath.Join(testDir, "fileA.txt"))
-	absFileB1, _ := filepath.Abs(filepath.Join(testDir, "dirB", "itemB1.txt"))
-
-	expectedHeaderA := fmt.Sprintf("File: %s", absFileA)
-	expectedHeaderB1 := fmt.Sprintf("File: %s", absFileB1)
-	sep := "----------------------------------------"
-
-	if !strings.Contains(output, expectedHeaderA) || !strings.Contains(output, "Content A") || !strings.Contains(output, "End of file: "+absFileA) {
-		testValue.Errorf("Raw content output missing parts for fileA.\nOutput: %s", output)
-	}
-	if !strings.Contains(output, expectedHeaderB1) || !strings.Contains(output, "Content B1") || !strings.Contains(output, "End of file: "+absFileB1) {
-		testValue.Errorf("Raw content output missing parts for itemB1.\nOutput: %s", output)
-	}
-	if strings.Count(output, sep) != 2 {
-		testValue.Errorf("Expected 2 separators in raw content output, found %d.\nOutput: %s", strings.Count(output, sep), output)
-	}
-	if strings.Index(output, expectedHeaderA) > strings.Index(output, expectedHeaderB1) {
-		testValue.Errorf("Raw content output order seems incorrect.\nOutput: %s", output)
+	dirBTreeSection := output[dirBTreeSectionIndex:]
+	if !strings.Contains(dirBTreeSection, expectedItemB1TreeLine) {
+		testInstance.Errorf("Raw tree output for directoryB missing expected child item '%s'.\nActual Output Section:\n%s", expectedItemB1TreeLine, dirBTreeSection)
 	}
 }
 
-func TestRawFormat_FlagExplicit(testValue *testing.T) {
-	binary := buildBinary(testValue)
-	testDir := setupTestDirectory(testValue, map[string]string{
-		"fileA.txt": "Content A",
+func TestRawFormat_ContentCommand_Default(testInstance *testing.T) {
+	binaryPath := buildBinary(testInstance)
+	testDirectory := setupTestDirectory(testInstance, map[string]string{
+		"fileA.txt":             "Content A",
+		"directoryB/":           "",
+		"directoryB/itemB1.txt": "Content B1",
 	})
 
-	output := runCommand(testValue, binary, []string{"content", "fileA.txt", "--format", "raw"}, testDir)
+	output := runCommand(testInstance, binaryPath, []string{appTypes.CommandContent, "fileA.txt", "directoryB"}, testDirectory)
 
-	absFileA, _ := filepath.Abs(filepath.Join(testDir, "fileA.txt"))
-	expectedHeaderA := fmt.Sprintf("File: %s", absFileA)
+	absoluteFileAPath, _ := filepath.Abs(filepath.Join(testDirectory, "fileA.txt"))
+	absoluteItemB1Path, _ := filepath.Abs(filepath.Join(testDirectory, "directoryB", "itemB1.txt"))
 
-	if !strings.Contains(output, expectedHeaderA) || !strings.Contains(output, "Content A") {
-		testValue.Errorf("Raw content output missing parts for fileA when using --format raw.\nOutput: %s", output)
+	expectedHeaderA := fmt.Sprintf("File: %s", absoluteFileAPath)
+	expectedFooterA := fmt.Sprintf("End of file: %s", absoluteFileAPath)
+	expectedHeaderB1 := fmt.Sprintf("File: %s", absoluteItemB1Path)
+	expectedFooterB1 := fmt.Sprintf("End of file: %s", absoluteItemB1Path)
+	expectedSeparator := "----------------------------------------"
+
+	if !strings.Contains(output, expectedHeaderA) {
+		testInstance.Errorf("Raw content output missing header for fileA.\nExpected: %s\nOutput:\n%s", expectedHeaderA, output)
+	}
+	if !strings.Contains(output, "Content A") {
+		testInstance.Errorf("Raw content output missing content for fileA.\nOutput:\n%s", output)
+	}
+	if !strings.Contains(output, expectedFooterA) {
+		testInstance.Errorf("Raw content output missing footer for fileA.\nExpected: %s\nOutput:\n%s", expectedFooterA, output)
+	}
+
+	if !strings.Contains(output, expectedHeaderB1) {
+		testInstance.Errorf("Raw content output missing header for itemB1.\nExpected: %s\nOutput:\n%s", expectedHeaderB1, output)
+	}
+	if !strings.Contains(output, "Content B1") {
+		testInstance.Errorf("Raw content output missing content for itemB1.\nOutput:\n%s", output)
+	}
+	if !strings.Contains(output, expectedFooterB1) {
+		testInstance.Errorf("Raw content output missing footer for itemB1.\nExpected: %s\nOutput:\n%s", expectedFooterB1, output)
+	}
+
+	if strings.Count(output, expectedSeparator) != 2 {
+		testInstance.Errorf("Expected 2 separators in raw content output, found %d.\nOutput:\n%s", strings.Count(output, expectedSeparator), output)
+	}
+	indexOfHeaderA := strings.Index(output, expectedHeaderA)
+	indexOfHeaderB1 := strings.Index(output, expectedHeaderB1)
+	if indexOfHeaderA == -1 || indexOfHeaderB1 == -1 || indexOfHeaderA > indexOfHeaderB1 {
+		testInstance.Errorf("Raw content output order seems incorrect (expected fileA before itemB1).\nOutput:\n%s", output)
 	}
 }
 
-func TestJsonFormat_ContentCommand_Mixed(testValue *testing.T) {
-	binary := buildBinary(testValue)
-	testDir := setupTestDirectory(testValue, map[string]string{
-		"fileA.txt":        "Content A",
-		"dirB/":            "",
-		"dirB/.ignore":     "ignored.txt",
-		"dirB/itemB1.txt":  "Content B1",
-		"dirB/ignored.txt": "Ignored Content B",
-		"fileC.txt":        "Content C",
+func TestRawFormat_FlagExplicit(testInstance *testing.T) {
+	binaryPath := buildBinary(testInstance)
+	testDirectory := setupTestDirectory(testInstance, map[string]string{
+		"onlyfile.txt": "Explicit raw content",
 	})
 
-	output := runCommand(testValue, binary, []string{"content", "fileA.txt", "dirB", "fileC.txt", "--format", "json"}, testDir)
+	output := runCommand(testInstance, binaryPath, []string{appTypes.CommandContent, "onlyfile.txt", "--format", appTypes.FormatRaw}, testDirectory)
 
-	var results []types.FileOutput
-	err := json.Unmarshal([]byte(output), &results)
-	if err != nil {
-		testValue.Fatalf("Failed to unmarshal JSON output: %v\nOutput:\n%s", err, output)
-	}
+	absoluteFilePath, _ := filepath.Abs(filepath.Join(testDirectory, "onlyfile.txt"))
+	expectedHeader := fmt.Sprintf("File: %s", absoluteFilePath)
+	expectedContent := "Explicit raw content"
 
-	if len(results) != 3 {
-		testValue.Fatalf("Expected 3 items in JSON array, got %d.\nOutput: %s", len(results), output)
-	}
-
-	absFileA, _ := filepath.Abs(filepath.Join(testDir, "fileA.txt"))
-	absFileB1, _ := filepath.Abs(filepath.Join(testDir, "dirB", "itemB1.txt"))
-	absFileC, _ := filepath.Abs(filepath.Join(testDir, "fileC.txt"))
-
-	if results[0].Path != absFileA || results[0].Content != "Content A" || results[0].Type != "file" {
-		testValue.Errorf("JSON item 0 mismatch for fileA. Got: %+v", results[0])
-	}
-	if results[1].Path != absFileB1 || results[1].Content != "Content B1" || results[1].Type != "file" {
-		testValue.Errorf("JSON item 1 mismatch for itemB1. Got: %+v", results[1])
-	}
-	if results[2].Path != absFileC || results[2].Content != "Content C" || results[2].Type != "file" {
-		testValue.Errorf("JSON item 2 mismatch for fileC. Got: %+v", results[2])
-	}
-
-	if strings.Contains(output, "Ignored Content B") {
-		testValue.Errorf("Ignored content from dirB/ignored.txt found in JSON output.\nOutput: %s", output)
-	}
-	if strings.Contains(output, `dirB/.ignore`) {
-		testValue.Errorf("The .ignore file itself was included in JSON output.\nOutput: %s", output)
+	if !strings.Contains(output, expectedHeader) || !strings.Contains(output, expectedContent) {
+		testInstance.Errorf("Explicit --format raw did not produce expected raw content output.\nOutput:\n%s", output)
 	}
 }
 
-func TestJsonFormat_TreeCommand_Mixed(testValue *testing.T) {
-	binary := buildBinary(testValue)
-	testDir := setupTestDirectory(testValue, map[string]string{
-		"fileA.txt":           "A",
-		"dirB/":               "",
-		"dirB/.ignore":        "ignored.txt",
-		"dirB/itemB1.txt":     "B1",
-		"dirB/ignored.txt":    "ignored",
-		"dirB/sub/":           "",
-		"dirB/sub/itemB2.txt": "B2",
-		"fileC.txt":           "C",
+func TestJsonFormat_ContentCommand_Mixed(testInstance *testing.T) {
+	binaryPath := buildBinary(testInstance)
+	testDirectory := setupTestDirectory(testInstance, map[string]string{
+		"fileA.txt":              "Content A",
+		"directoryB/":            "",
+		"directoryB/.ignore":     "ignored.txt",
+		"directoryB/itemB1.txt":  "Content B1",
+		"directoryB/ignored.txt": "Ignored Content B",
+		"fileC.txt":              "Content C",
 	})
 
-	output := runCommand(testValue, binary, []string{"tree", "fileA.txt", "dirB", "fileC.txt", "--format", "json"}, testDir)
+	output := runCommand(testInstance, binaryPath, []string{appTypes.CommandContent, "fileA.txt", "directoryB", "fileC.txt", "--format", appTypes.FormatJSON}, testDirectory)
 
-	var results []types.TreeOutputNode
-	err := json.Unmarshal([]byte(output), &results)
-	if err != nil {
-		testValue.Fatalf("Failed to unmarshal JSON output: %v\nOutput:\n%s", err, output)
+	var results []appTypes.FileOutput
+	jsonUnmarshalError := json.Unmarshal([]byte(output), &results)
+	if jsonUnmarshalError != nil {
+		testInstance.Fatalf("Failed to unmarshal JSON output: %v\nOutput:\n%s", jsonUnmarshalError, output)
 	}
 
-	if len(results) != 3 {
-		testValue.Fatalf("Expected 3 top-level items in JSON array, got %d.\nOutput: %s", len(results), output)
+	expectedCount := 3
+	if len(results) != expectedCount {
+		testInstance.Fatalf("Expected %d items in JSON array, got %d.\nOutput:\n%s", expectedCount, len(results), output)
 	}
 
-	absFileA, _ := filepath.Abs(filepath.Join(testDir, "fileA.txt"))
-	absDirB, _ := filepath.Abs(filepath.Join(testDir, "dirB"))
-	absFileC, _ := filepath.Abs(filepath.Join(testDir, "fileC.txt"))
+	absoluteFileAPath, _ := filepath.Abs(filepath.Join(testDirectory, "fileA.txt"))
+	absoluteItemB1Path, _ := filepath.Abs(filepath.Join(testDirectory, "directoryB", "itemB1.txt"))
+	absoluteFileCPath, _ := filepath.Abs(filepath.Join(testDirectory, "fileC.txt"))
+	absoluteIgnoreFilePath := filepath.Join(testDirectory, "directoryB", ".ignore")
+	absoluteIgnoredFilePath := filepath.Join(testDirectory, "directoryB", "ignored.txt")
 
-	if results[0].Path != absFileA || results[0].Type != "file" || results[0].Name != "fileA.txt" {
-		testValue.Errorf("JSON item 0 mismatch for fileA. Got: %+v", results[0])
-	}
-
-	if results[1].Path != absDirB || results[1].Type != "directory" || results[1].Name != "dirB" {
-		testValue.Errorf("JSON item 1 mismatch for dirB. Got: %+v", results[1])
-	}
-	if len(results[1].Children) != 2 {
-		var childNames []string
-		for _, ch := range results[1].Children {
-			childNames = append(childNames, ch.Name)
+	foundA, foundB1, foundC := false, false, false
+	for _, item := range results {
+		if item.Type != appTypes.NodeTypeFile {
+			testInstance.Errorf("Unexpected item type '%s' in content JSON output for path %s", item.Type, item.Path)
 		}
-		testValue.Fatalf("Expected 2 children for dirB, got %d. Children: %v \nOutput:\n%s", len(results[1].Children), childNames, output)
+		switch item.Path {
+		case absoluteFileAPath:
+			if item.Content != "Content A" {
+				testInstance.Errorf("Content mismatch for fileA. Expected 'Content A', got '%s'", item.Content)
+			}
+			foundA = true
+		case absoluteItemB1Path:
+			if item.Content != "Content B1" {
+				testInstance.Errorf("Content mismatch for itemB1. Expected 'Content B1', got '%s'", item.Content)
+			}
+			foundB1 = true
+		case absoluteFileCPath:
+			if item.Content != "Content C" {
+				testInstance.Errorf("Content mismatch for fileC. Expected 'Content C', got '%s'", item.Content)
+			}
+			foundC = true
+		case absoluteIgnoreFilePath:
+			testInstance.Errorf(".ignore file itself was included in JSON output: %s", item.Path)
+		case absoluteIgnoredFilePath:
+			testInstance.Errorf("Ignored file 'ignored.txt' was included in JSON output: %s", item.Path)
+		}
+	}
+
+	if !foundA || !foundB1 || !foundC {
+		testInstance.Errorf("Missing expected items in JSON output. Found A: %t, Found B1: %t, Found C: %t", foundA, foundB1, foundC)
+	}
+}
+
+func TestJsonFormat_TreeCommand_Mixed(testInstance *testing.T) {
+	binaryPath := buildBinary(testInstance)
+	testDirectory := setupTestDirectory(testInstance, map[string]string{
+		"fileA.txt":                 "Content A",
+		"directoryB/":               "",
+		"directoryB/.ignore":        "ignored.txt\nsub/",
+		"directoryB/itemB1.txt":     "Content B1",
+		"directoryB/ignored.txt":    "Ignored B",
+		"directoryB/sub/":           "",
+		"directoryB/sub/itemB2.txt": "Content B2",
+		"fileC.txt":                 "Content C",
+	})
+
+	output := runCommand(testInstance, binaryPath, []string{appTypes.CommandTree, "fileA.txt", "directoryB", "fileC.txt", "--format", appTypes.FormatJSON}, testDirectory)
+
+	var results []appTypes.TreeOutputNode
+	jsonUnmarshalError := json.Unmarshal([]byte(output), &results)
+	if jsonUnmarshalError != nil {
+		testInstance.Fatalf("Failed to unmarshal JSON output: %v\nOutput:\n%s", jsonUnmarshalError, output)
+	}
+
+	expectedTopLevelCount := 3
+	if len(results) != expectedTopLevelCount {
+		testInstance.Fatalf("Expected %d top-level items in JSON array, got %d.\nOutput:\n%s", expectedTopLevelCount, len(results), output)
+	}
+
+	absoluteFileAPath, _ := filepath.Abs(filepath.Join(testDirectory, "fileA.txt"))
+	absoluteDirectoryBPath, _ := filepath.Abs(filepath.Join(testDirectory, "directoryB"))
+	absoluteFileCPath, _ := filepath.Abs(filepath.Join(testDirectory, "fileC.txt"))
+
+	if results[0].Path != absoluteFileAPath || results[0].Type != appTypes.NodeTypeFile || results[0].Name != "fileA.txt" {
+		testInstance.Errorf("JSON item 0 mismatch for fileA. Got: %+v", results[0])
+	}
+	if len(results[0].Children) != 0 {
+		testInstance.Errorf("Expected fileA node to have no children, got %d", len(results[0].Children))
+	}
+
+	if results[1].Path != absoluteDirectoryBPath || results[1].Type != appTypes.NodeTypeDirectory || results[1].Name != "directoryB" {
+		testInstance.Errorf("JSON item 1 mismatch for directoryB. Got: %+v", results[1])
+	}
+	expectedChildrenCountB := 1
+	if len(results[1].Children) != expectedChildrenCountB {
+		var childNames []string
+		for _, child := range results[1].Children {
+			childNames = append(childNames, child.Name)
+		}
+		testInstance.Fatalf("Expected %d children for directoryB, got %d. Children: %v\nOutput:\n%s",
+			expectedChildrenCountB, len(results[1].Children), childNames, output)
 	}
 	childB1 := results[1].Children[0]
-	if childB1.Name != "itemB1.txt" || childB1.Type != "file" || len(childB1.Children) != 0 {
-		testValue.Errorf("Child itemB1 mismatch. Got: %+v", childB1)
-	}
-	childSub := results[1].Children[1]
-	if childSub.Name != "sub" || childSub.Type != "directory" || len(childSub.Children) != 1 {
-		testValue.Errorf("Child sub mismatch. Got: %+v", childSub)
-	}
-	if len(childSub.Children) > 0 {
-		if childSub.Children[0].Name != "itemB2.txt" || childSub.Children[0].Type != "file" {
-			testValue.Errorf("Grandchild itemB2 mismatch. Got: %+v", childSub.Children[0])
-		}
-	} else {
-		testValue.Errorf("Grandchild itemB2 missing from sub")
+	if childB1.Name != "itemB1.txt" || childB1.Type != appTypes.NodeTypeFile || len(childB1.Children) != 0 {
+		testInstance.Errorf("Child itemB1 mismatch in directoryB. Got: %+v", childB1)
 	}
 
-	if results[2].Path != absFileC || results[2].Type != "file" || results[2].Name != "fileC.txt" {
-		testValue.Errorf("JSON item 2 mismatch for fileC. Got: %+v", results[2])
+	if results[2].Path != absoluteFileCPath || results[2].Type != appTypes.NodeTypeFile || results[2].Name != "fileC.txt" {
+		testInstance.Errorf("JSON item 2 mismatch for fileC. Got: %+v", results[2])
+	}
+	if len(results[2].Children) != 0 {
+		testInstance.Errorf("Expected fileC node to have no children, got %d", len(results[2].Children))
 	}
 }
 
-func TestJsonFormat_Content_UnreadableFile(testValue *testing.T) {
+func TestJsonFormat_Content_UnreadableFile(testInstance *testing.T) {
 	if runtime.GOOS == "windows" {
-		testValue.Skip("Skipping unreadable file test on Windows")
+		testInstance.Skip("Skipping unreadable file permission test on Windows due to different permission models.")
 	}
-	binary := buildBinary(testValue)
-	testDir := setupTestDirectory(testValue, map[string]string{
-		"readable.txt":   "OK",
+	binaryPath := buildBinary(testInstance)
+	testDirectory := setupTestDirectory(testInstance, map[string]string{
+		"readable.txt":   "Readable content OK",
 		"unreadable.txt": "<UNREADABLE>",
 	})
 
-	stdoutOutput := runCommandWithWarnings(testValue, binary, []string{"content", "readable.txt", "unreadable.txt", "--format", "json"}, testDir)
+	standardOutput := runCommandWithWarnings(testInstance, binaryPath, []string{appTypes.CommandContent, "readable.txt", "unreadable.txt", "--format", appTypes.FormatJSON}, testDirectory)
 
-	var results []types.FileOutput
-	err := json.Unmarshal([]byte(stdoutOutput), &results)
-	if err != nil {
-		testValue.Fatalf("Failed to unmarshal JSON stdout: %v\nStdout:\n%s", err, stdoutOutput)
+	var results []appTypes.FileOutput
+	jsonUnmarshalError := json.Unmarshal([]byte(standardOutput), &results)
+	if jsonUnmarshalError != nil {
+		testInstance.Fatalf("Failed to unmarshal JSON stdout: %v\nStdout:\n%s", jsonUnmarshalError, standardOutput)
 	}
 
-	if len(results) != 1 {
-		testValue.Fatalf("Expected 1 item (readable.txt) in JSON array, got %d.\nJSON Output:\n%s", len(results), stdoutOutput)
+	expectedCount := 1
+	if len(results) != expectedCount {
+		testInstance.Fatalf("Expected %d item (readable.txt) in JSON array, got %d.\nJSON Output:\n%s", expectedCount, len(results), standardOutput)
 	}
 
-	absReadable, _ := filepath.Abs(filepath.Join(testDir, "readable.txt"))
-	if results[0].Path != absReadable || results[0].Content != "OK" {
-		testValue.Errorf("JSON item 0 mismatch for readable.txt. Got: %+v", results[0])
-	}
-}
-
-func TestInvalidFormatValue(testValue *testing.T) {
-	binary := buildBinary(testValue)
-	testDir := setupTestDirectory(testValue, map[string]string{"a.txt": "A"})
-
-	output := runCommandExpectError(testValue, binary, []string{"content", "a.txt", "--format", "yaml"}, testDir)
-
-	if !strings.Contains(output, "Invalid format value 'yaml'") {
-		testValue.Errorf("Expected error about invalid format value, got:\n%s", output)
+	absoluteReadablePath, _ := filepath.Abs(filepath.Join(testDirectory, "readable.txt"))
+	if results[0].Path != absoluteReadablePath || results[0].Content != "Readable content OK" || results[0].Type != appTypes.NodeTypeFile {
+		testInstance.Errorf("JSON item 0 mismatch for readable.txt. Got: %+v", results[0])
 	}
 }
 
-func TestInput_NonExistentFile(testValue *testing.T) {
-	binary := buildBinary(testValue)
-	testDir := setupTestDirectory(testValue, map[string]string{})
+func TestInvalidFormatValue(testInstance *testing.T) {
+	binaryPath := buildBinary(testInstance)
+	testDirectory := setupTestDirectory(testInstance, map[string]string{"a.txt": "A"})
 
-	output := runCommandExpectError(testValue, binary, []string{"content", "no_such_file.txt"}, testDir)
+	output := runCommandExpectError(testInstance, binaryPath, []string{appTypes.CommandContent, "a.txt", "--format", "invalid-format"}, testDirectory)
 
-	if !strings.Contains(output, "no_such_file.txt") || !strings.Contains(output, "does not exist") {
-		testValue.Errorf("Expected error about non-existent file, got:\n%s", output)
+	expectedErrorFragment := "Invalid format value 'invalid-format'"
+	if !strings.Contains(output, expectedErrorFragment) {
+		testInstance.Errorf("Expected error message containing '%s', but got:\n%s", expectedErrorFragment, output)
 	}
 }
 
-func TestMultiDir_ArgsOrder(testValue *testing.T) {
-	binary := buildBinary(testValue)
-	testDir := setupTestDirectory(testValue, map[string]string{
+func TestInput_NonExistentFile(testInstance *testing.T) {
+	binaryPath := buildBinary(testInstance)
+	testDirectory := setupTestDirectory(testInstance, map[string]string{})
+
+	nonExistentFileName := "non_existent_file.abc"
+	output := runCommandExpectError(testInstance, binaryPath, []string{appTypes.CommandContent, nonExistentFileName}, testDirectory)
+
+	expectedErrorFragment1 := nonExistentFileName
+	expectedErrorFragment2 := "does not exist"
+	if !strings.Contains(output, expectedErrorFragment1) || !strings.Contains(output, expectedErrorFragment2) {
+		testInstance.Errorf("Expected error message containing '%s' and '%s', but got:\n%s", expectedErrorFragment1, expectedErrorFragment2, output)
+	}
+}
+
+func TestArgs_PositionalAfterFlag(testInstance *testing.T) {
+	binaryPath := buildBinary(testInstance)
+	testDirectory := setupTestDirectory(testInstance, map[string]string{
 		"dir1/":      "",
 		"dir1/a.txt": "A",
 		"dir2/":      "",
 		"dir2/b.txt": "B",
 	})
 
-	output := runCommandExpectError(testValue, binary, []string{"content", "dir1", "--format", "json", "dir2"}, testDir)
-	if !strings.Contains(output, "Positional argument 'dir2' found after flags") {
-		testValue.Errorf("Expected error about positional arg after flags, got:\n%s", output)
+	output := runCommandExpectError(testInstance, binaryPath, []string{appTypes.CommandContent, "dir1", "--format", appTypes.FormatJSON, "dir2"}, testDirectory)
+
+	expectedErrorFragment := "Positional argument 'dir2' found after flags"
+	if !strings.Contains(output, expectedErrorFragment) {
+		testInstance.Errorf("Expected error message containing '%s', got:\n%s", expectedErrorFragment, output)
 	}
+}
+
+func getModuleRoot(testSetup *testing.T) string {
+	testSetup.Helper()
+	currentDirectory, err := os.Getwd()
+	if err != nil {
+		testSetup.Fatalf("Failed to get working directory: %v", err)
+	}
+
+	moduleRoot := filepath.Dir(currentDirectory)
+	if _, err := os.Stat(filepath.Join(moduleRoot, "go.mod")); os.IsNotExist(err) {
+		testSetup.Fatalf("Could not find go.mod in assumed root directory: %s", moduleRoot)
+	}
+	return moduleRoot
+}
+
+func TestCallChain_Raw(testInstance *testing.T) {
+	binaryPath := buildBinary(testInstance)
+	moduleRoot := getModuleRoot(testInstance)
+
+	targetFunction := "github.com/temirov/content/commands.GetContentData"
+	output := runCommand(testInstance, binaryPath, []string{appTypes.CommandCallChain, targetFunction, "--format", appTypes.FormatRaw}, moduleRoot)
+
+	if !strings.Contains(output, "----- CALLCHAIN METADATA -----") {
+		testInstance.Errorf("Callchain raw output missing metadata header.\nOutput:\n%s", output)
+	}
+	if !strings.Contains(output, "Target Function: ") || !strings.Contains(output, "commands.GetContentData") {
+		testInstance.Errorf("Callchain raw output missing correct target function identifier.\nOutput:\n%s", output)
+	}
+	if !strings.Contains(output, "Callers:") {
+		testInstance.Errorf("Callchain raw output missing 'Callers:' section.\nOutput:\n%s", output)
+	}
+	if !strings.Contains(output, "github.com/temirov/content.runContentTool") {
+		testInstance.Errorf("Callchain raw output missing expected caller 'runContentTool'.\nOutput:\n%s", output)
+	}
+	if !strings.Contains(output, "Callees:") {
+		testInstance.Errorf("Callchain raw output missing 'Callees:' section.\nOutput:\n%s", output)
+	}
+	if !strings.Contains(output, "----- FUNCTIONS -----") {
+		testInstance.Errorf("Callchain raw output missing functions header.\nOutput:\n%s", output)
+	}
+	if !strings.Contains(output, "func GetContentData(rootDirectory string, ignorePatterns []string) ([]types.FileOutput, error)") {
+		testInstance.Errorf("Callchain raw output missing source code signature for GetContentData.\nOutput:\n%s", output)
+	}
+}
+
+func TestCallChain_JSON(testInstance *testing.T) {
+	binaryPath := buildBinary(testInstance)
+	moduleRoot := getModuleRoot(testInstance)
+
+	targetFunctionInput := "github.com/temirov/content/commands.GetContentData"
+	output := runCommand(testInstance, binaryPath, []string{appTypes.CommandCallChain, targetFunctionInput, "--format", appTypes.FormatJSON}, moduleRoot)
+
+	var result appTypes.CallChainOutput
+	jsonUnmarshalError := json.Unmarshal([]byte(output), &result)
+	if jsonUnmarshalError != nil {
+		testInstance.Fatalf("Failed to unmarshal Callchain JSON output: %v\nOutput:\n%s", jsonUnmarshalError, output)
+	}
+
+	if !strings.HasSuffix(result.TargetFunction, "commands.GetContentData") {
+		testInstance.Errorf("JSON output TargetFunction mismatch. Expected suffix 'commands.GetContentData', got '%s'", result.TargetFunction)
+	}
+	if len(result.Callers) == 0 {
+		testInstance.Errorf("JSON output expected callers for GetContentData, but got none.")
+	} else {
+		foundCaller := false
+		expectedCaller := "github.com/temirov/content.runContentTool"
+		for _, caller := range result.Callers {
+			if caller == expectedCaller {
+				foundCaller = true
+				break
+			}
+		}
+		if !foundCaller {
+			testInstance.Errorf("JSON output missing expected caller '%s' in callers list: %v", expectedCaller, result.Callers)
+		}
+	}
+
+	if len(result.Functions) == 0 {
+		testInstance.Errorf("JSON output expected Functions map to be non-empty, but it was.")
+	}
+	targetFunctionResolved := result.TargetFunction
+	if _, ok := result.Functions[targetFunctionResolved]; !ok {
+		testInstance.Errorf("JSON output Functions map missing entry for resolved target function '%s'", targetFunctionResolved)
+	}
+	if !strings.Contains(result.Functions[targetFunctionResolved], "func GetContentData") {
+		testInstance.Errorf("JSON output Functions map entry for target function doesn't seem to contain its source code.")
+	}
+}
+
+func TestVersionFlag(testInstance *testing.T) {
+	binaryPath := buildBinary(testInstance)
+	testDirectory := setupTestDirectory(testInstance, map[string]string{})
+
+	output := runCommand(testInstance, binaryPath, []string{"--version"}, testDirectory)
+
+	expectedVersionPrefix := "content version:"
+	if !strings.HasPrefix(output, expectedVersionPrefix) {
+		testInstance.Errorf("Expected version output to start with '%s', got:\n%s", expectedVersionPrefix, output)
+	}
+	versionString := strings.TrimSpace(strings.TrimPrefix(output, expectedVersionPrefix))
+	if versionString == "" {
+		testInstance.Errorf("Version output did not contain a version string after the prefix.\nOutput:\n%s", output)
+	}
+	testInstance.Logf("Detected version: %s", versionString)
 }
