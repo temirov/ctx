@@ -1,120 +1,127 @@
+// Package commands contains the core logic for data collection for each command.
 package commands
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/printer"
 	"go/token"
+	"os"
 	"strings"
 
-	"go/types"
 	"golang.org/x/tools/go/callgraph"
 	"golang.org/x/tools/go/callgraph/static"
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/ssa"
-)
+	"golang.org/x/tools/go/ssa/ssautil" // Import the ssautil package
 
-// CallChainOutput represents the call chain details of a target function.
-type CallChainOutput struct {
-	TargetFunction string            `json:"targetFunction"`
-	Callers        []string          `json:"callers"`
-	Callees        *[]string         `json:"callees"`
-	Functions      map[string]string `json:"functions"`
-}
+	apptypes "github.com/temirov/content/types"
+)
 
 // GetCallChainData returns the call chain details for the specified target function name.
 // It loads all repository packages, builds the SSA program and static call graph,
 // and extracts the callers, callees and corresponding function source codes.
-func GetCallChainData(targetFunctionName string) (*CallChainOutput, error) {
+func GetCallChainData(targetFunctionName string) (*apptypes.CallChainOutput, error) {
 	packageConfiguration := &packages.Config{
 		Mode: packages.LoadAllSyntax,
 		Dir:  ".",
+		Fset: token.NewFileSet(),
 	}
 	loadedPackages, loadError := packages.Load(packageConfiguration, "./...")
 	if loadError != nil {
-		return nil, fmt.Errorf("failed to load packages: %v", loadError)
+		return nil, fmt.Errorf("failed to load packages: %w", loadError)
 	}
 	if packages.PrintErrors(loadedPackages) > 0 {
 		return nil, fmt.Errorf("errors encountered while loading packages")
 	}
-	fileSet := loadedPackages[0].Fset
-	ssaProgram := ssa.NewProgram(fileSet, ssa.BuilderMode(0))
-	for _, currentPackage := range loadedPackages {
-		ssaProgram.CreatePackage(currentPackage.Types, currentPackage.Syntax, currentPackage.TypesInfo, true)
+
+	// Use ssautil.Packages to create the SSA program and packages.
+	// BuilderMode 0 provides the default SSA construction behavior.
+	program, _ := ssautil.Packages(loadedPackages, ssa.BuilderMode(0))
+	if program == nil {
+		// This indicates an error during SSA construction not caught earlier.
+		return nil, fmt.Errorf("failed to build SSA program (ssautil.Packages returned nil program)")
 	}
-	visitedPackages := make(map[string]bool)
-	for _, currentPackage := range loadedPackages {
-		importRecursively(ssaProgram, currentPackage.Types, visitedPackages)
-	}
-	ssaProgram.Build()
-	callGraphGraph := static.CallGraph(ssaProgram)
+
+	// Build the SSA code for all function bodies in the program.
+	program.Build()
+
+	// Build the static call graph from the fully constructed SSA program.
+	callGraphGraph := static.CallGraph(program)
 	callGraphGraph.DeleteSyntheticNodes()
+
 	targetNode := findFunctionNode(callGraphGraph, targetFunctionName)
 	if targetNode == nil {
-		return nil, fmt.Errorf("target function not found in call graph: %s", targetFunctionName)
+		return nil, fmt.Errorf("target function '%s' not found in call graph", targetFunctionName)
 	}
+
 	var callerList []string
 	for _, incomingEdge := range targetNode.In {
 		if incomingEdge.Caller != nil && incomingEdge.Caller.Func != nil {
 			callerList = append(callerList, incomingEdge.Caller.Func.String())
 		}
 	}
+
 	var calleeList []string
 	for _, outgoingEdge := range targetNode.Out {
 		if outgoingEdge.Callee != nil && outgoingEdge.Callee.Func != nil {
 			calleeList = append(calleeList, outgoingEdge.Callee.Func.String())
 		}
 	}
+
 	var calleesPointer *[]string
-	if len(calleeList) == 0 {
-		calleesPointer = nil
-	} else {
+	if len(calleeList) > 0 {
 		calleesPointer = &calleeList
 	}
+
 	functionsMapping := make(map[string]string)
+	relevantFunctions := make(map[string]bool)
+	resolvedTargetName := targetNode.Func.String()
+	relevantFunctions[resolvedTargetName] = true
+	for _, caller := range callerList {
+		relevantFunctions[caller] = true
+	}
+	for _, callee := range calleeList {
+		relevantFunctions[callee] = true
+	}
+
 	for _, currentPackage := range loadedPackages {
 		for _, syntaxFile := range currentPackage.Syntax {
-			for _, declaration := range syntaxFile.Decls {
-				functionDeclaration, isFunction := declaration.(*ast.FuncDecl)
-				if !isFunction {
-					continue
+			ast.Inspect(syntaxFile, func(node ast.Node) bool {
+				functionDeclaration, isFunction := node.(*ast.FuncDecl)
+				if !isFunction || functionDeclaration.Name == nil {
+					return true
 				}
+
 				qualifiedFunctionName := getQualifiedFunctionName(currentPackage, functionDeclaration)
-				if qualifiedFunctionName == targetNode.Func.String() || containsString(callerList, qualifiedFunctionName) || containsString(calleeList, qualifiedFunctionName) {
-					sourceText, printingError := nodeToString(currentPackage.Fset, functionDeclaration)
+
+				if relevantFunctions[qualifiedFunctionName] {
+					sourceText, printingError := nodeToString(packageConfiguration.Fset, functionDeclaration)
 					if printingError == nil {
 						functionsMapping[qualifiedFunctionName] = sourceText
+					} else {
+						fmt.Fprintf(os.Stderr, "Warning: could not get source for %s: %v\n", qualifiedFunctionName, printingError)
 					}
 				}
-			}
+				return true
+			})
 		}
 	}
-	return &CallChainOutput{
-		TargetFunction: targetFunctionName,
+
+	return &apptypes.CallChainOutput{
+		TargetFunction: resolvedTargetName,
 		Callers:        callerList,
 		Callees:        calleesPointer,
 		Functions:      functionsMapping,
 	}, nil
 }
 
-func importRecursively(ssaProgram *ssa.Program, typesPackage *types.Package, visited map[string]bool) {
-	if visited[typesPackage.Path()] {
-		return
-	}
-	visited[typesPackage.Path()] = true
-	if ssaProgram.Package(typesPackage) == nil {
-		ssaProgram.CreatePackage(typesPackage, nil, nil, true)
-	}
-	for _, importedPackage := range typesPackage.Imports() {
-		importRecursively(ssaProgram, importedPackage, visited)
-	}
-}
-
 func nodeToString(fileSet *token.FileSet, astNode ast.Node) (string, error) {
 	var outputBuffer bytes.Buffer
-	if err := printer.Fprint(&outputBuffer, fileSet, astNode); err != nil {
+	config := printer.Config{Mode: printer.UseSpaces | printer.TabIndent, Tabwidth: 4}
+	err := config.Fprint(&outputBuffer, fileSet, astNode)
+	if err != nil {
 		return "", err
 	}
 	return outputBuffer.String(), nil
@@ -123,9 +130,10 @@ func nodeToString(fileSet *token.FileSet, astNode ast.Node) (string, error) {
 func getQualifiedFunctionName(pkg *packages.Package, functionDeclaration *ast.FuncDecl) string {
 	functionName := functionDeclaration.Name.Name
 	if functionDeclaration.Recv != nil && len(functionDeclaration.Recv.List) > 0 {
+		receiverType := functionDeclaration.Recv.List[0].Type
 		var receiverBuffer bytes.Buffer
-		if err := printer.Fprint(&receiverBuffer, pkg.Fset, functionDeclaration.Recv.List[0].Type); err != nil {
-			receiverBuffer.WriteString("unknown")
+		if err := printer.Fprint(&receiverBuffer, pkg.Fset, receiverType); err != nil {
+			return pkg.PkgPath + ".(*unknown)." + functionName
 		}
 		receiverRepresentation := strings.TrimSpace(receiverBuffer.String())
 		return pkg.PkgPath + "." + receiverRepresentation + "." + functionName
@@ -134,69 +142,19 @@ func getQualifiedFunctionName(pkg *packages.Package, functionDeclaration *ast.Fu
 }
 
 func findFunctionNode(graph *callgraph.Graph, inputFunctionName string) *callgraph.Node {
+	var bestMatch *callgraph.Node
 	for _, node := range graph.Nodes {
 		if node.Func != nil {
 			fullFunctionName := node.Func.String()
 			if fullFunctionName == inputFunctionName {
 				return node
 			}
-			if strings.HasSuffix(fullFunctionName, inputFunctionName) {
-				return node
+			if strings.HasSuffix(fullFunctionName, "."+inputFunctionName) {
+				if bestMatch == nil || len(fullFunctionName) > len(bestMatch.Func.String()) {
+					bestMatch = node
+				}
 			}
 		}
 	}
-	return nil
-}
-
-func containsString(stringSlice []string, targetString string) bool {
-	for _, currentString := range stringSlice {
-		if currentString == targetString {
-			return true
-		}
-	}
-	return false
-}
-
-// RenderCallChainJSON returns the call chain output as an indented JSON string.
-func RenderCallChainJSON(callChainOutput *CallChainOutput) (string, error) {
-	jsonBytes, err := json.MarshalIndent(callChainOutput, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal call chain output to JSON: %w", err)
-	}
-	return string(jsonBytes), nil
-}
-
-// RenderCallChainRaw returns the call chain output as a detailed human-readable string.
-func RenderCallChainRaw(callChainOutput *CallChainOutput) string {
-	var builder strings.Builder
-	builder.WriteString("----- CALLCHAIN METADATA -----\n")
-	builder.WriteString(fmt.Sprintf("Target Function: %s\n", callChainOutput.TargetFunction))
-	builder.WriteString("Callers:\n")
-	if len(callChainOutput.Callers) == 0 {
-		builder.WriteString("  (none)\n")
-	} else {
-		for _, callerName := range callChainOutput.Callers {
-			builder.WriteString(fmt.Sprintf("  %s\n", callerName))
-		}
-	}
-	builder.WriteString("Callees:\n")
-	if callChainOutput.Callees == nil {
-		builder.WriteString("  (none)\n")
-	} else {
-		for _, calleeName := range *callChainOutput.Callees {
-			builder.WriteString(fmt.Sprintf("  %s\n", calleeName))
-		}
-	}
-	builder.WriteString("\n----- FUNCTIONS -----\n")
-	if len(callChainOutput.Functions) == 0 {
-		builder.WriteString("  (none)\n")
-	} else {
-		for functionName, sourceCode := range callChainOutput.Functions {
-			builder.WriteString(fmt.Sprintf("Function: %s\n", functionName))
-			builder.WriteString("--------------------------------------------------\n")
-			builder.WriteString(sourceCode)
-			builder.WriteString("\n--------------------------------------------------\n\n")
-		}
-	}
-	return builder.String()
+	return bestMatch
 }

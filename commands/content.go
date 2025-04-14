@@ -1,14 +1,13 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	// "strings" // No longer needed after removing exclusion logic here
 
-	//nolint:depguard
 	"github.com/temirov/content/types"
-	//nolint:depguard
 	"github.com/temirov/content/utils"
 )
 
@@ -18,7 +17,7 @@ import (
 // Returns a slice of successfully read file data and the first fatal error encountered during walk.
 func GetContentData(rootDirectory string, ignorePatterns []string) ([]types.FileOutput, error) {
 	var results []types.FileOutput
-	var firstFatalError error // To capture the first actual error stopping the walk
+	var firstFatalError error
 
 	absoluteRootDirectory, absErr := filepath.Abs(rootDirectory)
 	if absErr != nil {
@@ -26,86 +25,49 @@ func GetContentData(rootDirectory string, ignorePatterns []string) ([]types.File
 	}
 	cleanRootDirectory := filepath.Clean(absoluteRootDirectory)
 
-	walkErr := filepath.WalkDir(cleanRootDirectory, func(path string, entry os.DirEntry, err error) error {
-		// Handle errors accessing the entry itself (permissions, etc.)
+	walkErr := filepath.WalkDir(cleanRootDirectory, func(currentPath string, directoryEntry os.DirEntry, err error) error {
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Error accessing path %s: %v\n", path, err)
-			// Try to skip the problematic entry if possible
-			if entry != nil && entry.IsDir() {
+			fmt.Fprintf(os.Stderr, "Warning: Error accessing path %s: %v\n", currentPath, err)
+			if directoryEntry != nil && directoryEntry.IsDir() {
 				return filepath.SkipDir
 			}
-			// If it's a file or WalkDir had a more general error, just continue if possible
 			return nil
 		}
 
-		// Skip the root directory itself
-		relativePath := relativeOrSelf(path, cleanRootDirectory)
+		relativePath := utils.RelativePathOrSelf(currentPath, cleanRootDirectory)
+
 		if relativePath == "." {
 			return nil
 		}
 
-		// Handle -e folder exclusion
-		// Note: utils.ShouldIgnoreByPath also handles EXCL patterns for nested checks
-		if entry.IsDir() && filepath.Dir(relativePath) == "." { // Check if top-level item
-			for _, pattern := range ignorePatterns {
-				if strings.HasPrefix(pattern, "EXCL:") {
-					exclusionName := strings.TrimPrefix(pattern, "EXCL:")
-					if relativePath == exclusionName {
-						return filepath.SkipDir
-					}
-				}
-			}
-		}
-
-		// Handle .ignore/.gitignore patterns
 		if utils.ShouldIgnoreByPath(relativePath, ignorePatterns) {
-			if entry.IsDir() {
+			if directoryEntry.IsDir() {
 				return filepath.SkipDir
 			}
-			return nil // Skip ignored file
+			return nil
 		}
 
-		// Process files: read content and add to results
-		if !entry.IsDir() {
-			fileData, readErr := os.ReadFile(path)
+		if !directoryEntry.IsDir() {
+			fileData, readErr := os.ReadFile(currentPath)
 			if readErr != nil {
-				// Warn about read errors but continue the walk
-				fmt.Fprintf(os.Stderr, "Warning: Failed to read file %s: %v\n", path, readErr)
-				return nil // Don't stop the walk for one unreadable file
+				fmt.Fprintf(os.Stderr, "Warning: Failed to read file %s: %v\n", currentPath, readErr)
+				return nil
 			}
 
-			// Ensure absolute path in the result
-			absPath, _ := filepath.Abs(path)
+			absoluteEntryPath, _ := filepath.Abs(currentPath)
 			results = append(results, types.FileOutput{
-				Path:    absPath,
-				Type:    "file",
+				Path:    absoluteEntryPath,
+				Type:    types.NodeTypeFile,
 				Content: string(fileData),
 			})
 		}
 
-		return nil // Continue walking
+		return nil
 	})
 
-	// Capture the first fatal error from WalkDir itself
-	if walkErr != nil {
+	if walkErr != nil && !errors.Is(walkErr, filepath.SkipDir) {
 		firstFatalError = walkErr
 	}
 
 	return results, firstFatalError
-}
-
-// relativeOrSelf calculates the relative path from root to fullPath.
-// Returns fullPath if relative calculation fails.
-func relativeOrSelf(fullPath, root string) string {
-	cleanPath := filepath.Clean(fullPath)
-	// Ensure root is absolute for reliable relative path calculation
-	absRoot, err := filepath.Abs(root)
-	if err != nil {
-		return cleanPath // Fallback if root path is invalid
-	}
-	relativePath, relErr := filepath.Rel(absRoot, cleanPath)
-	if relErr != nil {
-		return cleanPath // Fallback if relative fails
-	}
-	return relativePath
 }
