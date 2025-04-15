@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/temirov/content/utils"
+	"github.com/temirov/ctx/utils"
 )
 
 const (
