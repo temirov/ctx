@@ -1,6 +1,12 @@
 # Changelog
 
-## [v0.0.8] - 2025-04-13
+## [v0.0.9] - 2025-04-15
+
+### What's New 🎉
+
+1. JSON is a default output format
+
+## [v0.0.8] - 2025-04-15
 
 ### What's New 🎉
 
