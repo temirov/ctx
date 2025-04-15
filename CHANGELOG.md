@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.0.8] - 2025-04-13
+
+### What's New 🎉
+
+1. Renamed `content` to `ctx`
+
 ## [v0.0.7] - 2025-04-13
 
 ### Features ✨

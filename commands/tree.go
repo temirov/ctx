@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/temirov/content/types"
-	"github.com/temirov/content/utils"
+	"github.com/temirov/ctx/types"
+	"github.com/temirov/ctx/utils"
 )
 
 // GetTreeData generates the tree structure data for a given directory.

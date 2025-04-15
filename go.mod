@@ -1,4 +1,4 @@
-module github.com/temirov/content
+module github.com/temirov/ctx
 
 go 1.23.6
 
