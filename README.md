@@ -41,6 +41,11 @@ raw text format (default) or structured JSON.
 - **Deduplication:** Duplicate input paths (after resolving to absolute paths) are processed only once for `tree` and
   `content`.
 
+## Downloads
+
+For prebuilt binaries and packaged releases, please visit the [Releases](https://github.com/temirov/ctx/releases) page.
+Binaries built for macOS (Intel and ARM), Linux (Intel), and Windows (Intel) are available there.
+
 ## Installation
 
 1. Ensure you have Go installed (version 1.21 or later recommended).
