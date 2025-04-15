@@ -16,7 +16,7 @@ import (
 	"golang.org/x/tools/go/ssa"
 	"golang.org/x/tools/go/ssa/ssautil" // Import the ssautil package
 
-	apptypes "github.com/temirov/content/types"
+	apptypes "github.com/temirov/ctx/types"
 )
 
 // GetCallChainData returns the call chain details for the specified target function name.
