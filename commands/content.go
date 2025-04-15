@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	// "strings" // No longer needed after removing exclusion logic here
 
-	"github.com/temirov/content/types"
-	"github.com/temirov/content/utils"
+	"github.com/temirov/ctx/types"
+	"github.com/temirov/ctx/utils"
 )
 
 // GetContentData traverses the directory tree starting from rootDirectory

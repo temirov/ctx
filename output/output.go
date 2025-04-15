@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/temirov/content/types"
+	"github.com/temirov/ctx/types"
 )
 
 const (
