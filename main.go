@@ -58,7 +58,7 @@ func printUsage() {
 	fmt.Printf("  %s, %s <folder> : Exclude folder name during directory traversal (for tree/content).\n", flagExcludeShort, flagExcludeLong)
 	fmt.Printf("  %s           : Disable loading of .gitignore files (for tree/content).\n", flagNoGitignore)
 	fmt.Printf("  %s             : Disable loading of .ignore files (for tree/content).\n", flagNoIgnore)
-	fmt.Printf("  %s <%s|%s>   : Set output format (default: %s).\n", flagFormat, types.FormatRaw, types.FormatJSON, types.FormatRaw)
+	fmt.Printf("  %s <%s|%s>   : Set output format (default: %s).\n", flagFormat, types.FormatRaw, types.FormatJSON, types.FormatJSON)
 	fmt.Printf("  %s              : Display application version and exit.\n", flagVersion)
 	os.Exit(1)
 }
@@ -70,7 +70,7 @@ func parseArgsOrExit() (commandName string, inputArguments []string, exclusionFo
 
 	useGitignore = true
 	useIgnoreFile = true
-	outputFormat = types.FormatRaw
+	outputFormat = types.FormatJSON
 
 	rawCommand := os.Args[1]
 	switch rawCommand {
