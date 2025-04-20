@@ -24,22 +24,19 @@ and **optional embedded documentation** for referenced packages and symbols.
 - **Content Command (`content`, `c`):**
     - *Raw format:* Outputs the content of explicitly provided files and concatenates contents of files within
       directories, separated by headers. When `--doc` is used, documentation for imported packages and symbols is
-      appended
-      after each file block.
+      appended after each file block.
     - *JSON format:* Outputs a JSON array of objects, each containing the `path`, `type`, and `content` of successfully
       read files. Documentation (when `--doc` is used) is included in a `documentation` field.
 - **Call Chain Command (`callchain`, `cc`):**
     - *Raw format:* Displays the target function, its callers, and callees, followed by the source code of these
       functions. When `--doc` is used, documentation for referenced external packages/functions is appended.
     - *JSON format:* Outputs a JSON object with `targetFunction`, `callers`, `callees`, a `functions` map (name →
-      source),
-      and (when `--doc`) a `documentation` array.
+      source), and (when `--doc`) a `documentation` array.
 - **Exclusion Patterns (for `tree` and `content`):**
     - Reads patterns from a `.ignore` file located at the root of each processed directory (can be disabled with
       `--no-ignore`).
     - Reads patterns from a `.gitignore` file located at the root of each processed directory by default (can be
-      disabled
-      with `--no-gitignore`).
+      disabled with `--no-gitignore`).
     - A global exclusion flag (`-e` or `--e`) excludes a designated folder if it appears as a direct child in any
       specified directory.
 - **Command Abbreviations:**
@@ -78,14 +75,14 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 
 ### Common Flags
 
-| Flag                   | Applies to         | Description                                                                       |
-|------------------------|--------------------|-----------------------------------------------------------------------------------|
-| `-e, --e <folder>`     | tree, content      | Exclude a direct‑child folder during directory traversal.                         |
-| `--no-gitignore`       | tree, content      | Disable loading of `.gitignore` files.                                            |
-| `--no-ignore`          | tree, content      | Disable loading of `.ignore` files.                                               |
-| `--format <raw\|json>` | all commands       | Select output format (default `raw`).                                             |
-| `--doc`                | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
-| `--version`            | all commands       | Print ctx version and exit.                                                       |
+| Flag               | Applies to         | Description                                                                       |
+|--------------------|--------------------|-----------------------------------------------------------------------------------|
+| `-e, --e <folder>` | tree, content      | Exclude a direct‑child folder during directory traversal.                         |
+| `--no-gitignore`   | tree, content      | Disable loading of `.gitignore` files.                                            |
+| `--no-ignore`      | tree, content      | Disable loading of `.ignore` files.                                               |
+| `--format <raw     | json>`             | all commands                                                                      | Select output format (default `raw`).                                             |
+| `--doc`            | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
+| `--version`        | all commands       | Print ctx version and exit.                                                       |
 
 ### Examples
 
