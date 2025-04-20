@@ -1,39 +1,40 @@
-// Package types defines shared data structures and constants used across the content tool.
+// Package types defines every cross‑package data structure used by the ctx CLI.
 package types
 
-// Constants for node types used in output structures.
 const (
 	NodeTypeFile      = "file"
 	NodeTypeDirectory = "directory"
-)
 
-// Constants for command names.
-const (
 	CommandTree      = "tree"
 	CommandContent   = "content"
 	CommandCallChain = "callchain"
-)
 
-// Constants for output formats.
-const (
 	FormatRaw  = "raw"
 	FormatJSON = "json"
 )
 
-// ValidatedPath stores information about a resolved and validated input path.
+// ValidatedPath is an absolute input path that already passed existence checks.
 type ValidatedPath struct {
 	AbsolutePath string
 	IsDir        bool
 }
 
-// FileOutput represents the data for a single file's content, used for JSON output.
-type FileOutput struct {
-	Path    string `json:"path"`
-	Type    string `json:"type"`
-	Content string `json:"content"`
+// DocumentationEntry is a single piece of documentation attached to output.
+type DocumentationEntry struct {
+	Kind string `json:"type"`
+	Name string `json:"name"`
+	Doc  string `json:"documentation"`
 }
 
-// TreeOutputNode represents a node in the directory tree structure for JSON output.
+// FileOutput represents one file returned by the content command.
+type FileOutput struct {
+	Path          string               `json:"path"`
+	Type          string               `json:"type"`
+	Content       string               `json:"content"`
+	Documentation []DocumentationEntry `json:"documentation,omitempty"`
+}
+
+// TreeOutputNode represents a node of a directory tree returned by the tree command.
 type TreeOutputNode struct {
 	Path     string            `json:"path"`
 	Name     string            `json:"name"`
@@ -41,10 +42,11 @@ type TreeOutputNode struct {
 	Children []*TreeOutputNode `json:"children,omitempty"`
 }
 
-// CallChainOutput represents the call chain details of a target function.
+// CallChainOutput is the result of the callchain command.
 type CallChainOutput struct {
-	TargetFunction string            `json:"targetFunction"`
-	Callers        []string          `json:"callers"`
-	Callees        *[]string         `json:"callees,omitempty"`
-	Functions      map[string]string `json:"functions,omitempty"`
+	TargetFunction string               `json:"targetFunction"`
+	Callers        []string             `json:"callers"`
+	Callees        *[]string            `json:"callees,omitempty"`
+	Functions      map[string]string    `json:"functions"`
+	Documentation  []DocumentationEntry `json:"documentation,omitempty"`
 }

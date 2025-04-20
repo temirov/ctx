@@ -1,5 +1,28 @@
 # Changelog
 
+## [v0.0.10] - 2025-04-19
+
+### Features ✨
+
+1. **Documentation Extraction (`--doc` flag)**
+    - Added the `--doc` boolean flag to the `content` (`c`) and `callchain` (`cc`) commands.
+    - When enabled, ctx collects and embeds documentation for imported third‑party packages and referenced functions.
+    - Documentation is available in both *raw* and *json* output formats.
+
+### Improvements ⚙️
+
+1. **Tests Package Renaming**
+    - All integration tests are now consolidated under the `tests` package to simplify discovery.
+2. **Table‑Driven Tests**
+    - Introduced table‑based patterns for new test cases to improve readability and maintenance.
+
+### Internal
+
+1. **README Update**
+    - Added details about the new `--doc` flag and updated flag tables and examples.
+
+---
+
 ## [v0.0.9] - 2025-04-15
 
 ### What's New 🎉
