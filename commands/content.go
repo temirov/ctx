@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,63 +9,55 @@ import (
 	"github.com/temirov/ctx/utils"
 )
 
-// GetContentData traverses the directory tree starting from rootDirectory
-// and collects FileOutput data for files that are not excluded.
-// It prints warnings to stderr for unreadable files/dirs but attempts to continue.
-// Returns a slice of successfully read file data and the first fatal error encountered during walk.
-func GetContentData(rootDirectory string, ignorePatterns []string) ([]types.FileOutput, error) {
-	var results []types.FileOutput
-	var firstFatalError error
-
-	absoluteRootDirectory, absErr := filepath.Abs(rootDirectory)
-	if absErr != nil {
-		return nil, fmt.Errorf("failed to get absolute path for %s: %w", rootDirectory, absErr)
+// GetContentData returns FileOutput slices for the specified directory.
+func GetContentData(rootPath string, ignorePatterns []string) ([]types.FileOutput, error) {
+	absoluteRootPath, pathErr := filepath.Abs(rootPath)
+	if pathErr != nil {
+		return nil, fmt.Errorf("failed to get absolute path for %s: %w", rootPath, pathErr)
 	}
-	cleanRootDirectory := filepath.Clean(absoluteRootDirectory)
+	cleanRootPath := filepath.Clean(absoluteRootPath)
 
-	walkErr := filepath.WalkDir(cleanRootDirectory, func(currentPath string, directoryEntry os.DirEntry, err error) error {
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Error accessing path %s: %v\n", currentPath, err)
-			if directoryEntry != nil && directoryEntry.IsDir() {
+	var fileOutputs []types.FileOutput
+
+	walkError := filepath.WalkDir(cleanRootPath, func(currentPath string, entry os.DirEntry, accessErr error) error {
+		if accessErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: error accessing path %s: %v\n", currentPath, accessErr)
+			if entry != nil && entry.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		relativePath := utils.RelativePathOrSelf(currentPath, cleanRootDirectory)
-
+		relativePath := utils.RelativePathOrSelf(currentPath, cleanRootPath)
 		if relativePath == "." {
 			return nil
 		}
-
 		if utils.ShouldIgnoreByPath(relativePath, ignorePatterns) {
-			if directoryEntry.IsDir() {
+			if entry.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-
-		if !directoryEntry.IsDir() {
-			fileData, readErr := os.ReadFile(currentPath)
-			if readErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Failed to read file %s: %v\n", currentPath, readErr)
-				return nil
-			}
-
-			absoluteEntryPath, _ := filepath.Abs(currentPath)
-			results = append(results, types.FileOutput{
-				Path:    absoluteEntryPath,
-				Type:    types.NodeTypeFile,
-				Content: string(fileData),
-			})
+		if entry.IsDir() {
+			return nil
 		}
 
+		contentBytes, readErr := os.ReadFile(currentPath)
+		if readErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to read file %s: %v\n", currentPath, readErr)
+			return nil
+		}
+
+		fileOutputs = append(fileOutputs, types.FileOutput{
+			Path:    currentPath,
+			Type:    types.NodeTypeFile,
+			Content: string(contentBytes),
+		})
 		return nil
 	})
-
-	if walkErr != nil && !errors.Is(walkErr, filepath.SkipDir) {
-		firstFatalError = walkErr
+	if walkError != nil {
+		return nil, walkError
 	}
 
-	return results, firstFatalError
+	return fileOutputs, nil
 }

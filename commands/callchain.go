@@ -10,25 +10,28 @@ import (
 	"os"
 	"strings"
 
+	"github.com/temirov/ctx/docs"
+	apptypes "github.com/temirov/ctx/types"
 	"golang.org/x/tools/go/callgraph"
 	"golang.org/x/tools/go/callgraph/static"
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/ssa"
-	"golang.org/x/tools/go/ssa/ssautil" // Import the ssautil package
-
-	apptypes "github.com/temirov/ctx/types"
+	"golang.org/x/tools/go/ssa/ssautil"
 )
 
-// GetCallChainData returns the call chain details for the specified target function name.
-// It loads all repository packages, builds the SSA program and static call graph,
-// and extracts the callers, callees and corresponding function source codes.
-func GetCallChainData(targetFunctionName string) (*apptypes.CallChainOutput, error) {
-	packageConfiguration := &packages.Config{
+// GetCallChainData returns the call chain information for the requested function.
+func GetCallChainData(
+	targetFunctionQualifiedName string,
+	includeDocumentation bool,
+	documentationCollector *docs.Collector,
+	repositoryRootDirectory string,
+) (*apptypes.CallChainOutput, error) {
+	packageLoadConfiguration := &packages.Config{
 		Mode: packages.LoadAllSyntax,
 		Dir:  ".",
 		Fset: token.NewFileSet(),
 	}
-	loadedPackages, loadError := packages.Load(packageConfiguration, "./...")
+	loadedPackages, loadError := packages.Load(packageLoadConfiguration, "./...")
 	if loadError != nil {
 		return nil, fmt.Errorf("failed to load packages: %w", loadError)
 	}
@@ -36,72 +39,62 @@ func GetCallChainData(targetFunctionName string) (*apptypes.CallChainOutput, err
 		return nil, fmt.Errorf("errors encountered while loading packages")
 	}
 
-	// Use ssautil.Packages to create the SSA program and packages.
-	// BuilderMode 0 provides the default SSA construction behavior.
-	program, _ := ssautil.Packages(loadedPackages, ssa.BuilderMode(0))
-	if program == nil {
-		// This indicates an error during SSA construction not caught earlier.
-		return nil, fmt.Errorf("failed to build SSA program (ssautil.Packages returned nil program)")
-	}
+	ssaProgram, _ := ssautil.Packages(loadedPackages, ssa.BuilderMode(0))
+	ssaProgram.Build()
 
-	// Build the SSA code for all function bodies in the program.
-	program.Build()
+	callGraphRoot := static.CallGraph(ssaProgram)
+	callGraphRoot.DeleteSyntheticNodes()
 
-	// Build the static call graph from the fully constructed SSA program.
-	callGraphGraph := static.CallGraph(program)
-	callGraphGraph.DeleteSyntheticNodes()
-
-	targetNode := findFunctionNode(callGraphGraph, targetFunctionName)
+	targetNode := selectFunctionNode(callGraphRoot, targetFunctionQualifiedName)
 	if targetNode == nil {
-		return nil, fmt.Errorf("target function '%s' not found in call graph", targetFunctionName)
+		return nil, fmt.Errorf("target function %q not found in call graph", targetFunctionQualifiedName)
 	}
 
-	var callerList []string
-	for _, incomingEdge := range targetNode.In {
-		if incomingEdge.Caller != nil && incomingEdge.Caller.Func != nil {
-			callerList = append(callerList, incomingEdge.Caller.Func.String())
+	var directCallerNames []string
+	for _, inEdge := range targetNode.In {
+		if inEdge.Caller != nil && inEdge.Caller.Func != nil {
+			directCallerNames = append(directCallerNames, inEdge.Caller.Func.String())
 		}
 	}
 
-	var calleeList []string
-	for _, outgoingEdge := range targetNode.Out {
-		if outgoingEdge.Callee != nil && outgoingEdge.Callee.Func != nil {
-			calleeList = append(calleeList, outgoingEdge.Callee.Func.String())
+	var directCalleeNames []string
+	for _, outEdge := range targetNode.Out {
+		if outEdge.Callee != nil && outEdge.Callee.Func != nil {
+			directCalleeNames = append(directCalleeNames, outEdge.Callee.Func.String())
 		}
 	}
 
-	var calleesPointer *[]string
-	if len(calleeList) > 0 {
-		calleesPointer = &calleeList
+	relevantFunctionNames := map[string]struct{}{
+		targetNode.Func.String(): {},
+	}
+	for _, name := range directCallerNames {
+		relevantFunctionNames[name] = struct{}{}
+	}
+	for _, name := range directCalleeNames {
+		relevantFunctionNames[name] = struct{}{}
 	}
 
-	functionsMapping := make(map[string]string)
-	relevantFunctions := make(map[string]bool)
-	resolvedTargetName := targetNode.Func.String()
-	relevantFunctions[resolvedTargetName] = true
-	for _, caller := range callerList {
-		relevantFunctions[caller] = true
-	}
-	for _, callee := range calleeList {
-		relevantFunctions[callee] = true
-	}
+	functionSources := make(map[string]string)
+	extractedFilePaths := make(map[string]struct{})
 
-	for _, currentPackage := range loadedPackages {
-		for _, syntaxFile := range currentPackage.Syntax {
-			ast.Inspect(syntaxFile, func(node ast.Node) bool {
-				functionDeclaration, isFunction := node.(*ast.FuncDecl)
-				if !isFunction || functionDeclaration.Name == nil {
+	for _, pkg := range loadedPackages {
+		for _, file := range pkg.Syntax {
+			ast.Inspect(file, func(node ast.Node) bool {
+				funcDecl, ok := node.(*ast.FuncDecl)
+				if !ok || funcDecl.Name == nil {
 					return true
 				}
-
-				qualifiedFunctionName := getQualifiedFunctionName(currentPackage, functionDeclaration)
-
-				if relevantFunctions[qualifiedFunctionName] {
-					sourceText, printingError := nodeToString(packageConfiguration.Fset, functionDeclaration)
-					if printingError == nil {
-						functionsMapping[qualifiedFunctionName] = sourceText
-					} else {
-						fmt.Fprintf(os.Stderr, "Warning: could not get source for %s: %v\n", qualifiedFunctionName, printingError)
+				qualifiedName := composeQualifiedName(pkg, funcDecl)
+				if _, needed := relevantFunctionNames[qualifiedName]; !needed {
+					return true
+				}
+				var buf bytes.Buffer
+				(&printer.Config{Mode: printer.UseSpaces | printer.TabIndent, Tabwidth: 4}).
+					Fprint(&buf, packageLoadConfiguration.Fset, funcDecl)
+				functionSources[qualifiedName] = buf.String()
+				if includeDocumentation {
+					if pos := packageLoadConfiguration.Fset.File(funcDecl.Pos()); pos != nil {
+						extractedFilePaths[pos.Name()] = struct{}{}
 					}
 				}
 				return true
@@ -109,52 +102,60 @@ func GetCallChainData(targetFunctionName string) (*apptypes.CallChainOutput, err
 		}
 	}
 
-	return &apptypes.CallChainOutput{
-		TargetFunction: resolvedTargetName,
-		Callers:        callerList,
-		Callees:        calleesPointer,
-		Functions:      functionsMapping,
-	}, nil
-}
-
-func nodeToString(fileSet *token.FileSet, astNode ast.Node) (string, error) {
-	var outputBuffer bytes.Buffer
-	config := printer.Config{Mode: printer.UseSpaces | printer.TabIndent, Tabwidth: 4}
-	err := config.Fprint(&outputBuffer, fileSet, astNode)
-	if err != nil {
-		return "", err
+	output := &apptypes.CallChainOutput{
+		TargetFunction: targetFunctionQualifiedName,
+		Callers:        directCallerNames,
+		Functions:      functionSources,
 	}
-	return outputBuffer.String(), nil
-}
+	if len(directCalleeNames) > 0 {
+		output.Callees = &directCalleeNames
+	}
 
-func getQualifiedFunctionName(pkg *packages.Package, functionDeclaration *ast.FuncDecl) string {
-	functionName := functionDeclaration.Name.Name
-	if functionDeclaration.Recv != nil && len(functionDeclaration.Recv.List) > 0 {
-		receiverType := functionDeclaration.Recv.List[0].Type
-		var receiverBuffer bytes.Buffer
-		if err := printer.Fprint(&receiverBuffer, pkg.Fset, receiverType); err != nil {
-			return pkg.PkgPath + ".(*unknown)." + functionName
+	if includeDocumentation && documentationCollector != nil {
+		repoPrefix := repositoryRootDirectory + string(os.PathSeparator)
+		for filePath := range extractedFilePaths {
+			if filePath != repositoryRootDirectory && !strings.HasPrefix(filePath, repoPrefix) {
+				continue
+			}
+			entries, err := documentationCollector.CollectFromFile(filePath)
+			if err == nil && len(entries) > 0 {
+				output.Documentation = append(output.Documentation, entries...)
+			}
 		}
-		receiverRepresentation := strings.TrimSpace(receiverBuffer.String())
-		return pkg.PkgPath + "." + receiverRepresentation + "." + functionName
 	}
-	return pkg.PkgPath + "." + functionName
+
+	return output, nil
 }
 
-func findFunctionNode(graph *callgraph.Graph, inputFunctionName string) *callgraph.Node {
-	var bestMatch *callgraph.Node
+func composeQualifiedName(pkg *packages.Package, decl *ast.FuncDecl) string {
+	name := decl.Name.Name
+	if decl.Recv != nil && len(decl.Recv.List) > 0 {
+		var buf bytes.Buffer
+		printer.Fprint(&buf, pkg.Fset, decl.Recv.List[0].Type)
+		return pkg.PkgPath + "." + strings.TrimSpace(buf.String()) + "." + name
+	}
+	return pkg.PkgPath + "." + name
+}
+
+func selectFunctionNode(graph *callgraph.Graph, candidate string) *callgraph.Node {
+	short := candidate
+	if i := strings.LastIndex(candidate, "."); i >= 0 && i < len(candidate)-1 {
+		short = candidate[i+1:]
+	}
+	var best *callgraph.Node
 	for _, node := range graph.Nodes {
-		if node.Func != nil {
-			fullFunctionName := node.Func.String()
-			if fullFunctionName == inputFunctionName {
-				return node
-			}
-			if strings.HasSuffix(fullFunctionName, "."+inputFunctionName) {
-				if bestMatch == nil || len(fullFunctionName) > len(bestMatch.Func.String()) {
-					bestMatch = node
-				}
+		if node.Func == nil {
+			continue
+		}
+		full := node.Func.String()
+		if full == candidate {
+			return node
+		}
+		if strings.HasSuffix(full, "."+candidate) || strings.HasSuffix(full, "."+short) {
+			if best == nil || len(full) > len(best.Func.String()) {
+				best = node
 			}
 		}
 	}
-	return bestMatch
+	return best
 }
