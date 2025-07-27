@@ -3,6 +3,5 @@
 .git/
 .ignore
 .gitignore
-LICENSE
 *.txt
 .golangci.yml
