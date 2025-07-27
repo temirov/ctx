@@ -75,14 +75,14 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 
 ### Common Flags
 
-| Flag               | Applies to         | Description                                                                       |
-|--------------------|--------------------|-----------------------------------------------------------------------------------|
-| `-e, --e <folder>` | tree, content      | Exclude a direct‑child folder during directory traversal.                         |
-| `--no-gitignore`   | tree, content      | Disable loading of `.gitignore` files.                                            |
-| `--no-ignore`      | tree, content      | Disable loading of `.ignore` files.                                               |
-| `--format <raw     | json>`             | all commands                                                                      | Select output format (default `raw`).                                             |
-| `--doc`            | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
-| `--version`        | all commands       | Print ctx version and exit.                                                       |
+| Flag                   | Applies to         | Description                                                                      |
+|------------------------|--------------------|----------------------------------------------------------------------------------|
+| `-e, --e <folder>`     | tree, content      | Exclude a direct‑child folder during directory traversal.                        |
+| `--no-gitignore`       | tree, content      | Disable loading of `.gitignore` files.                                           |
+| `--no-ignore`          | tree, content      | Disable loading of `.ignore` files.                                              |
+| `--format <raw| json>` | all commands       | Select output format (default `raw`).                                            |
+| `--doc`                | content, callchain | Embed documentation for referenced external packages and symbols into the output.|
+| `--version`            | all commands       | Print ctx version and exit.                                                      |
 
 ### Examples
 
@@ -117,4 +117,4 @@ Exclusion patterns are loaded **only** during directory traversal; explicitly li
 
 ## License
 
-ctx is released under the [MIT License](LICENSE).
+ctx is released under the [MIT License](MIT-LICENSE).
