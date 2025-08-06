@@ -17,11 +17,18 @@ const (
 	exclusionPrefix   = "EXCL:"
 )
 
-// LoadIgnoreFilePatterns reads a specified ignore file (if it exists) and returns a slice of ignore patterns.
-// Blank lines and lines beginning with '#' are skipped.
+// IgnoreFileSections represents patterns grouped by category within an ignore file.
+type IgnoreFileSections struct {
+	Ignore []string
+	Binary []string
+}
+
+// LoadIgnoreFilePatterns reads a specified ignore file (if it exists) and returns categorized patterns.
+// Supported sections are [ignore] and [binary]. Lines before any section header and files without
+// headers default to the [ignore] section. Blank lines and lines beginning with '#' are skipped.
 //
 // #nosec G304
-func LoadIgnoreFilePatterns(ignoreFilePath string) ([]string, error) {
+func LoadIgnoreFilePatterns(ignoreFilePath string) (*IgnoreFileSections, error) {
 	fileHandle, openError := os.Open(ignoreFilePath)
 	if openError != nil {
 		if os.IsNotExist(openError) {
@@ -36,19 +43,39 @@ func LoadIgnoreFilePatterns(ignoreFilePath string) ([]string, error) {
 		}
 	}()
 
-	var patterns []string
+	sections := &IgnoreFileSections{}
+	currentSection := "ignore"
+
 	scanner := bufio.NewScanner(fileHandle)
 	for scanner.Scan() {
 		lineValue := strings.TrimSpace(scanner.Text())
 		if lineValue == "" || strings.HasPrefix(lineValue, "#") {
 			continue
 		}
-		patterns = append(patterns, lineValue)
+		if strings.HasPrefix(lineValue, "[") && strings.HasSuffix(lineValue, "]") {
+			header := strings.ToLower(strings.Trim(lineValue, "[]"))
+			switch header {
+			case "ignore":
+				currentSection = "ignore"
+			case "binary":
+				currentSection = "binary"
+			default:
+				currentSection = "ignore"
+			}
+			continue
+		}
+
+		switch currentSection {
+		case "binary":
+			sections.Binary = append(sections.Binary, lineValue)
+		default:
+			sections.Ignore = append(sections.Ignore, lineValue)
+		}
 	}
 	if scanError := scanner.Err(); scanError != nil {
 		return nil, scanError
 	}
-	return patterns, nil
+	return sections, nil
 }
 
 // LoadCombinedIgnorePatterns loads patterns from .ignore and/or .gitignore files within a directory,
@@ -62,7 +89,9 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 		if loadError != nil {
 			return nil, fmt.Errorf("loading %s from %s: %w", ignoreFileName, absoluteDirectoryPath, loadError)
 		}
-		combinedPatterns = append(combinedPatterns, ignoreFilePatterns...)
+		if ignoreFilePatterns != nil {
+			combinedPatterns = append(combinedPatterns, ignoreFilePatterns.Ignore...)
+		}
 	}
 
 	if useGitignore {
@@ -71,7 +100,9 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 		if loadError != nil {
 			return nil, fmt.Errorf("loading %s from %s: %w", gitIgnoreFileName, absoluteDirectoryPath, loadError)
 		}
-		combinedPatterns = append(combinedPatterns, gitignoreFilePatterns...)
+		if gitignoreFilePatterns != nil {
+			combinedPatterns = append(combinedPatterns, gitignoreFilePatterns.Ignore...)
+		}
 	}
 
 	deduplicatedFilePatterns := utils.DeduplicatePatterns(combinedPatterns)
