@@ -355,8 +355,8 @@ func TestCTX(testingHandle *testing.T) {
 				appTypes.FormatJSON,
 			},
 			prepare: func(t *testing.T) string {
-				if runtime.GOOS == "windows" {
-					t.Skip("Skipping unreadable file test on Windows")
+				if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+					t.Skip("Skipping unreadable file test on Windows or as root")
 				}
 				return setupTestDirectory(t, map[string]string{
 					"readable.txt":   "OK",
