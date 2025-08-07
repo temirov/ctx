@@ -2,8 +2,9 @@
 
 Ctx is a command‑line tool written in Go that displays a directory tree view, outputs file contents for specified
 files and directories, or analyzes the call chain for a given function in the repository. It supports exclusion patterns
-via .ignore and .gitignore files within each directory, an optional global exclusion flag, configurable output formats,
-and **optional embedded documentation** for referenced packages and symbols.
+via `.ignore` (with `[ignore]` and `[binary]` sections) and `.gitignore` files within each directory, an optional global
+exclusion flag, configurable output formats, and **optional embedded documentation** for referenced packages and
+symbols.
 
 ## Features
 
@@ -34,7 +35,8 @@ and **optional embedded documentation** for referenced packages and symbols.
       source), and (when `--doc`) a `documentation` array.
 - **Exclusion Patterns (for `tree` and `content`):**
     - Reads patterns from a `.ignore` file located at the root of each processed directory (can be disabled with
-      `--no-ignore`).
+      `--no-ignore`). The file supports `[ignore]` and `[binary]` sections; legacy files without headers are
+      interpreted as `[ignore]`.
     - Reads patterns from a `.gitignore` file located at the root of each processed directory by default (can be
       disabled with `--no-gitignore`).
     - A global exclusion flag (`-e` or `--e`) excludes a designated folder if it appears as a direct child in any
@@ -75,14 +77,14 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 
 ### Common Flags
 
-| Flag                   | Applies to         | Description                                                                      |
-|------------------------|--------------------|----------------------------------------------------------------------------------|
-| `-e, --e <folder>`     | tree, content      | Exclude a direct‑child folder during directory traversal.                        |
-| `--no-gitignore`       | tree, content      | Disable loading of `.gitignore` files.                                           |
-| `--no-ignore`          | tree, content      | Disable loading of `.ignore` files.                                              |
-| `--format <raw| json>` | all commands       | Select output format (default `raw`).                                            |
-| `--doc`                | content, callchain | Embed documentation for referenced external packages and symbols into the output.|
-| `--version`            | all commands       | Print ctx version and exit.                                                      |
+| Flag                   | Applies to         | Description |
+|------------------------|--------------------|-------------|
+| `-e, --e <folder>`     | tree, content      | Exclude a direct‑child folder during directory traversal. |
+| `--no-gitignore`       | tree, content      | Disable loading of `.gitignore` files. |
+| `--no-ignore`          | tree, content      | Disable loading of `.ignore` files (with `[ignore]`/`[binary]`). |
+| `--format <raw| json>` | all commands       | Select output format (default `raw`). |
+| `--doc`                | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
+| `--version`            | all commands       | Print ctx version and exit. |
 
 ### Examples
 
@@ -114,6 +116,25 @@ ctx callchain github.com/temirov/ctx/commands.GetContentData --doc --format raw
 ## Configuration
 
 Exclusion patterns are loaded **only** during directory traversal; explicitly listed file paths are never ignored.
+
+### `.ignore` format
+
+```ini
+[ignore]
+node_modules/
+dist/
+
+[binary]
+*.png
+*.jpg
+```
+
+- `[ignore]` — glob patterns excluded from traversal.
+- `[binary]` — matched files are treated as binary and skipped when printing content.
+
+Existing `.ignore` files that list patterns without section headers continue to work; they are interpreted as
+`[ignore]`. To upgrade, optionally add a `[ignore]` header above current patterns and append a `[binary]` section for
+binary files.
 
 ## License
 

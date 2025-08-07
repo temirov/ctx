@@ -13,8 +13,9 @@ file and/or directory paths, with configurable output formats:
 - **callchain:** Analyzes the call graph for a specified function within the repository.
 
 The utility filters files and directories *during directory traversal* (for `tree` and `content`) based on exclusion
-patterns specified in configuration files (`.ignore`, `.gitignore`) located within each processed directory, and an
-optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never filtered.
+patterns specified in configuration files (`.ignore` with `[ignore]`/`[binary]` sections, `.gitignore`) located within
+each processed directory, and an optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never
+filtered. Legacy `.ignore` files without headers are treated as `[ignore]`.
 
 ---
 
@@ -50,7 +51,8 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
     - **`--no-gitignore` flag:** (Applies to `tree`, `content`)
         - Optional. Disables loading of `.gitignore` files when processing **directory** arguments.
     - **`--no-ignore` flag:** (Applies to `tree`, `content`)
-        - Optional. Disables loading of `.ignore` files when processing **directory** arguments.
+        - Optional. Disables loading of `.ignore` files (with `[ignore]`/`[binary]` sections) when processing
+          **directory** arguments.
     - **`--format <raw|json>` flag:** (Applies to all commands)
         - Optional. Specifies the output format. Defaults to `raw`.
     - **`--version` flag:**
@@ -61,7 +63,8 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
 - **Source of Exclusions:**
     - Exclusion rules apply *only* when recursively processing specified **directory** paths.
     - Rules are retrieved from:
-        1. `.ignore` file located in the root of *each* processed directory (if `--no-ignore` is not used).
+        1. `.ignore` file located in the root of *each* processed directory (if `--no-ignore` is not used). The file may
+           contain `[ignore]` and `[binary]` sections; absence of headers defaults to `[ignore]`.
         2. `.gitignore` file located in the root of *each* processed directory (if `--no-gitignore` is not used).
         3. The global `-e`/`--e` flag (applies to direct children directories).
     - Patterns from `.ignore` and `.gitignore` within a specific directory are combined and deduplicated for processing
@@ -69,8 +72,11 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
 - **Scope:**
     - Ignore rules **do not** filter explicitly listed **file** arguments.
 - **`.ignore` / `.gitignore` File Format:**
-    - Uses standard Gitignore semantics (glob patterns). One pattern per line. Non-empty lines not beginning with `#`
-      considered.
+    - `.ignore` supports optional `[ignore]` and `[binary]` headers. Lines under `[ignore]` exclude matching paths;
+      lines under `[binary]` mark files as binary and skip their content during processing. Files without headers are
+      interpreted as `[ignore]` for backward compatibility.
+    - `.gitignore` follows standard Gitignore semantics (glob patterns). One pattern per line. Non-empty lines not
+      beginning with `#` are considered.
 
 ### Error Handling
 
