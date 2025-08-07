@@ -63,7 +63,11 @@ func buildTreeNodes(currentDirectoryPath string, ignorePatterns []string, isRoot
 				node.Children = childNodes
 			}
 		} else {
-			node.Type = types.NodeTypeFile
+			if utils.IsFileBinary(childPath) {
+				node.Type = types.NodeTypeBinary
+			} else {
+				node.Type = types.NodeTypeFile
+			}
 		}
 		nodes = append(nodes, node)
 	}

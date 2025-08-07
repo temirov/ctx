@@ -48,10 +48,17 @@ func GetContentData(rootPath string, ignorePatterns []string) ([]types.FileOutpu
 			return nil
 		}
 
+		fileType := types.NodeTypeFile
+		content := string(contentBytes)
+		if utils.IsBinary(contentBytes) {
+			fileType = types.NodeTypeBinary
+			content = ""
+		}
+
 		fileOutputs = append(fileOutputs, types.FileOutput{
 			Path:    currentPath,
-			Type:    types.NodeTypeFile,
-			Content: string(contentBytes),
+			Type:    fileType,
+			Content: content,
 		})
 		return nil
 	})

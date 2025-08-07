@@ -4,6 +4,7 @@ package types
 const (
 	NodeTypeFile      = "file"
 	NodeTypeDirectory = "directory"
+	NodeTypeBinary    = "binary"
 
 	CommandTree      = "tree"
 	CommandContent   = "content"

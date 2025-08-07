@@ -115,7 +115,11 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 		case *types.FileOutput:
 			if commandName == types.CommandContent {
 				fmt.Printf("File: %s\n", v.Path)
-				fmt.Println(v.Content)
+				if v.Type == types.NodeTypeBinary {
+					fmt.Println("(binary content omitted)")
+				} else {
+					fmt.Println(v.Content)
+				}
 				fmt.Printf("End of file: %s\n", v.Path)
 				fmt.Println(separatorLine)
 			}
@@ -123,6 +127,8 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 			if commandName == types.CommandTree {
 				if v.Type == types.NodeTypeFile {
 					fmt.Printf("[File] %s\n", v.Path)
+				} else if v.Type == types.NodeTypeBinary {
+					fmt.Printf("[Binary] %s\n", v.Path)
 				} else {
 					fmt.Printf("\n--- Directory Tree: %s ---\n", v.Path)
 					printTree(v, "")
@@ -175,8 +181,12 @@ func dedupeCollectedItems(items []interface{}) []interface{} {
 }
 
 func printTree(node *types.TreeOutputNode, prefix string) {
-	if node.Type == types.NodeTypeFile {
+	switch node.Type {
+	case types.NodeTypeFile:
 		fmt.Printf("%s[File] %s\n", prefix, node.Path)
+		return
+	case types.NodeTypeBinary:
+		fmt.Printf("%s[Binary] %s\n", prefix, node.Path)
 		return
 	}
 	fmt.Printf("%s%s\n", prefix, node.Path)
