@@ -144,3 +144,75 @@ func ShouldIgnoreByPath(relativePath string, ignorePatterns []string) bool {
 
 	return false
 }
+
+// ShouldTreatAsBinary checks if a directory entry should be treated as binary based on its name
+// and type, relative to a set of binary patterns and whether it's at the root level of processing.
+// Used primarily during tree building (os.ReadDir).
+func ShouldTreatAsBinary(directoryEntry os.DirEntry, binaryPatterns []string, isRootLevel bool) bool {
+	entryName := directoryEntry.Name()
+
+	for _, patternValue := range binaryPatterns {
+		if strings.HasPrefix(patternValue, ExclusionPrefix) {
+			exclusionName := strings.TrimPrefix(patternValue, ExclusionPrefix)
+			if isRootLevel && directoryEntry.IsDir() && entryName == exclusionName {
+				return true
+			}
+			continue
+		}
+
+		if strings.HasSuffix(patternValue, "/") {
+			patternDirectory := strings.TrimSuffix(patternValue, "/")
+			if directoryEntry.IsDir() && entryName == patternDirectory {
+				return true
+			}
+		} else {
+			isMatched, matchError := filepath.Match(patternValue, entryName)
+			if matchError == nil && isMatched {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ShouldTreatAsBinaryByPath checks if a path relative to its processing root should be treated as binary.
+// It considers exclusion patterns, directory patterns, and filename patterns.
+// Used by the content command's walk function (filepath.WalkDir).
+func ShouldTreatAsBinaryByPath(relativePath string, binaryPatterns []string) bool {
+	normalizedPath := filepath.ToSlash(relativePath)
+	pathComponents := strings.Split(normalizedPath, "/")
+	entryName := ""
+	if len(pathComponents) > 0 {
+		entryName = pathComponents[len(pathComponents)-1]
+	}
+
+	for _, pattern := range binaryPatterns {
+		if strings.HasPrefix(pattern, ExclusionPrefix) {
+			exclusionName := strings.TrimPrefix(pattern, ExclusionPrefix)
+			if len(pathComponents) >= 1 && pathComponents[0] == exclusionName {
+				return true
+			}
+			continue
+		}
+
+		isDirectoryPattern := strings.HasSuffix(pattern, "/")
+		cleanedPattern := strings.TrimSuffix(pattern, "/")
+
+		if !strings.Contains(cleanedPattern, "/") {
+			isMatched, _ := filepath.Match(cleanedPattern, entryName)
+			if isMatched {
+				return true
+			}
+		} else {
+			isMatched, _ := filepath.Match(pattern, normalizedPath)
+			if isMatched {
+				return true
+			}
+			if isDirectoryPattern && strings.HasPrefix(normalizedPath, cleanedPattern+"/") {
+				return true
+			}
+		}
+	}
+
+	return false
+}
