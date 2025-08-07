@@ -208,12 +208,12 @@ func runTreeOrContentCommand(
 				continue
 			}
 			if command == types.CommandTree {
-				nodes, err := commands.GetTreeData(info.AbsolutePath, patterns)
+				nodes, err := commands.GetTreeData(info.AbsolutePath, patterns, nil)
 				if err == nil && len(nodes) > 0 {
 					collected = append(collected, nodes[0])
 				}
 			} else {
-				files, err := commands.GetContentData(info.AbsolutePath, patterns)
+				files, err := commands.GetContentData(info.AbsolutePath, patterns, nil)
 				if err == nil {
 					for i := range files {
 						collected = append(collected, &files[i])
@@ -228,6 +228,16 @@ func runTreeOrContentCommand(
 					Type: types.NodeTypeFile,
 				})
 			} else {
+				fileInfo, statErr := os.Stat(info.AbsolutePath)
+				if statErr != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to read %s: %v\n", info.AbsolutePath, statErr)
+					continue
+				}
+				if fileInfo.Mode().Perm()&0o444 == 0 {
+					fmt.Fprintf(os.Stderr, "Warning: failed to read %s: permission denied\n", info.AbsolutePath)
+					continue
+				}
+
 				data, err := os.ReadFile(info.AbsolutePath)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Warning: failed to read %s: %v\n", info.AbsolutePath, err)

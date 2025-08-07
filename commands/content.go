@@ -10,7 +10,7 @@ import (
 )
 
 // GetContentData returns FileOutput slices for the specified directory.
-func GetContentData(rootPath string, ignorePatterns []string) ([]types.FileOutput, error) {
+func GetContentData(rootPath string, ignorePatterns, binaryPatterns []string) ([]types.FileOutput, error) {
 	absoluteRootPath, pathErr := filepath.Abs(rootPath)
 	if pathErr != nil {
 		return nil, fmt.Errorf("failed to get absolute path for %s: %w", rootPath, pathErr)
@@ -38,7 +38,27 @@ func GetContentData(rootPath string, ignorePatterns []string) ([]types.FileOutpu
 			}
 			return nil
 		}
+		if utils.ShouldTreatAsBinaryByPath(relativePath, binaryPatterns) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			fileOutputs = append(fileOutputs, types.FileOutput{
+				Path: currentPath,
+				Type: types.NodeTypeBinary,
+			})
+			return nil
+		}
 		if entry.IsDir() {
+			return nil
+		}
+
+		info, statErr := os.Stat(currentPath)
+		if statErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to read file %s: %v\n", currentPath, statErr)
+			return nil
+		}
+		if info.Mode().Perm()&0o444 == 0 {
+			fmt.Fprintf(os.Stderr, "Warning: failed to read file %s: permission denied\n", currentPath)
 			return nil
 		}
 

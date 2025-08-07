@@ -13,7 +13,7 @@ import (
 // GetTreeData generates the tree structure data for a given directory.
 // It returns a slice containing a single root node representing the directory.
 // Warnings for skipped subdirectories are printed to stderr.
-func GetTreeData(rootDirPath string, ignorePatterns []string) ([]*types.TreeOutputNode, error) {
+func GetTreeData(rootDirPath string, ignorePatterns, binaryPatterns []string) ([]*types.TreeOutputNode, error) {
 	absoluteRootDirPath, err := filepath.Abs(rootDirPath)
 	if err != nil {
 		return nil, fmt.Errorf("getting absolute path for %s: %w", rootDirPath, err)
@@ -25,7 +25,7 @@ func GetTreeData(rootDirPath string, ignorePatterns []string) ([]*types.TreeOutp
 		Type: types.NodeTypeDirectory,
 	}
 
-	children, err := buildTreeNodes(absoluteRootDirPath, ignorePatterns, true)
+	children, err := buildTreeNodes(absoluteRootDirPath, ignorePatterns, binaryPatterns, true)
 	if err != nil {
 		return nil, fmt.Errorf("building tree for %s: %w", rootDirPath, err)
 	}
@@ -34,7 +34,7 @@ func GetTreeData(rootDirPath string, ignorePatterns []string) ([]*types.TreeOutp
 	return []*types.TreeOutputNode{rootNode}, nil
 }
 
-func buildTreeNodes(currentDirectoryPath string, ignorePatterns []string, isRootLevel bool) ([]*types.TreeOutputNode, error) {
+func buildTreeNodes(currentDirectoryPath string, ignorePatterns, binaryPatterns []string, isRootLevel bool) ([]*types.TreeOutputNode, error) {
 	var nodes []*types.TreeOutputNode
 
 	directoryEntries, readDirError := os.ReadDir(currentDirectoryPath)
@@ -53,9 +53,11 @@ func buildTreeNodes(currentDirectoryPath string, ignorePatterns []string, isRoot
 			Name: entry.Name(),
 		}
 
-		if entry.IsDir() {
+		if utils.ShouldTreatAsBinary(entry, binaryPatterns, isRootLevel) {
+			node.Type = types.NodeTypeBinary
+		} else if entry.IsDir() {
 			node.Type = types.NodeTypeDirectory
-			childNodes, err := buildTreeNodes(childPath, ignorePatterns, false)
+			childNodes, err := buildTreeNodes(childPath, ignorePatterns, binaryPatterns, false)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Skipping subdirectory %s due to error: %v\n", childPath, err)
 				node.Children = nil
