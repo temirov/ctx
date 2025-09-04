@@ -12,14 +12,11 @@ import (
 	"github.com/temirov/ctx/internal/utils"
 )
 
-const (
-	ignoreFileName      = ".ignore"
-	gitIgnoreFileName   = ".gitignore"
-	exclusionPrefix     = "EXCL:"
-	gitDirectoryPattern = utils.GitDirectoryName + "/"
-	// showBinaryContentDirective marks patterns whose binary content should be displayed.
-	showBinaryContentDirective = "show-binary-content:"
-)
+// gitDirectoryPattern represents the pattern that matches the Git directory.
+const gitDirectoryPattern = utils.GitDirectoryName + "/"
+
+// showBinaryContentDirective marks patterns whose binary content should be displayed.
+const showBinaryContentDirective = "show-binary-content:"
 
 // LoadIgnoreFilePatterns reads a specified ignore file and returns ignore patterns and binary content patterns.
 //
@@ -69,19 +66,19 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 	var combinedPatterns []string
 
 	if useIgnoreFile {
-		ignoreFilePath := filepath.Join(absoluteDirectoryPath, ignoreFileName)
+		ignoreFilePath := filepath.Join(absoluteDirectoryPath, utils.IgnoreFileName)
 		ignoreFilePatterns, _, loadError := LoadIgnoreFilePatterns(ignoreFilePath)
 		if loadError != nil {
-			return nil, fmt.Errorf("loading %s from %s: %w", ignoreFileName, absoluteDirectoryPath, loadError)
+			return nil, fmt.Errorf("loading %s from %s: %w", utils.IgnoreFileName, absoluteDirectoryPath, loadError)
 		}
 		combinedPatterns = append(combinedPatterns, ignoreFilePatterns...)
 	}
 
 	if useGitignore {
-		gitIgnoreFilePath := filepath.Join(absoluteDirectoryPath, gitIgnoreFileName)
+		gitIgnoreFilePath := filepath.Join(absoluteDirectoryPath, utils.GitIgnoreFileName)
 		gitIgnoreFilePatterns, _, loadError := LoadIgnoreFilePatterns(gitIgnoreFilePath)
 		if loadError != nil {
-			return nil, fmt.Errorf("loading %s from %s: %w", gitIgnoreFileName, absoluteDirectoryPath, loadError)
+			return nil, fmt.Errorf("loading %s from %s: %w", utils.GitIgnoreFileName, absoluteDirectoryPath, loadError)
 		}
 		combinedPatterns = append(combinedPatterns, gitIgnoreFilePatterns...)
 	}
@@ -95,7 +92,7 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 	trimmedExclusion := strings.TrimSpace(exclusionFolder)
 	if trimmedExclusion != "" {
 		normalizedExclusion := strings.TrimSuffix(trimmedExclusion, "/")
-		exclusionPattern := exclusionPrefix + normalizedExclusion
+		exclusionPattern := utils.ExclusionPrefix + normalizedExclusion
 		isPresent := false
 		for _, pattern := range deduplicatedFilePatterns {
 			if pattern == exclusionPattern {
@@ -136,10 +133,10 @@ func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionFolder strin
 		}
 
 		if useIgnoreFile {
-			ignoreFilePath := filepath.Join(currentDirectoryPath, ignoreFileName)
+			ignoreFilePath := filepath.Join(currentDirectoryPath, utils.IgnoreFileName)
 			ignorePatterns, binaryContentPatterns, loadError := LoadIgnoreFilePatterns(ignoreFilePath)
 			if loadError != nil {
-				return fmt.Errorf("loading %s from %s: %w", ignoreFileName, currentDirectoryPath, loadError)
+				return fmt.Errorf("loading %s from %s: %w", utils.IgnoreFileName, currentDirectoryPath, loadError)
 			}
 			for _, pattern := range ignorePatterns {
 				aggregatedPatterns = append(aggregatedPatterns, prefix+pattern)
@@ -150,10 +147,10 @@ func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionFolder strin
 		}
 
 		if useGitignore {
-			gitIgnoreFilePath := filepath.Join(currentDirectoryPath, gitIgnoreFileName)
+			gitIgnoreFilePath := filepath.Join(currentDirectoryPath, utils.GitIgnoreFileName)
 			gitIgnorePatterns, _, loadError := LoadIgnoreFilePatterns(gitIgnoreFilePath)
 			if loadError != nil {
-				return fmt.Errorf("loading %s from %s: %w", gitIgnoreFileName, currentDirectoryPath, loadError)
+				return fmt.Errorf("loading %s from %s: %w", utils.GitIgnoreFileName, currentDirectoryPath, loadError)
 			}
 			for _, pattern := range gitIgnorePatterns {
 				aggregatedPatterns = append(aggregatedPatterns, prefix+pattern)
@@ -177,7 +174,7 @@ func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionFolder strin
 	trimmedExclusion := strings.TrimSpace(exclusionFolder)
 	if trimmedExclusion != "" {
 		normalizedExclusion := strings.TrimSuffix(trimmedExclusion, "/")
-		exclusionPattern := exclusionPrefix + normalizedExclusion
+		exclusionPattern := utils.ExclusionPrefix + normalizedExclusion
 		isPresent := false
 		for _, pattern := range deduplicatedPatterns {
 			if pattern == exclusionPattern {
