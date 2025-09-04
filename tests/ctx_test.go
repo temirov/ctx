@@ -195,10 +195,10 @@ func TestCTX(testingHandle *testing.T) {
 				"--format",
 				"raw",
 			},
-			prepare: func(t *testing.T) string { return getModuleRoot(t) },
-			validate: func(t *testing.T, output string) {
-				if strings.Count(output, "strings.ToLower") == 0 {
-					t.Errorf("expected documentation entry for strings.ToLower")
+			prepare: func(testingHandle *testing.T) string { return getModuleRoot(testingHandle) },
+			validate: func(testingHandle *testing.T, output string) {
+				if !strings.Contains(output, "GetContentData") {
+					testingHandle.Errorf("expected GetContentData documentation in output")
 				}
 			},
 		},
@@ -357,6 +357,9 @@ func TestCTX(testingHandle *testing.T) {
 			prepare: func(t *testing.T) string {
 				if runtime.GOOS == "windows" {
 					t.Skip("Skipping unreadable file test on Windows")
+				}
+				if os.Geteuid() == 0 {
+					t.Skip("Skipping unreadable file test as root user")
 				}
 				return setupTestDirectory(t, map[string]string{
 					"readable.txt":   "OK",

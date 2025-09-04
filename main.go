@@ -6,7 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
+
+	"github.com/spf13/cobra"
 
 	"github.com/temirov/ctx/commands"
 	"github.com/temirov/ctx/config"
@@ -17,224 +18,233 @@ import (
 )
 
 const (
-	flagVersion     = "--version"
-	flagExcludeS    = "-e"
-	flagExcludeL    = "--e"
-	flagNoGitignore = "--no-gitignore"
-	flagNoIgnore    = "--no-ignore"
-	flagFormat      = "--format"
-	flagDoc         = "--doc"
-	defaultPath     = "."
+	flagVersionName     = "version"
+	flagExcludeName     = "e"
+	flagNoGitignoreName = "no-gitignore"
+	flagNoIgnoreName    = "no-ignore"
+	flagFormatName      = "format"
+	flagDocName         = "doc"
+	defaultPath         = "."
+	versionPrefix       = "ctx version:"
+	docIgnoredMessage   = "--doc ignored for tree"
 )
 
+var (
+	showVersionFlag      bool
+	exclusionFolder      string
+	noGitignoreFlag      bool
+	noIgnoreFlag         bool
+	outputFormat         string
+	documentationEnabled bool
+)
+
+// main is the entry point of the ctx CLI.
 func main() {
-	for _, arg := range os.Args[1:] {
-		if arg == flagVersion {
-			fmt.Println("ctx version:", utils.GetApplicationVersion())
+	rootCommand := newRootCommand()
+	if executeError := rootCommand.Execute(); executeError != nil {
+		log.Fatalf("Error: %v", executeError)
+	}
+}
+
+// newRootCommand constructs the root Cobra command with all subcommands.
+func newRootCommand() *cobra.Command {
+	rootCommand := &cobra.Command{
+		Use:          "ctx",
+		SilenceUsage: true,
+		RunE: func(command *cobra.Command, arguments []string) error {
+			return command.Help()
+		},
+	}
+
+	persistentFlags := rootCommand.PersistentFlags()
+	persistentFlags.BoolVar(&showVersionFlag, flagVersionName, false, "Show application version")
+	persistentFlags.StringVarP(&exclusionFolder, flagExcludeName, flagExcludeName, "", "Folder to exclude")
+	persistentFlags.BoolVar(&noGitignoreFlag, flagNoGitignoreName, false, "Disable use of .gitignore files")
+	persistentFlags.BoolVar(&noIgnoreFlag, flagNoIgnoreName, false, "Disable use of ignore files")
+	persistentFlags.StringVar(&outputFormat, flagFormatName, types.FormatJSON, "Output format (raw or json)")
+	persistentFlags.BoolVar(&documentationEnabled, flagDocName, false, "Include documentation entries")
+
+	rootCommand.PersistentPreRunE = func(command *cobra.Command, arguments []string) error {
+		if showVersionFlag {
+			fmt.Println(versionPrefix, utils.GetApplicationVersion())
 			os.Exit(0)
 		}
+		if outputFormat != types.FormatRaw && outputFormat != types.FormatJSON {
+			return fmt.Errorf("Invalid format value '%s'", outputFormat)
+		}
+		return nil
 	}
-	command, paths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat, documentationEnabled := parseArgsOrExit()
-	if err := runTool(command, paths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat, documentationEnabled); err != nil {
-		log.Fatalf("Error: %v", err)
+
+	rootCommand.AddCommand(newTreeCommand(), newContentCommand(), newCallChainCommand())
+	return rootCommand
+}
+
+// newTreeCommand creates the tree subcommand.
+func newTreeCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   types.CommandTree + " [paths]",
+		Short: "Display directory structure",
+		RunE:  runTreeCommand,
 	}
 }
 
-func parseArgsOrExit() (string, []string, string, bool, bool, string, bool) {
-	if len(os.Args) < 2 {
-		printUsage()
+// newContentCommand creates the content subcommand.
+func newContentCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   types.CommandContent + " [paths]",
+		Short: "Display file contents",
+		RunE:  runContentCommand,
 	}
-	useGitignore := true
-	useIgnoreFile := true
-	outputFormat := types.FormatJSON
-	withDoc := false
+}
 
-	rawCommand := os.Args[1]
-	var command string
-	switch rawCommand {
-	case types.CommandTree, "t":
-		command = types.CommandTree
-	case types.CommandContent, "c":
-		command = types.CommandContent
-	case types.CommandCallChain, "cc":
-		command = types.CommandCallChain
-	default:
-		fmt.Printf("Error: invalid command '%s'\n", rawCommand)
-		printUsage()
+// newCallChainCommand creates the callchain subcommand.
+func newCallChainCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   types.CommandCallChain + " <function>",
+		Short: "Display function call chains",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runCallChainCommand,
 	}
+}
 
-	args := os.Args[2:]
-	var paths []string
-	flagsSeen := false
-	exclusionFolder := ""
-
-	for i := 0; i < len(args); {
-		arg := args[i]
-		if strings.HasPrefix(arg, "-") {
-			flagsSeen = true
-			switch arg {
-			case flagExcludeS, flagExcludeL:
-				if i+1 >= len(args) {
-					fmt.Printf("Error: missing exclusion folder after %s\n", arg)
-					printUsage()
-				}
-				exclusionFolder = args[i+1]
-				i += 2
-			case flagNoGitignore:
-				useGitignore = false
-				i++
-			case flagNoIgnore:
-				useIgnoreFile = false
-				i++
-			case flagFormat:
-				if i+1 >= len(args) {
-					fmt.Printf("Error: missing format after %s\n", arg)
-					printUsage()
-				}
-				val := strings.ToLower(args[i+1])
-				if val != types.FormatRaw && val != types.FormatJSON {
-					fmt.Printf("Invalid format value '%s'\n", val)
-					printUsage()
-				}
-				outputFormat = val
-				i += 2
-			case flagDoc:
-				withDoc = true
-				i++
-			default:
-				fmt.Printf("Error: unknown flag %s\n", arg)
-				printUsage()
-			}
-		} else {
-			if flagsSeen && command != types.CommandCallChain {
-				fmt.Printf("Error: positional argument '%s' after flags\n", arg)
-				printUsage()
-			}
-			paths = append(paths, arg)
-			i++
-		}
-	}
-
-	if (command == types.CommandTree || command == types.CommandContent) && len(paths) == 0 {
+// runTreeCommand executes the tree command with provided arguments.
+func runTreeCommand(command *cobra.Command, arguments []string) error {
+	paths := arguments
+	if len(paths) == 0 {
 		paths = []string{defaultPath}
 	}
-	if command == types.CommandCallChain && len(paths) != 1 {
-		fmt.Printf("Error: '%s' requires exactly one argument\n", types.CommandCallChain)
-		printUsage()
+	if documentationEnabled {
+		fmt.Fprintln(os.Stderr, docIgnoredMessage)
 	}
-	if command == types.CommandTree && withDoc {
-		fmt.Fprintln(os.Stderr, "--doc ignored for tree")
-		withDoc = false
-	}
-	return command, paths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat, withDoc
+	useGitignore := !noGitignoreFlag
+	useIgnoreFile := !noIgnoreFlag
+	return runTool(types.CommandTree, paths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat, false)
 }
 
-func printUsage() {
-	exe := filepath.Base(os.Args[0])
-	fmt.Printf("Usage:\n  %s <tree|t|content|c|callchain|cc> [paths] [-e folder] [--no-gitignore] [--no-ignore] [--format raw|json] [--doc]\n", exe)
-	os.Exit(1)
+// runContentCommand executes the content command with provided arguments.
+func runContentCommand(command *cobra.Command, arguments []string) error {
+	paths := arguments
+	if len(paths) == 0 {
+		paths = []string{defaultPath}
+	}
+	useGitignore := !noGitignoreFlag
+	useIgnoreFile := !noIgnoreFlag
+	return runTool(types.CommandContent, paths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat, documentationEnabled)
 }
 
+// runCallChainCommand executes the callchain command.
+func runCallChainCommand(command *cobra.Command, arguments []string) error {
+	useGitignore := !noGitignoreFlag
+	useIgnoreFile := !noIgnoreFlag
+	return runTool(types.CommandCallChain, arguments, exclusionFolder, useGitignore, useIgnoreFile, outputFormat, documentationEnabled)
+}
+
+// runTool dispatches commands to their respective handlers.
 func runTool(
 	command string,
 	paths []string,
 	exclusionFolder string,
-	useGitignore, useIgnoreFile bool,
+	useGitignore bool,
+	useIgnoreFile bool,
 	format string,
 	documentationEnabled bool,
 ) error {
-	root, _ := os.Getwd()
-	var collector *docs.Collector
+	rootPath, _ := os.Getwd()
+	var documentationCollector *docs.Collector
 	if documentationEnabled {
-		col, err := docs.NewCollector(root)
-		if err != nil {
-			return err
+		collector, collectorError := docs.NewCollector(rootPath)
+		if collectorError != nil {
+			return collectorError
 		}
-		collector = col
+		documentationCollector = collector
 	}
 
 	switch command {
 	case types.CommandCallChain:
-		return runCallChain(paths[0], format, documentationEnabled, collector, root)
+		return runCallChain(paths[0], format, documentationEnabled, documentationCollector, rootPath)
 	case types.CommandTree, types.CommandContent:
-		return runTreeOrContentCommand(command, paths, exclusionFolder, useGitignore, useIgnoreFile, format, documentationEnabled, collector)
+		return runTreeOrContentCommand(command, paths, exclusionFolder, useGitignore, useIgnoreFile, format, documentationEnabled, documentationCollector)
 	default:
 		return fmt.Errorf("unsupported command")
 	}
 }
 
+// runCallChain renders call chain information for the target function.
 func runCallChain(
-	target, format string,
-	withDoc bool,
+	target string,
+	format string,
+	withDocumentation bool,
 	collector *docs.Collector,
 	root string,
 ) error {
-	data, err := commands.GetCallChainData(target, withDoc, collector, root)
-	if err != nil {
-		return err
+	data, callChainError := commands.GetCallChainData(target, withDocumentation, collector, root)
+	if callChainError != nil {
+		return callChainError
 	}
 	if format == types.FormatJSON {
-		out, err := output.RenderCallChainJSON(data)
-		if err != nil {
-			return err
+		rendered, renderError := output.RenderCallChainJSON(data)
+		if renderError != nil {
+			return renderError
 		}
-		fmt.Println(out)
+		fmt.Println(rendered)
 	} else {
 		fmt.Println(output.RenderCallChainRaw(data))
 	}
 	return nil
 }
 
+// runTreeOrContentCommand handles tree and content commands.
 func runTreeOrContentCommand(
 	command string,
 	paths []string,
 	exclusionFolder string,
-	useGitignore, useIgnoreFile bool,
+	useGitignore bool,
+	useIgnoreFile bool,
 	format string,
-	withDoc bool,
+	withDocumentation bool,
 	collector *docs.Collector,
 ) error {
-	validated, err := resolveAndValidatePaths(paths)
-	if err != nil {
-		return err
+	validated, validationError := resolveAndValidatePaths(paths)
+	if validationError != nil {
+		return validationError
 	}
 
 	var collected []interface{}
-	for _, info := range validated {
-		if info.IsDir {
-			patterns, err := config.LoadCombinedIgnorePatterns(info.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: skipping %s: %v\n", info.AbsolutePath, err)
+	for _, pathInfo := range validated {
+		if pathInfo.IsDir {
+			patterns, patternError := config.LoadCombinedIgnorePatterns(pathInfo.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile)
+			if patternError != nil {
+				fmt.Fprintf(os.Stderr, "Warning: skipping %s: %v\n", pathInfo.AbsolutePath, patternError)
 				continue
 			}
 			if command == types.CommandTree {
-				nodes, err := commands.GetTreeData(info.AbsolutePath, patterns)
-				if err == nil && len(nodes) > 0 {
+				nodes, nodeError := commands.GetTreeData(pathInfo.AbsolutePath, patterns)
+				if nodeError == nil && len(nodes) > 0 {
 					collected = append(collected, nodes[0])
 				}
 			} else {
-				files, err := commands.GetContentData(info.AbsolutePath, patterns)
-				if err == nil {
-					for i := range files {
-						collected = append(collected, &files[i])
+				files, fileError := commands.GetContentData(pathInfo.AbsolutePath, patterns)
+				if fileError == nil {
+					for index := range files {
+						collected = append(collected, &files[index])
 					}
 				}
 			}
 		} else {
 			if command == types.CommandTree {
 				collected = append(collected, &types.TreeOutputNode{
-					Path: info.AbsolutePath,
-					Name: filepath.Base(info.AbsolutePath),
+					Path: pathInfo.AbsolutePath,
+					Name: filepath.Base(pathInfo.AbsolutePath),
 					Type: types.NodeTypeFile,
 				})
 			} else {
-				data, err := os.ReadFile(info.AbsolutePath)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to read %s: %v\n", info.AbsolutePath, err)
+				data, readError := os.ReadFile(pathInfo.AbsolutePath)
+				if readError != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to read %s: %v\n", pathInfo.AbsolutePath, readError)
 					continue
 				}
 				collected = append(collected, &types.FileOutput{
-					Path:    info.AbsolutePath,
+					Path:    pathInfo.AbsolutePath,
 					Type:    types.NodeTypeFile,
 					Content: string(data),
 				})
@@ -242,55 +252,56 @@ func runTreeOrContentCommand(
 		}
 	}
 
-	var docsEntries []types.DocumentationEntry
-	if withDoc && collector != nil {
+	var documentationEntries []types.DocumentationEntry
+	if withDocumentation && collector != nil {
 		for _, item := range collected {
-			if f, ok := item.(*types.FileOutput); ok {
-				entries, _ := collector.CollectFromFile(f.Path)
-				docsEntries = append(docsEntries, entries...)
+			if fileOutput, isFileOutput := item.(*types.FileOutput); isFileOutput {
+				entries, _ := collector.CollectFromFile(fileOutput.Path)
+				documentationEntries = append(documentationEntries, entries...)
 			}
 		}
-		sort.Slice(docsEntries, func(i, j int) bool {
-			if docsEntries[i].Kind != docsEntries[j].Kind {
-				return docsEntries[i].Kind < docsEntries[j].Kind
+		sort.Slice(documentationEntries, func(firstIndex, secondIndex int) bool {
+			if documentationEntries[firstIndex].Kind != documentationEntries[secondIndex].Kind {
+				return documentationEntries[firstIndex].Kind < documentationEntries[secondIndex].Kind
 			}
-			return docsEntries[i].Name < docsEntries[j].Name
+			return documentationEntries[firstIndex].Name < documentationEntries[secondIndex].Name
 		})
 	}
 
 	if format == types.FormatJSON {
-		out, err := output.RenderJSON(docsEntries, collected)
-		if err != nil {
-			return err
+		rendered, renderError := output.RenderJSON(documentationEntries, collected)
+		if renderError != nil {
+			return renderError
 		}
-		fmt.Println(out)
+		fmt.Println(rendered)
 		return nil
 	}
 
-	return output.RenderRaw(command, docsEntries, collected)
+	return output.RenderRaw(command, documentationEntries, collected)
 }
 
+// resolveAndValidatePaths turns input paths into validated absolute paths.
 func resolveAndValidatePaths(inputs []string) ([]types.ValidatedPath, error) {
 	seen := make(map[string]struct{})
 	var result []types.ValidatedPath
-	for _, p := range inputs {
-		absP, err := filepath.Abs(p)
-		if err != nil {
-			return nil, fmt.Errorf("abs failed for '%s': %w", p, err)
+	for _, inputPath := range inputs {
+		absolutePath, absoluteError := filepath.Abs(inputPath)
+		if absoluteError != nil {
+			return nil, fmt.Errorf("abs failed for '%s': %w", inputPath, absoluteError)
 		}
-		clean := filepath.Clean(absP)
-		if _, ok := seen[clean]; ok {
+		cleanPath := filepath.Clean(absolutePath)
+		if _, alreadySeen := seen[cleanPath]; alreadySeen {
 			continue
 		}
-		info, err := os.Stat(clean)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil, fmt.Errorf("path '%s' does not exist", p)
+		info, statError := os.Stat(cleanPath)
+		if statError != nil {
+			if os.IsNotExist(statError) {
+				return nil, fmt.Errorf("path '%s' does not exist", inputPath)
 			}
-			return nil, fmt.Errorf("stat failed for '%s': %w", p, err)
+			return nil, fmt.Errorf("stat failed for '%s': %w", inputPath, statError)
 		}
-		seen[clean] = struct{}{}
-		result = append(result, types.ValidatedPath{AbsolutePath: clean, IsDir: info.IsDir()})
+		seen[cleanPath] = struct{}{}
+		result = append(result, types.ValidatedPath{AbsolutePath: cleanPath, IsDir: info.IsDir()})
 	}
 	if len(result) == 0 {
 		return nil, fmt.Errorf("no valid paths")
