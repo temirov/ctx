@@ -8,13 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/temirov/ctx/types"
 	"github.com/temirov/ctx/utils"
-)
-
-const (
-	ignoreFileName    = ".ignore"
-	gitIgnoreFileName = ".gitignore"
-	exclusionPrefix   = "EXCL:"
 )
 
 // LoadIgnoreFilePatterns reads a specified ignore file (if it exists) and returns a slice of ignore patterns.
@@ -57,19 +52,19 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 	var combinedPatterns []string
 
 	if useIgnoreFile {
-		ignoreFilePath := filepath.Join(absoluteDirectoryPath, ignoreFileName)
+		ignoreFilePath := filepath.Join(absoluteDirectoryPath, types.IgnoreFileName)
 		ignoreFilePatterns, loadError := LoadIgnoreFilePatterns(ignoreFilePath)
 		if loadError != nil {
-			return nil, fmt.Errorf("loading %s from %s: %w", ignoreFileName, absoluteDirectoryPath, loadError)
+			return nil, fmt.Errorf("loading %s from %s: %w", types.IgnoreFileName, absoluteDirectoryPath, loadError)
 		}
 		combinedPatterns = append(combinedPatterns, ignoreFilePatterns...)
 	}
 
 	if useGitignore {
-		gitIgnoreFilePath := filepath.Join(absoluteDirectoryPath, gitIgnoreFileName)
+		gitIgnoreFilePath := filepath.Join(absoluteDirectoryPath, types.GitIgnoreFileName)
 		gitignoreFilePatterns, loadError := LoadIgnoreFilePatterns(gitIgnoreFilePath)
 		if loadError != nil {
-			return nil, fmt.Errorf("loading %s from %s: %w", gitIgnoreFileName, absoluteDirectoryPath, loadError)
+			return nil, fmt.Errorf("loading %s from %s: %w", types.GitIgnoreFileName, absoluteDirectoryPath, loadError)
 		}
 		combinedPatterns = append(combinedPatterns, gitignoreFilePatterns...)
 	}
@@ -79,7 +74,7 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 	trimmedExclusion := strings.TrimSpace(exclusionFolder)
 	if trimmedExclusion != "" {
 		normalizedExclusion := strings.TrimSuffix(trimmedExclusion, "/")
-		exclusionPattern := exclusionPrefix + normalizedExclusion
+		exclusionPattern := types.ExclusionPrefix + normalizedExclusion
 		isPresent := false
 		for _, pattern := range deduplicatedFilePatterns {
 			if pattern == exclusionPattern {

@@ -5,18 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-)
 
-// Constants related to ignore file handling.
-const (
-	IgnoreFileName    = ".ignore"
-	GitIgnoreFileName = ".gitignore"
-	ExclusionPrefix   = "EXCL:"
+	"github.com/temirov/ctx/types"
 )
 
 var serviceFiles = map[string]struct{}{
-	IgnoreFileName:    {},
-	GitIgnoreFileName: {},
+	types.IgnoreFileName:    {},
+	types.GitIgnoreFileName: {},
 }
 
 // DeduplicatePatterns removes duplicate patterns from a slice while preserving order.
@@ -76,8 +71,8 @@ func ShouldIgnore(directoryEntry os.DirEntry, ignorePatterns []string, isRootLev
 	}
 
 	for _, patternValue := range ignorePatterns {
-		if strings.HasPrefix(patternValue, ExclusionPrefix) {
-			exclusionName := strings.TrimPrefix(patternValue, ExclusionPrefix)
+		if strings.HasPrefix(patternValue, types.ExclusionPrefix) {
+			exclusionName := strings.TrimPrefix(patternValue, types.ExclusionPrefix)
 			if isRootLevel && directoryEntry.IsDir() && entryName == exclusionName {
 				return true
 			}
@@ -115,8 +110,8 @@ func ShouldIgnoreByPath(relativePath string, ignorePatterns []string) bool {
 	}
 
 	for _, pattern := range ignorePatterns {
-		if strings.HasPrefix(pattern, ExclusionPrefix) {
-			exclusionName := strings.TrimPrefix(pattern, ExclusionPrefix)
+		if strings.HasPrefix(pattern, types.ExclusionPrefix) {
+			exclusionName := strings.TrimPrefix(pattern, types.ExclusionPrefix)
 			if len(pathComponents) >= 1 && pathComponents[0] == exclusionName {
 				return true
 			}
