@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,63 +11,67 @@ import (
 )
 
 // GetContentData returns FileOutput slices for the specified directory.
-func GetContentData(rootPath string, ignorePatterns []string) ([]types.FileOutput, error) {
-	absoluteRootPath, pathErr := filepath.Abs(rootPath)
-	if pathErr != nil {
-		return nil, fmt.Errorf("failed to get absolute path for %s: %w", rootPath, pathErr)
+func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatterns []string) ([]types.FileOutput, error) {
+	absoluteRootPath, absolutePathError := filepath.Abs(rootPath)
+	if absolutePathError != nil {
+		return nil, fmt.Errorf("failed to get absolute path for %s: %w", rootPath, absolutePathError)
 	}
-	cleanRootPath := filepath.Clean(absoluteRootPath)
+	cleanedRootPath := filepath.Clean(absoluteRootPath)
 
 	var fileOutputs []types.FileOutput
 
-	walkError := filepath.WalkDir(cleanRootPath, func(currentPath string, entry os.DirEntry, accessErr error) error {
-		if accessErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: error accessing path %s: %v\n", currentPath, accessErr)
-			if entry != nil && entry.IsDir() {
+	directoryWalkError := filepath.WalkDir(cleanedRootPath, func(walkedPath string, directoryEntry os.DirEntry, accessError error) error {
+		if accessError != nil {
+			fmt.Fprintf(os.Stderr, "Warning: error accessing path %s: %v\n", walkedPath, accessError)
+			if directoryEntry != nil && directoryEntry.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		relativePath := utils.RelativePathOrSelf(currentPath, cleanRootPath)
+		relativePath := utils.RelativePathOrSelf(walkedPath, cleanedRootPath)
 		if relativePath == "." {
 			return nil
 		}
 		if utils.ShouldIgnoreByPath(relativePath, ignorePatterns) {
-			if entry.IsDir() {
+			if directoryEntry.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if entry.IsDir() {
+		if directoryEntry.IsDir() {
 			return nil
 		}
 
-		contentBytes, readErr := os.ReadFile(currentPath)
-		if readErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to read file %s: %v\n", currentPath, readErr)
+		fileBytes, fileReadError := os.ReadFile(walkedPath)
+		if fileReadError != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to read file %s: %v\n", walkedPath, fileReadError)
 			return nil
 		}
 
 		fileType := types.NodeTypeFile
-		content := string(contentBytes)
+		fileContent := string(fileBytes)
 		mimeType := ""
-		if utils.IsBinary(contentBytes) {
+		if utils.IsBinary(fileBytes) {
 			fileType = types.NodeTypeBinary
-			content = ""
-			mimeType = utils.DetectMimeType(currentPath)
+			mimeType = utils.DetectMimeType(walkedPath)
+			if utils.ShouldDisplayBinaryContentByPath(relativePath, binaryContentPatterns) {
+				fileContent = base64.StdEncoding.EncodeToString(fileBytes)
+			} else {
+				fileContent = ""
+			}
 		}
 
 		fileOutputs = append(fileOutputs, types.FileOutput{
-			Path:     currentPath,
+			Path:     walkedPath,
 			Type:     fileType,
-			Content:  content,
+			Content:  fileContent,
 			MimeType: mimeType,
 		})
 		return nil
 	})
-	if walkError != nil {
-		return nil, walkError
+	if directoryWalkError != nil {
+		return nil, directoryWalkError
 	}
 
 	return fileOutputs, nil
