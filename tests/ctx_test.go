@@ -4,6 +4,7 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"os"
 	"os/exec"
@@ -274,6 +275,58 @@ func TestCTX(testingHandle *testing.T) {
 			},
 		},
 		{
+			name: "TreeXML",
+			arguments: []string{
+				appTypes.CommandTree,
+				"fileA.txt",
+				"--format",
+				appTypes.FormatXML,
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"fileA.txt": "A",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				type resultWrapper struct {
+					Nodes []appTypes.TreeOutputNode `xml:"code>item"`
+				}
+				var wrapper resultWrapper
+				if err := xml.Unmarshal([]byte(output), &wrapper); err != nil {
+					t.Fatalf("invalid XML: %v\n%s", err, output)
+				}
+				if len(wrapper.Nodes) != 1 {
+					t.Fatalf("expected one top-level node, got %d", len(wrapper.Nodes))
+				}
+			},
+		},
+		{
+			name: "ContentXML",
+			arguments: []string{
+				appTypes.CommandContent,
+				"fileA.txt",
+				"--format",
+				appTypes.FormatXML,
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"fileA.txt": "Content A",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				type resultWrapper struct {
+					Files []appTypes.FileOutput `xml:"code>item"`
+				}
+				var wrapper resultWrapper
+				if err := xml.Unmarshal([]byte(output), &wrapper); err != nil {
+					t.Fatalf("invalid XML: %v\n%s", err, output)
+				}
+				if len(wrapper.Files) != 1 {
+					t.Fatalf("expected one item, got %d", len(wrapper.Files))
+				}
+			},
+		},
+		{
 			name: "RawFormatExplicitFlag",
 			arguments: []string{
 				appTypes.CommandContent,
@@ -352,6 +405,34 @@ func TestCTX(testingHandle *testing.T) {
 				chain := list[0]
 				if chain.TargetFunction != contentDataFunction {
 					t.Fatalf("unexpected target function %q", chain.TargetFunction)
+				}
+			},
+		},
+		{
+			name: "CallChainXML",
+			arguments: []string{
+				appTypes.CommandCallChain,
+				contentDataFunction,
+				"--format",
+				appTypes.FormatXML,
+			},
+			prepare: func(t *testing.T) string { return getModuleRoot(t) },
+			validate: func(t *testing.T, output string) {
+				type callChainsWrapper struct {
+					XMLName xml.Name `xml:"callchains"`
+					Chains  []struct {
+						TargetFunction string `xml:"targetFunction"`
+					} `xml:"callchain"`
+				}
+				var wrapper callChainsWrapper
+				if err := xml.Unmarshal([]byte(output), &wrapper); err != nil {
+					t.Fatalf("invalid XML: %v\n%s", err, output)
+				}
+				if len(wrapper.Chains) == 0 {
+					t.Fatalf("expected at least one element, got zero")
+				}
+				if wrapper.Chains[0].TargetFunction != contentDataFunction {
+					t.Fatalf("unexpected target function %q", wrapper.Chains[0].TargetFunction)
 				}
 			},
 		},

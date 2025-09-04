@@ -12,6 +12,7 @@ const (
 
 	FormatRaw  = "raw"
 	FormatJSON = "json"
+	FormatXML  = "xml"
 )
 
 // ValidatedPath is an absolute input path that already passed existence checks.
@@ -22,32 +23,32 @@ type ValidatedPath struct {
 
 // DocumentationEntry is a single piece of documentation attached to output.
 type DocumentationEntry struct {
-	Kind string `json:"type"`
-	Name string `json:"name"`
-	Doc  string `json:"documentation"`
+	Kind string `json:"type" xml:"type"`
+	Name string `json:"name" xml:"name"`
+	Doc  string `json:"documentation" xml:"documentation"`
 }
 
 // FileOutput represents one file returned by the content command.
 type FileOutput struct {
-	Path          string               `json:"path"`
-	Type          string               `json:"type"`
-	Content       string               `json:"content"`
-	Documentation []DocumentationEntry `json:"documentation,omitempty"`
+	Path          string               `json:"path" xml:"path"`
+	Type          string               `json:"type" xml:"type"`
+	Content       string               `json:"content" xml:"content"`
+	Documentation []DocumentationEntry `json:"documentation,omitempty" xml:"documentation>entry,omitempty"`
 }
 
 // TreeOutputNode represents a node of a directory tree returned by the tree command.
 type TreeOutputNode struct {
-	Path     string            `json:"path"`
-	Name     string            `json:"name"`
-	Type     string            `json:"type"`
-	Children []*TreeOutputNode `json:"children,omitempty"`
+	Path     string            `json:"path" xml:"path"`
+	Name     string            `json:"name" xml:"name"`
+	Type     string            `json:"type" xml:"type"`
+	Children []*TreeOutputNode `json:"children,omitempty" xml:"children>node,omitempty"`
 }
 
 // CallChainOutput is the result of the callchain command.
 type CallChainOutput struct {
-	TargetFunction string               `json:"targetFunction"`
-	Callers        []string             `json:"callers"`
-	Callees        *[]string            `json:"callees,omitempty"`
-	Functions      map[string]string    `json:"functions"`
-	Documentation  []DocumentationEntry `json:"documentation,omitempty"`
+	TargetFunction string               `json:"targetFunction" xml:"targetFunction"`
+	Callers        []string             `json:"callers" xml:"callers>caller"`
+	Callees        *[]string            `json:"callees,omitempty" xml:"callees>callee,omitempty"`
+	Functions      map[string]string    `json:"functions" xml:"-"`
+	Documentation  []DocumentationEntry `json:"documentation,omitempty" xml:"documentation>entry,omitempty"`
 }
