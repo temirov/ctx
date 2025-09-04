@@ -40,7 +40,18 @@ const (
 	unsupportedCommandMessage  = "unsupported command"
 	defaultCallChainDepth      = 1
 	callChainDepthDescription  = "traversal depth"
+	invalidFormatMessage       = "Invalid format value '%s'"
 )
+
+// validateOutputFormat ensures that the requested output format is supported.
+func validateOutputFormat(format string) error {
+	switch format {
+	case types.FormatRaw, types.FormatJSON, types.FormatXML:
+		return nil
+	default:
+		return fmt.Errorf(invalidFormatMessage, format)
+	}
+}
 
 // main is the entry point of the application.
 func main() {
@@ -100,8 +111,8 @@ func createTreeCommand() *cobra.Command {
 				withDocumentation = false
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
-			if outputFormatLower != types.FormatRaw && outputFormatLower != types.FormatJSON && outputFormatLower != types.FormatXML {
-				return fmt.Errorf("Invalid format value '%s'", outputFormatLower)
+			if err := validateOutputFormat(outputFormatLower); err != nil {
+				return err
 			}
 			return runTool(
 				types.CommandTree,
@@ -145,8 +156,8 @@ func createContentCommand() *cobra.Command {
 				arguments = []string{defaultPath}
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
-			if outputFormatLower != types.FormatRaw && outputFormatLower != types.FormatJSON && outputFormatLower != types.FormatXML {
-				return fmt.Errorf("Invalid format value '%s'", outputFormatLower)
+			if err := validateOutputFormat(outputFormatLower); err != nil {
+				return err
 			}
 			return runTool(
 				types.CommandContent,
@@ -184,8 +195,8 @@ func createCallChainCommand() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, arguments []string) error {
 			outputFormatLower := strings.ToLower(outputFormat)
-			if outputFormatLower != types.FormatRaw && outputFormatLower != types.FormatJSON && outputFormatLower != types.FormatXML {
-				return fmt.Errorf("Invalid format value '%s'", outputFormatLower)
+			if err := validateOutputFormat(outputFormatLower); err != nil {
+				return err
 			}
 			return runTool(
 				types.CommandCallChain,
