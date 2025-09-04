@@ -19,28 +19,38 @@ import (
 )
 
 const (
-	visibleFileName                 = "visible.txt"
-	hiddenFileName                  = "hidden.txt"
-	visibleFileContent              = "visible"
-	hiddenFileContent               = "secret"
-	includeGitFlag                  = "--git"
-	versionFlag                     = "--version"
-	treeAlias                       = "t"
-	subDirectoryName                = "sub"
-	gitignoreFileName               = ".gitignore"
-	nodeModulesDirName              = "node_modules"
-	dependencyFileName              = "dependency.js"
-	nodeModulesPattern              = nodeModulesDirName + "/\n"
-	dependencyFileContent           = "dependency"
-	commandDirectoryRelativePath    = "cmd/ctx"
-	integrationBinaryBaseName       = "ctx_integration_binary"
-	contentDataFunction             = "github.com/temirov/ctx/internal/commands.GetContentData"
-	runTreeOrContentCommandFunction = "github.com/temirov/ctx/cmd/ctx.runTreeOrContentCommand"
-	runToolFunction                 = "github.com/temirov/ctx/cmd/ctx.runTool"
-	callChainAlias                  = "cc"
-	formatFlag                      = "--format"
-	depthFlag                       = "--depth"
-	depthTwoValue                   = "2"
+	visibleFileName       = "visible.txt"
+	hiddenFileName        = "hidden.txt"
+	visibleFileContent    = "visible"
+	hiddenFileContent     = "secret"
+	includeGitFlag        = "--git"
+	versionFlag           = "--version"
+	treeAlias             = "t"
+	subDirectoryName      = "sub"
+	gitignoreFileName     = ".gitignore"
+	nodeModulesDirName    = "node_modules"
+	dependencyFileName    = "dependency.js"
+	nodeModulesPattern    = nodeModulesDirName + "/\n"
+	dependencyFileContent = "dependency"
+	// googleSheetsAddonDirectoryName names the root directory of the Google Sheets add-on fixture.
+	googleSheetsAddonDirectoryName = "google-sheets-addon"
+	// claspConfigurationFileName is the configuration file name for the Apps Script CLI.
+	claspConfigurationFileName = ".clasp.json"
+	// claspConfigurationPattern instructs git to ignore the clasp configuration file.
+	claspConfigurationPattern = claspConfigurationFileName + "\n"
+	// claspConfigurationContent is placeholder JSON content for the clasp configuration file.
+	claspConfigurationContent = "{\"scriptId\":\"1\"}"
+	// googleSheetsAddonGitignoreContent combines ignore rules for the add-on fixture.
+	googleSheetsAddonGitignoreContent = nodeModulesPattern + claspConfigurationPattern
+	commandDirectoryRelativePath      = "cmd/ctx"
+	integrationBinaryBaseName         = "ctx_integration_binary"
+	contentDataFunction               = "github.com/temirov/ctx/internal/commands.GetContentData"
+	runTreeOrContentCommandFunction   = "github.com/temirov/ctx/cmd/ctx.runTreeOrContentCommand"
+	runToolFunction                   = "github.com/temirov/ctx/cmd/ctx.runTool"
+	callChainAlias                    = "cc"
+	formatFlag                        = "--format"
+	depthFlag                         = "--depth"
+	depthTwoValue                     = "2"
 
 	usageSnippet = "Usage:\n  ctx"
 
@@ -187,6 +197,19 @@ func setupTestDirectory(testingHandle *testing.T, layout map[string]string) stri
 	}
 
 	return root
+}
+
+// setupGoogleSheetsAddonFixture creates a directory tree resembling a minimal Google Sheets add-on.
+// The returned path points to the add-on directory within the temporary workspace.
+func setupGoogleSheetsAddonFixture(testingHandle *testing.T) string {
+	layout := map[string]string{
+		filepath.Join(googleSheetsAddonDirectoryName, gitignoreFileName):                      googleSheetsAddonGitignoreContent,
+		filepath.Join(googleSheetsAddonDirectoryName, nodeModulesDirName, dependencyFileName): dependencyFileContent,
+		filepath.Join(googleSheetsAddonDirectoryName, claspConfigurationFileName):             claspConfigurationContent,
+		filepath.Join(googleSheetsAddonDirectoryName, visibleFileName):                        visibleFileContent,
+	}
+	root := setupTestDirectory(testingHandle, layout)
+	return filepath.Join(root, googleSheetsAddonDirectoryName)
 }
 
 // getModuleRoot returns the repository root directory.
@@ -803,6 +826,38 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if _, ok := names[visibleFileName]; !ok {
 					t.Fatalf("expected %s in output", visibleFileName)
+				}
+			},
+		},
+		{
+			name:      "GoogleSheetsAddonTreeOmitsIgnoredEntries",
+			arguments: []string{appTypes.CommandTree},
+			prepare:   setupGoogleSheetsAddonFixture,
+			validate: func(testingHandle *testing.T, output string) {
+				if strings.Contains(output, nodeModulesDirName) {
+					testingHandle.Fatalf("expected tree output to exclude %s\n%s", nodeModulesDirName, output)
+				}
+				if strings.Contains(output, claspConfigurationFileName) {
+					testingHandle.Fatalf("expected tree output to exclude %s\n%s", claspConfigurationFileName, output)
+				}
+				if !strings.Contains(output, visibleFileName) {
+					testingHandle.Fatalf("expected tree output to include %s\n%s", visibleFileName, output)
+				}
+			},
+		},
+		{
+			name:      "GoogleSheetsAddonContentOmitsIgnoredEntries",
+			arguments: []string{appTypes.CommandContent},
+			prepare:   setupGoogleSheetsAddonFixture,
+			validate: func(testingHandle *testing.T, output string) {
+				if strings.Contains(output, dependencyFileName) || strings.Contains(output, dependencyFileContent) {
+					testingHandle.Fatalf("expected content output to exclude %s\n%s", dependencyFileName, output)
+				}
+				if strings.Contains(output, claspConfigurationFileName) || strings.Contains(output, claspConfigurationContent) {
+					testingHandle.Fatalf("expected content output to exclude %s\n%s", claspConfigurationFileName, output)
+				}
+				if !strings.Contains(output, visibleFileName) || !strings.Contains(output, visibleFileContent) {
+					testingHandle.Fatalf("expected content output to include %s and its content\n%s", visibleFileName, output)
 				}
 			},
 		},
