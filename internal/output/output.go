@@ -11,25 +11,24 @@ import (
 )
 
 const (
-	indentPrefix          = ""
-	indentSpacer          = "  "
+	indentPrefix = ""
+	indentSpacer = "  "
+
 	separatorLine         = "----------------------------------------"
 	documentationHeader   = "--- Documentation ---"
 	callchainMetaHeader   = "----- CALLCHAIN METADATA -----"
 	callchainFunctionsHdr = "----- FUNCTIONS -----"
 	callchainDocsHeader   = "--- DOCS ---"
-	xmlHeader             = xml.Header
-	xmlRootElement        = "result"
-	xmlDocumentationName  = "documentation"
-	xmlCodeName           = "code"
-	xmlEntryName          = "entry"
-	xmlItemName           = "item"
-	xmlCallchainsName     = "callchains"
-	xmlCallchainName      = "callchain"
-	binaryContentOmitted  = "(binary content omitted)"
-	mimeTypeLabel         = "Mime Type: "
-	binaryNodeFormat      = "[Binary] %s (%s%s)\n"
-	binaryTreeFormat      = "%s[Binary] %s (%s%s)\n"
+
+	xmlHeader         = xml.Header
+	xmlRootElement    = "result"
+	xmlCallchainsName = "callchains"
+	xmlCallchainName  = "callchain"
+
+	binaryContentOmitted = "(binary content omitted)"
+	mimeTypeLabel        = "Mime Type: "
+	binaryNodeFormat     = "[Binary] %s (%s%s)\n"
+	binaryTreeFormat     = "%s[Binary] %s (%s%s)\n"
 )
 
 // RenderCallChainRaw returns the call‑chain output in raw text format.
