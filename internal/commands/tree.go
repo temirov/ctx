@@ -10,6 +10,11 @@ import (
 	"github.com/temirov/ctx/internal/utils"
 )
 
+const (
+	// warningSkipSubdirFormat is used when a subdirectory cannot be processed.
+	warningSkipSubdirFormat = "Warning: Skipping subdirectory %s due to error: %v\n"
+)
+
 // GetTreeData generates the tree structure data for a given directory.
 // It returns a slice containing a single root node representing the directory.
 // Warnings for skipped subdirectories are printed to stderr.
@@ -61,7 +66,7 @@ func buildTreeNodes(currentDirectoryPath string, rootDirectoryPath string, ignor
 			node.Type = types.NodeTypeDirectory
 			childNodes, buildError := buildTreeNodes(childPath, rootDirectoryPath, ignorePatterns, binaryContentPatterns)
 			if buildError != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Skipping subdirectory %s due to error: %v\n", childPath, buildError)
+				fmt.Fprintf(os.Stderr, warningSkipSubdirFormat, childPath, buildError)
 				node.Children = nil
 			} else {
 				node.Children = childNodes
