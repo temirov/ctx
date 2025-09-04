@@ -2,6 +2,7 @@ package utils_test
 
 import (
 	"encoding/base64"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,6 +18,44 @@ const binaryFileName = "sample.bin"
 
 // binaryBase64Content holds the base64 representation of the binary file content.
 const binaryBase64Content = "AAE="
+
+// directoryName defines the directory used for ignore tests.
+const directoryName = "dir"
+
+// exclusionPattern defines root-level exclusion pattern for the directory.
+const exclusionPattern = utils.ExclusionPrefix + directoryName
+
+// directoryPattern defines a pattern matching the directory.
+const directoryPattern = directoryName + "/"
+
+// wildcardTextPattern defines a pattern matching text files.
+const wildcardTextPattern = "*.txt"
+
+// wildcardMarkdownPattern defines a pattern matching markdown files.
+const wildcardMarkdownPattern = "*.md"
+
+// mockDirEntry implements os.DirEntry for testing.
+type mockDirEntry struct {
+	entryName string
+	directory bool
+}
+
+// Name returns the entry name.
+func (entry mockDirEntry) Name() string { return entry.entryName }
+
+// IsDir reports if the entry represents a directory.
+func (entry mockDirEntry) IsDir() bool { return entry.directory }
+
+// Type returns the file mode type.
+func (entry mockDirEntry) Type() fs.FileMode {
+	if entry.directory {
+		return fs.ModeDir
+	}
+	return 0
+}
+
+// Info returns file information.
+func (entry mockDirEntry) Info() (fs.FileInfo, error) { return nil, nil }
 
 // TestDeduplicatePatterns verifies that DeduplicatePatterns removes duplicate patterns.
 func TestDeduplicatePatterns(testingInstance *testing.T) {
@@ -110,6 +149,59 @@ func TestRelativePathOrSelf(testingInstance *testing.T) {
 		actual := utils.RelativePathOrSelf(testCase.fullPath, testCase.root)
 		if actual != testCase.expected {
 			testingInstance.Errorf("case %d (%s): expected %s, got %s", index, testCase.testName, testCase.expected, actual)
+		}
+	}
+}
+
+// TestShouldIgnore verifies directory entry ignoring rules.
+func TestShouldIgnore(testingInstance *testing.T) {
+	testCases := []struct {
+		testName       string
+		entry          mockDirEntry
+		patterns       []string
+		isRootLevel    bool
+		expectedIgnore bool
+	}{
+		{
+			testName:       "service file",
+			entry:          mockDirEntry{entryName: utils.GitIgnoreFileName, directory: false},
+			patterns:       nil,
+			isRootLevel:    false,
+			expectedIgnore: true,
+		},
+		{
+			testName:       "exclude pattern",
+			entry:          mockDirEntry{entryName: directoryName, directory: true},
+			patterns:       []string{exclusionPattern},
+			isRootLevel:    true,
+			expectedIgnore: true,
+		},
+		{
+			testName:       "directory pattern",
+			entry:          mockDirEntry{entryName: directoryName, directory: true},
+			patterns:       []string{directoryPattern},
+			isRootLevel:    false,
+			expectedIgnore: true,
+		},
+		{
+			testName:       "wildcard file pattern",
+			entry:          mockDirEntry{entryName: textFileName, directory: false},
+			patterns:       []string{wildcardTextPattern},
+			isRootLevel:    false,
+			expectedIgnore: true,
+		},
+		{
+			testName:       "not ignored",
+			entry:          mockDirEntry{entryName: textFileName, directory: false},
+			patterns:       []string{wildcardMarkdownPattern},
+			isRootLevel:    false,
+			expectedIgnore: false,
+		},
+	}
+	for index, testCase := range testCases {
+		actual := utils.ShouldIgnore(testCase.entry, testCase.patterns, testCase.isRootLevel)
+		if actual != testCase.expectedIgnore {
+			testingInstance.Errorf("case %d (%s): expected %t, got %t", index, testCase.testName, testCase.expectedIgnore, actual)
 		}
 	}
 }
