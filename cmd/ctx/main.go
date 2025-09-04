@@ -42,6 +42,8 @@ const (
 	callChainDepthDescription  = "traversal depth"
 	// invalidFormatMessage is used when an unsupported format is requested.
 	invalidFormatMessage = "Invalid format value '%s'"
+	// warningSkipPathFormat is used when a path is skipped due to an error.
+	warningSkipPathFormat = "Warning: skipping %s: %v\n"
 )
 
 // isSupportedFormat reports whether the provided format is recognized.
@@ -304,7 +306,7 @@ func runTreeOrContentCommand(
 		if info.IsDir {
 			ignorePatternList, binaryContentPatternList, loadError := config.LoadRecursiveIgnorePatterns(info.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile, includeGit)
 			if loadError != nil {
-				fmt.Fprintf(os.Stderr, "Warning: skipping %s: %v\n", info.AbsolutePath, loadError)
+				fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, loadError)
 				continue
 			}
 			if commandName == types.CommandTree {
