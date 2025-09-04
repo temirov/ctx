@@ -49,7 +49,30 @@ const (
 	// invalidFormatMessage is used when an unsupported format is requested.
 	invalidFormatMessage = "Invalid format value '%s'"
 	// warningSkipPathFormat is used when a path is skipped due to an error.
-	warningSkipPathFormat = "Warning: skipping %s: %v\n"
+	warningSkipPathFormat        = "Warning: skipping %s: %v\n"
+	aliasFormat                  = "%s (%s)"
+	commandDisplayNameAnnotation = "commandDisplayName"
+	helpTemplate                 = `{{with (or .Long .Short)}}{{.}}\n\n{{end}}Usage:
+  {{.UseLine}}
+{{if .HasAvailableSubCommands}}
+Available Commands:
+{{- range .Commands}}{{- if or .IsAvailableCommand (eq .Name "help")}}
+  {{rpad (index .Annotations "%s") .NamePadding }}{{.Short}}
+{{- end}}{{- end}}
+{{end}}{{if .HasAvailableLocalFlags}}
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
+{{end}}{{if .HasAvailableInheritedFlags}}
+Global Flags:
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}
+{{end}}{{if .HasHelpSubCommands}}
+Additional help topics:
+{{- range .Commands}}{{- if .IsAdditionalHelpTopicCommand}}
+  {{rpad .CommandPath .CommandPathPadding }}{{.Short}}
+{{- end}}{{- end}}
+{{end}}{{if not .HasSubCommands}}
+{{.UseLine}}{{if .HasExample}}\n\nExamples:\n{{.Example}}{{end}}
+{{end}}`
 )
 
 // isSupportedFormat reports whether the provided format is recognized.
@@ -60,6 +83,22 @@ func isSupportedFormat(format string) bool {
 	default:
 		return false
 	}
+}
+
+// FormatCommandWithAliases returns the command name joined with its aliases.
+// Aliases are comma-separated and enclosed in parentheses. If no aliases are
+// defined, only the command name is returned.
+func FormatCommandWithAliases(commandUsage string, commandAliases []string) string {
+	usageParts := strings.Fields(commandUsage)
+	if len(usageParts) == 0 {
+		return commandUsage
+	}
+	commandName := usageParts[0]
+	if len(commandAliases) == 0 {
+		return commandName
+	}
+	aliasList := strings.Join(commandAliases, ", ")
+	return fmt.Sprintf(aliasFormat, commandName, aliasList)
 }
 
 // main is the entry point of the application.
@@ -94,6 +133,16 @@ func createRootCommand() *cobra.Command {
 		createContentCommand(),
 		createCallChainCommand(),
 	)
+	rootCommand.InitDefaultHelpCmd()
+	rootCommand.InitDefaultCompletionCmd()
+	for _, subCommand := range rootCommand.Commands() {
+		formattedName := FormatCommandWithAliases(subCommand.Use, subCommand.Aliases) + " "
+		if subCommand.Annotations == nil {
+			subCommand.Annotations = make(map[string]string)
+		}
+		subCommand.Annotations[commandDisplayNameAnnotation] = formattedName
+	}
+	rootCommand.SetHelpTemplate(fmt.Sprintf(helpTemplate, commandDisplayNameAnnotation))
 	return rootCommand
 }
 
