@@ -13,6 +13,15 @@ import (
 	"testing"
 
 	appTypes "github.com/temirov/ctx/types"
+	"github.com/temirov/ctx/utils"
+)
+
+const (
+	visibleFileName    = "visible.txt"
+	hiddenFileName     = "hidden.txt"
+	visibleFileContent = "visible"
+	hiddenFileContent  = "secret"
+	includeGitFlag     = "--git"
 )
 
 func buildBinary(testingHandle *testing.T) string {
@@ -355,8 +364,8 @@ func TestCTX(testingHandle *testing.T) {
 				appTypes.FormatJSON,
 			},
 			prepare: func(t *testing.T) string {
-				if runtime.GOOS == "windows" {
-					t.Skip("Skipping unreadable file test on Windows")
+				if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+					t.Skip("Skipping unreadable file test on this platform")
 				}
 				return setupTestDirectory(t, map[string]string{
 					"readable.txt":   "OK",
@@ -409,6 +418,65 @@ func TestCTX(testingHandle *testing.T) {
 					if strings.HasPrefix(strings.TrimSpace(line), "Error:") {
 						t.Fatalf("unexpected error message in output:\n%s", output)
 					}
+				}
+			},
+		},
+		{
+			name: "GitDirectoryExcludedByDefault",
+			arguments: []string{
+				appTypes.CommandTree,
+			},
+			prepare: func(t *testing.T) string {
+				layout := map[string]string{
+					filepath.Join(utils.GitDirectoryName, hiddenFileName): hiddenFileContent,
+					visibleFileName: visibleFileContent,
+				}
+				return setupTestDirectory(t, layout)
+			},
+			validate: func(t *testing.T, output string) {
+				var nodes []appTypes.TreeOutputNode
+				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
+					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(nodes) != 1 {
+					t.Fatalf("expected one root node, got %d", len(nodes))
+				}
+				children := nodes[0].Children
+				if len(children) != 1 || children[0].Name != visibleFileName {
+					t.Fatalf("expected only %s, got %#v", visibleFileName, children)
+				}
+			},
+		},
+		{
+			name: "GitDirectoryIncludedWithFlag",
+			arguments: []string{
+				appTypes.CommandTree,
+				includeGitFlag,
+			},
+			prepare: func(t *testing.T) string {
+				layout := map[string]string{
+					filepath.Join(utils.GitDirectoryName, hiddenFileName): hiddenFileContent,
+					visibleFileName: visibleFileContent,
+				}
+				return setupTestDirectory(t, layout)
+			},
+			validate: func(t *testing.T, output string) {
+				var nodes []appTypes.TreeOutputNode
+				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
+					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(nodes) != 1 {
+					t.Fatalf("expected one root node, got %d", len(nodes))
+				}
+				names := make(map[string]struct{})
+				for _, child := range nodes[0].Children {
+					names[child.Name] = struct{}{}
+				}
+				if _, ok := names[utils.GitDirectoryName]; !ok {
+					t.Fatalf("expected %s in output", utils.GitDirectoryName)
+				}
+				if _, ok := names[visibleFileName]; !ok {
+					t.Fatalf("expected %s in output", visibleFileName)
 				}
 			},
 		},
