@@ -33,6 +33,7 @@ type FileOutput struct {
 	Path          string               `json:"path" xml:"path"`
 	Type          string               `json:"type" xml:"type"`
 	Content       string               `json:"content" xml:"content"`
+	MimeType      string               `json:"mimeType,omitempty" xml:"mimeType,omitempty"`
 	Documentation []DocumentationEntry `json:"documentation,omitempty" xml:"documentation>entry,omitempty"`
 }
 
@@ -41,6 +42,7 @@ type TreeOutputNode struct {
 	Path     string            `json:"path" xml:"path"`
 	Name     string            `json:"name" xml:"name"`
 	Type     string            `json:"type" xml:"type"`
+	MimeType string            `json:"mimeType,omitempty" xml:"mimeType,omitempty"`
 	Children []*TreeOutputNode `json:"children,omitempty" xml:"children>node,omitempty"`
 }
 
