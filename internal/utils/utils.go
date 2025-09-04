@@ -7,12 +7,16 @@ import (
 	"strings"
 )
 
-// Constants related to ignore file handling.
+// Ignore file constants used across the project.
 const (
-	IgnoreFileName    = ".ignore"
+	// IgnoreFileName is the name of the project's ignore file.
+	IgnoreFileName = ".ignore"
+	// GitIgnoreFileName is the name of the Git ignore file.
 	GitIgnoreFileName = ".gitignore"
-	ExclusionPrefix   = "EXCL:"
-	GitDirectoryName  = ".git"
+	// ExclusionPrefix marks patterns that exclude directories from processing.
+	ExclusionPrefix = "EXCL:"
+	// GitDirectoryName is the name of the Git repository directory.
+	GitDirectoryName = ".git"
 )
 
 var serviceFiles = map[string]struct{}{
