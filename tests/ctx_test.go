@@ -385,6 +385,61 @@ func TestCTX(testingHandle *testing.T) {
 			},
 		},
 		{
+			name: "BinaryFileContentJSON",
+			arguments: []string{
+				appTypes.CommandContent,
+				".",
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"bin.dat": "\x00\x01\x02",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				var files []appTypes.FileOutput
+				if err := json.Unmarshal([]byte(output), &files); err != nil {
+					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(files) != 1 {
+					t.Fatalf("expected one item, got %d", len(files))
+				}
+				if files[0].Type != appTypes.NodeTypeBinary {
+					t.Fatalf("expected type %q, got %q", appTypes.NodeTypeBinary, files[0].Type)
+				}
+				if files[0].Content != "" {
+					t.Fatalf("expected empty content for binary file, got %q", files[0].Content)
+				}
+			},
+		},
+		{
+			name: "BinaryFileTreeJSON",
+			arguments: []string{
+				appTypes.CommandTree,
+				".",
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"bin.dat": "\x00\x01\x02",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				var nodes []appTypes.TreeOutputNode
+				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
+					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(nodes) != 1 {
+					t.Fatalf("expected one top-level node, got %d", len(nodes))
+				}
+				if len(nodes[0].Children) != 1 {
+					t.Fatalf("expected one child, got %d", len(nodes[0].Children))
+				}
+				child := nodes[0].Children[0]
+				if child.Type != appTypes.NodeTypeBinary {
+					t.Fatalf("expected type %q, got %q", appTypes.NodeTypeBinary, child.Type)
+				}
+			},
+		},
+		{
 			name: "InvalidFormatValue",
 			arguments: []string{
 				appTypes.CommandContent,
