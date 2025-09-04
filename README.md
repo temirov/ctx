@@ -14,7 +14,7 @@ and **optional embedded documentation** for referenced packages and symbols.
 - **Embedded Documentation (`--doc`):** When the `--doc` flag is used with the `content` or `callchain` command,
   ctx embeds documentation for imported third-party packages and referenced functions in the output (both *raw* and
   *json* formats).
-- **Output Formats:** Supports **raw** text output (default) and **json** output using the `--format` flag for all
+- **Output Formats:** Supports **raw** text output (default), **json**, and **xml** output using the `--format` flag for all
   commands.
 - **Tree Command (`tree`, `t`):**
     - *Raw format:* Recursively displays the directory structure for each specified directory in a tree-like format,
@@ -82,7 +82,7 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--no-gitignore`      | tree, content      | Disable loading of `.gitignore` files. |
 | `--no-ignore`         | tree, content      | Disable loading of `.ignore` files. |
 | `--git`               | tree, content      | Include the `.git` directory during traversal. |
-| `--format <raw|json>` | all commands       | Select output format (default `raw`). |
+| `--format <raw|json|xml>` | all commands       | Select output format (default `raw`). |
 | `--doc`               | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
 | `--version`           | all commands       | Print ctx version and exit. |
 
@@ -112,6 +112,7 @@ ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --doc --fo
 |--------|--------------------------------|--------------------------------------------|------------------|
 | raw    | Text tree view (`[File] path`) | File blocks (`File: path ... End of file`) | Metadata, source blocks; docs when `--doc`. |
 | json   | `[]TreeOutputNode`             | `[]FileOutput`                             | `CallChainOutput` |
+| xml    | `result/code/item` nodes       | `result/code/item` nodes                   | `callchains/callchain` |
 
 ## Configuration
 
