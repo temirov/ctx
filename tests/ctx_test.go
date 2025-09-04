@@ -19,19 +19,25 @@ import (
 )
 
 const (
-	visibleFileName       = "visible.txt"
-	hiddenFileName        = "hidden.txt"
-	visibleFileContent    = "visible"
-	hiddenFileContent     = "secret"
-	includeGitFlag        = "--git"
-	versionFlag           = "--version"
-	treeAlias             = "t"
+	visibleFileName    = "visible.txt"
+	hiddenFileName     = "hidden.txt"
+	visibleFileContent = "visible"
+	hiddenFileContent  = "secret"
+	includeGitFlag     = "--git"
+	versionFlag        = "--version"
+	treeAlias          = "t"
+	// contentAlias represents the shorthand for the content command.
+	contentAlias          = "c"
 	subDirectoryName      = "sub"
 	gitignoreFileName     = ".gitignore"
 	nodeModulesDirName    = "node_modules"
 	dependencyFileName    = "dependency.js"
 	nodeModulesPattern    = nodeModulesDirName + "/\n"
 	dependencyFileContent = "dependency"
+	// ignoredFileName names a file that should be excluded by gitignore.
+	ignoredFileName = "ignored.txt"
+	// ignoredFileContent supplies the content for ignoredFileName.
+	ignoredFileContent = "ignore"
 	// googleSheetsAddonDirectoryName names the root directory of the Google Sheets add-on fixture.
 	googleSheetsAddonDirectoryName = "google-sheets-addon"
 	// claspConfigurationFileName is the configuration file name for the Apps Script CLI.
@@ -887,6 +893,42 @@ func TestCTX(testingHandle *testing.T) {
 				subNode := rootChildren[0]
 				if len(subNode.Children) != 1 || subNode.Children[0].Name != visibleFileName {
 					t.Fatalf("expected only %s in %s, got %#v", visibleFileName, subDirectoryName, subNode.Children)
+				}
+			},
+		},
+		{
+			name:      "NestedGitignoreContentExcluded",
+			arguments: []string{contentAlias},
+			prepare: func(testingHandle *testing.T) string {
+				directoryLayout := map[string]string{
+					filepath.Join(subDirectoryName, gitignoreFileName):                      nodeModulesPattern + ignoredFileName + "\n",
+					filepath.Join(subDirectoryName, nodeModulesDirName, dependencyFileName): dependencyFileContent,
+					filepath.Join(subDirectoryName, ignoredFileName):                        ignoredFileContent,
+					filepath.Join(subDirectoryName, visibleFileName):                        visibleFileContent,
+				}
+				return setupTestDirectory(testingHandle, directoryLayout)
+			},
+			validate: func(testingHandle *testing.T, output string) {
+				if strings.Contains(output, nodeModulesDirName) {
+					testingHandle.Fatalf("expected content output to exclude %s\n%s", nodeModulesDirName, output)
+				}
+				if strings.Contains(output, ignoredFileName) {
+					testingHandle.Fatalf("expected content output to exclude %s\n%s", ignoredFileName, output)
+				}
+				var fileOutputs []appTypes.FileOutput
+				if err := json.Unmarshal([]byte(output), &fileOutputs); err != nil {
+					testingHandle.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(fileOutputs) != 1 {
+					testingHandle.Fatalf("expected one file, got %d", len(fileOutputs))
+				}
+				expectedSuffix := filepath.Join(subDirectoryName, visibleFileName)
+				fileOutput := fileOutputs[0]
+				if !strings.HasSuffix(fileOutput.Path, expectedSuffix) {
+					testingHandle.Fatalf("expected path suffix %s, got %s", expectedSuffix, fileOutput.Path)
+				}
+				if fileOutput.Content != visibleFileContent {
+					testingHandle.Fatalf("expected content %s, got %s", visibleFileContent, fileOutput.Content)
 				}
 			},
 		},
