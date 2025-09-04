@@ -112,11 +112,12 @@ func ShouldIgnore(directoryEntry os.DirEntry, ignorePatterns []string, isRootLev
 	return false
 }
 
-// ShouldIgnoreByPath reports whether relativePath should be ignored.
+// ShouldIgnoreByPath reports whether relativePath matches an entry in ignorePatterns.
 // Both relativePath and ignorePatterns are converted to forward-slash form.
-// Patterns are matched hierarchically against path segments. A pattern ending
-// with a slash ignores the directory and all of its descendants, preventing
-// further traversal.
+// A pattern ending with the pathSeparator constant targets a directory and all of its descendants.
+// A pattern without pathSeparator matches only the last segment of the path. Patterns containing pathSeparator evaluate each
+// segment hierarchically, such that "a/b" matches only when both segments align.
+// Patterns prefixed with ExclusionPrefix match the top-level directory name and prevent traversal into that directory.
 func ShouldIgnoreByPath(relativePath string, ignorePatterns []string) bool {
 	normalizedPath := normalizeToForwardSlash(relativePath)
 	pathSegments := strings.Split(normalizedPath, pathSeparator)
