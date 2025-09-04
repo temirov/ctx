@@ -202,7 +202,7 @@ func runTreeOrContentCommand(
 	var collected []interface{}
 	for _, info := range validated {
 		if info.IsDir {
-			patterns, err := config.LoadCombinedIgnorePatterns(info.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile)
+			patterns, err := config.LoadCombinedIgnorePatterns(info.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile, true)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: skipping %s: %v\n", info.AbsolutePath, err)
 				continue

@@ -52,8 +52,14 @@ func LoadIgnoreFilePatterns(ignoreFilePath string) ([]string, error) {
 }
 
 // LoadCombinedIgnorePatterns loads patterns from .ignore and/or .gitignore files within a directory,
-// adds the exclusion folder pattern if specified, and returns the combined, deduplicated list.
-func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder string, useGitignore bool, useIgnoreFile bool) ([]string, error) {
+// optionally adds the exclusion folder pattern, and returns the combined, deduplicated list.
+func LoadCombinedIgnorePatterns(
+	absoluteDirectoryPath string,
+	exclusionFolder string,
+	useGitignore bool,
+	useIgnoreFile bool,
+	includeExclusion bool,
+) ([]string, error) {
 	var combinedPatterns []string
 
 	if useIgnoreFile {
@@ -77,7 +83,7 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 	deduplicatedFilePatterns := utils.DeduplicatePatterns(combinedPatterns)
 
 	trimmedExclusion := strings.TrimSpace(exclusionFolder)
-	if trimmedExclusion != "" {
+	if includeExclusion && trimmedExclusion != "" {
 		normalizedExclusion := strings.TrimSuffix(trimmedExclusion, "/")
 		exclusionPattern := exclusionPrefix + normalizedExclusion
 		isPresent := false

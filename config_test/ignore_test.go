@@ -119,6 +119,7 @@ func TestLoadCombinedIgnorePatterns(testingHandle *testing.T) {
 		exclusion        string
 		useGitignore     bool
 		useIgnoreFile    bool
+		includeExclusion bool
 		expectedPatterns []string
 		expectError      bool
 	}{
@@ -130,6 +131,7 @@ func TestLoadCombinedIgnorePatterns(testingHandle *testing.T) {
 			exclusion:        "",
 			useGitignore:     true,
 			useIgnoreFile:    true,
+			includeExclusion: false,
 			expectedPatterns: []string{},
 			expectError:      false,
 		},
@@ -146,6 +148,7 @@ func TestLoadCombinedIgnorePatterns(testingHandle *testing.T) {
 			exclusion:        exclusionFolderName,
 			useGitignore:     true,
 			useIgnoreFile:    true,
+			includeExclusion: true,
 			expectedPatterns: []string{patternAlpha, patternBeta, exclusionPattern},
 			expectError:      false,
 		},
@@ -160,6 +163,7 @@ func TestLoadCombinedIgnorePatterns(testingHandle *testing.T) {
 			exclusion:        "",
 			useGitignore:     false,
 			useIgnoreFile:    true,
+			includeExclusion: false,
 			expectedPatterns: nil,
 			expectError:      true,
 		},
@@ -174,6 +178,7 @@ func TestLoadCombinedIgnorePatterns(testingHandle *testing.T) {
 			exclusion:        "",
 			useGitignore:     true,
 			useIgnoreFile:    false,
+			includeExclusion: false,
 			expectedPatterns: nil,
 			expectError:      true,
 		},
@@ -182,7 +187,7 @@ func TestLoadCombinedIgnorePatterns(testingHandle *testing.T) {
 	for _, testCase := range testCases {
 		testingHandle.Run(testCase.name, func(testingHandle *testing.T) {
 			directoryPath := testCase.setup(testingHandle)
-			patterns, loadError := config.LoadCombinedIgnorePatterns(directoryPath, testCase.exclusion, testCase.useGitignore, testCase.useIgnoreFile)
+			patterns, loadError := config.LoadCombinedIgnorePatterns(directoryPath, testCase.exclusion, testCase.useGitignore, testCase.useIgnoreFile, testCase.includeExclusion)
 			if testCase.expectError {
 				if loadError == nil {
 					testingHandle.Fatalf("expected error for %s", testCase.name)
