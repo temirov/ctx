@@ -25,7 +25,7 @@ func GetTreeData(rootDirPath string, ignorePatterns []string) ([]*types.TreeOutp
 		Type: types.NodeTypeDirectory,
 	}
 
-	children, err := buildTreeNodes(absoluteRootDirPath, ignorePatterns, true)
+	children, err := buildTreeNodes(absoluteRootDirPath, absoluteRootDirPath, ignorePatterns)
 	if err != nil {
 		return nil, fmt.Errorf("building tree for %s: %w", rootDirPath, err)
 	}
@@ -34,7 +34,7 @@ func GetTreeData(rootDirPath string, ignorePatterns []string) ([]*types.TreeOutp
 	return []*types.TreeOutputNode{rootNode}, nil
 }
 
-func buildTreeNodes(currentDirectoryPath string, ignorePatterns []string, isRootLevel bool) ([]*types.TreeOutputNode, error) {
+func buildTreeNodes(currentDirectoryPath string, rootDirectoryPath string, ignorePatterns []string) ([]*types.TreeOutputNode, error) {
 	var nodes []*types.TreeOutputNode
 
 	directoryEntries, readDirError := os.ReadDir(currentDirectoryPath)
@@ -43,11 +43,12 @@ func buildTreeNodes(currentDirectoryPath string, ignorePatterns []string, isRoot
 	}
 
 	for _, entry := range directoryEntries {
-		if utils.ShouldIgnore(entry, ignorePatterns, isRootLevel) {
+		childPath := filepath.Join(currentDirectoryPath, entry.Name())
+		relativeChildPath := utils.RelativePathOrSelf(childPath, rootDirectoryPath)
+		if utils.ShouldIgnoreByPath(relativeChildPath, ignorePatterns) {
 			continue
 		}
 
-		childPath := filepath.Join(currentDirectoryPath, entry.Name())
 		node := &types.TreeOutputNode{
 			Path: childPath,
 			Name: entry.Name(),
@@ -55,7 +56,7 @@ func buildTreeNodes(currentDirectoryPath string, ignorePatterns []string, isRoot
 
 		if entry.IsDir() {
 			node.Type = types.NodeTypeDirectory
-			childNodes, err := buildTreeNodes(childPath, ignorePatterns, false)
+			childNodes, err := buildTreeNodes(childPath, rootDirectoryPath, ignorePatterns)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Skipping subdirectory %s due to error: %v\n", childPath, err)
 				node.Children = nil
