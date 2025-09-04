@@ -19,9 +19,10 @@ import (
 	"golang.org/x/tools/go/ssa/ssautil"
 )
 
-// GetCallChainData returns the call chain information for the requested function.
+// GetCallChainData returns call chain information up to the specified depth.
 func GetCallChainData(
 	targetFunctionQualifiedName string,
+	callChainDepth int,
 	includeDocumentation bool,
 	documentationCollector *docs.Collector,
 	repositoryRootDirectory string,
@@ -50,27 +51,53 @@ func GetCallChainData(
 		return nil, fmt.Errorf("target function %q not found in call graph", targetFunctionQualifiedName)
 	}
 
-	var directCallerNames []string
-	for _, inEdge := range targetNode.In {
-		if inEdge.Caller != nil && inEdge.Caller.Func != nil {
-			directCallerNames = append(directCallerNames, inEdge.Caller.Func.String())
+	visitedCallers := map[*callgraph.Node]struct{}{targetNode: {}}
+	callerQueue := []*callgraph.Node{targetNode}
+	var callerNames []string
+	for depth := 0; depth < callChainDepth; depth++ {
+		var next []*callgraph.Node
+		for _, node := range callerQueue {
+			for _, inEdge := range node.In {
+				if inEdge.Caller == nil || inEdge.Caller.Func == nil {
+					continue
+				}
+				if _, seen := visitedCallers[inEdge.Caller]; seen {
+					continue
+				}
+				visitedCallers[inEdge.Caller] = struct{}{}
+				callerNames = append(callerNames, inEdge.Caller.Func.String())
+				next = append(next, inEdge.Caller)
+			}
 		}
+		callerQueue = next
 	}
 
-	var directCalleeNames []string
-	for _, outEdge := range targetNode.Out {
-		if outEdge.Callee != nil && outEdge.Callee.Func != nil {
-			directCalleeNames = append(directCalleeNames, outEdge.Callee.Func.String())
+	visitedCallees := map[*callgraph.Node]struct{}{targetNode: {}}
+	calleeQueue := []*callgraph.Node{targetNode}
+	var calleeNames []string
+	for depth := 0; depth < callChainDepth; depth++ {
+		var next []*callgraph.Node
+		for _, node := range calleeQueue {
+			for _, outEdge := range node.Out {
+				if outEdge.Callee == nil || outEdge.Callee.Func == nil {
+					continue
+				}
+				if _, seen := visitedCallees[outEdge.Callee]; seen {
+					continue
+				}
+				visitedCallees[outEdge.Callee] = struct{}{}
+				calleeNames = append(calleeNames, outEdge.Callee.Func.String())
+				next = append(next, outEdge.Callee)
+			}
 		}
+		calleeQueue = next
 	}
 
-	relevantFunctionNames := map[string]struct{}{
-		targetNode.Func.String(): {},
-	}
-	for _, name := range directCallerNames {
+	relevantFunctionNames := map[string]struct{}{targetNode.Func.String(): {}}
+	for _, name := range callerNames {
 		relevantFunctionNames[name] = struct{}{}
 	}
-	for _, name := range directCalleeNames {
+	for _, name := range calleeNames {
 		relevantFunctionNames[name] = struct{}{}
 	}
 
@@ -104,11 +131,11 @@ func GetCallChainData(
 
 	output := &apptypes.CallChainOutput{
 		TargetFunction: targetFunctionQualifiedName,
-		Callers:        directCallerNames,
+		Callers:        callerNames,
 		Functions:      functionSources,
 	}
-	if len(directCalleeNames) > 0 {
-		output.Callees = &directCalleeNames
+	if len(calleeNames) > 0 {
+		output.Callees = &calleeNames
 	}
 
 	if includeDocumentation && documentationCollector != nil {
