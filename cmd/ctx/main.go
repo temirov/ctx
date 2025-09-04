@@ -94,7 +94,7 @@ func createTreeCommand() *cobra.Command {
 				withDocumentation = false
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
-			if outputFormatLower != types.FormatRaw && outputFormatLower != types.FormatJSON {
+			if outputFormatLower != types.FormatRaw && outputFormatLower != types.FormatJSON && outputFormatLower != types.FormatXML {
 				return fmt.Errorf("Invalid format value '%s'", outputFormatLower)
 			}
 			return runTool(
@@ -138,7 +138,7 @@ func createContentCommand() *cobra.Command {
 				arguments = []string{defaultPath}
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
-			if outputFormatLower != types.FormatRaw && outputFormatLower != types.FormatJSON {
+			if outputFormatLower != types.FormatRaw && outputFormatLower != types.FormatJSON && outputFormatLower != types.FormatXML {
 				return fmt.Errorf("Invalid format value '%s'", outputFormatLower)
 			}
 			return runTool(
@@ -175,7 +175,7 @@ func createCallChainCommand() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, arguments []string) error {
 			outputFormatLower := strings.ToLower(outputFormat)
-			if outputFormatLower != types.FormatRaw && outputFormatLower != types.FormatJSON {
+			if outputFormatLower != types.FormatRaw && outputFormatLower != types.FormatJSON && outputFormatLower != types.FormatXML {
 				return fmt.Errorf("Invalid format value '%s'", outputFormatLower)
 			}
 			return runTool(
@@ -241,6 +241,12 @@ func runCallChain(
 	}
 	if format == types.FormatJSON {
 		out, err := output.RenderCallChainJSON(data)
+		if err != nil {
+			return err
+		}
+		fmt.Println(out)
+	} else if format == types.FormatXML {
+		out, err := output.RenderCallChainXML(data)
 		if err != nil {
 			return err
 		}
@@ -340,6 +346,13 @@ func runTreeOrContentCommand(
 
 	if format == types.FormatJSON {
 		out, err := output.RenderJSON(documentationEntries, collected)
+		if err != nil {
+			return err
+		}
+		fmt.Println(out)
+		return nil
+	} else if format == types.FormatXML {
+		out, err := output.RenderXML(documentationEntries, collected)
 		if err != nil {
 			return err
 		}

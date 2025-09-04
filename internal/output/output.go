@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"sort"
 
@@ -10,20 +11,28 @@ import (
 )
 
 const (
-	indentPrefix     = ""
-	indentSpacer     = "  "
-	separatorLine    = "----------------------------------------"
-	documentationHdr = "--- Documentation ---"
-	callchainMetaHdr = "----- CALLCHAIN METADATA -----"
-	callchainFuncHdr = "----- FUNCTIONS -----"
-	callchainDocsHdr = "--- DOCS ---"
+	indentPrefix          = ""
+	indentSpacer          = "  "
+	separatorLine         = "----------------------------------------"
+	documentationHeader   = "--- Documentation ---"
+	callchainMetaHeader   = "----- CALLCHAIN METADATA -----"
+	callchainFunctionsHdr = "----- FUNCTIONS -----"
+	callchainDocsHeader   = "--- DOCS ---"
+	xmlHeader             = xml.Header
+	xmlRootElement        = "result"
+	xmlDocumentationName  = "documentation"
+	xmlCodeName           = "code"
+	xmlEntryName          = "entry"
+	xmlItemName           = "item"
+	xmlCallchainsName     = "callchains"
+	xmlCallchainName      = "callchain"
 )
 
 // RenderCallChainRaw returns the call‑chain output in raw text format.
 func RenderCallChainRaw(data *types.CallChainOutput) string {
 	var buf bytes.Buffer
 
-	buf.WriteString(callchainMetaHdr + "\n")
+	buf.WriteString(callchainMetaHeader + "\n")
 	buf.WriteString("Target Function: " + data.TargetFunction + "\n")
 	buf.WriteString("Callers:\n")
 	if len(data.Callers) == 0 {
@@ -42,7 +51,7 @@ func RenderCallChainRaw(data *types.CallChainOutput) string {
 		}
 	}
 	buf.WriteString("\n")
-	buf.WriteString(callchainFuncHdr + "\n")
+	buf.WriteString(callchainFunctionsHdr + "\n")
 	for _, name := range orderedFunctionNames(data) {
 		buf.WriteString("Function: " + name + "\n")
 		buf.WriteString(separatorLine + "\n")
@@ -50,7 +59,7 @@ func RenderCallChainRaw(data *types.CallChainOutput) string {
 		buf.WriteString(separatorLine + "\n\n")
 	}
 	if len(data.Documentation) > 0 {
-		buf.WriteString(callchainDocsHdr + "\n")
+		buf.WriteString(callchainDocsHeader + "\n")
 		for _, e := range data.Documentation {
 			buf.WriteString(e.Kind + " " + e.Name + "\n")
 			if e.Doc != "" {
@@ -68,6 +77,54 @@ func RenderCallChainJSON(data *types.CallChainOutput) (string, error) {
 	array := []types.CallChainOutput{*data}
 	encoded, err := json.MarshalIndent(array, indentPrefix, indentSpacer)
 	return string(encoded), err
+}
+
+// RenderCallChainXML marshals the call-chain output as an XML document.
+func RenderCallChainXML(data *types.CallChainOutput) (string, error) {
+	var callees []string
+	if data.Callees != nil {
+		callees = *data.Callees
+	}
+	type xmlFunction struct {
+		Name string `xml:"name"`
+		Body string `xml:"body"`
+	}
+	var functionList []xmlFunction
+	names := make([]string, 0, len(data.Functions))
+	for name := range data.Functions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		functionList = append(functionList, xmlFunction{Name: name, Body: data.Functions[name]})
+	}
+	type xmlCallChain struct {
+		TargetFunction string                     `xml:"targetFunction"`
+		Callers        []string                   `xml:"callers>caller"`
+		Callees        []string                   `xml:"callees>callee,omitempty"`
+		Functions      []xmlFunction              `xml:"functions>function"`
+		Documentation  []types.DocumentationEntry `xml:"documentation>entry,omitempty"`
+	}
+	wrapper := struct {
+		XMLName xml.Name       `xml:""`
+		Chains  []xmlCallChain `xml:"callchain"`
+	}{
+		XMLName: xml.Name{Local: xmlCallchainsName},
+		Chains: []xmlCallChain{
+			{
+				TargetFunction: data.TargetFunction,
+				Callers:        data.Callers,
+				Callees:        callees,
+				Functions:      functionList,
+				Documentation:  data.Documentation,
+			},
+		},
+	}
+	encoded, err := xml.MarshalIndent(wrapper, indentPrefix, indentSpacer)
+	if err != nil {
+		return "", err
+	}
+	return xmlHeader + string(encoded), nil
 }
 
 // RenderJSON deduplicates and marshals documentation and results to JSON.
@@ -94,13 +151,33 @@ func RenderJSON(documentationEntries []types.DocumentationEntry, collected []int
 	return string(encoded), err
 }
 
+// RenderXML deduplicates and marshals documentation and results to XML.
+func RenderXML(documentationEntries []types.DocumentationEntry, collected []interface{}) (string, error) {
+	dedupedDocs := dedupeDocumentationEntries(documentationEntries)
+	dedupedItems := dedupeCollectedItems(collected)
+	bundle := struct {
+		XMLName       xml.Name                   `xml:""`
+		Documentation []types.DocumentationEntry `xml:"documentation>entry,omitempty"`
+		Code          []interface{}              `xml:"code>item,omitempty"`
+	}{
+		XMLName:       xml.Name{Local: xmlRootElement},
+		Documentation: dedupedDocs,
+		Code:          dedupedItems,
+	}
+	encoded, err := xml.MarshalIndent(bundle, indentPrefix, indentSpacer)
+	if err != nil {
+		return "", err
+	}
+	return xmlHeader + string(encoded), nil
+}
+
 // RenderRaw deduplicates and prints documentation and results in raw text format.
 func RenderRaw(commandName string, documentationEntries []types.DocumentationEntry, collected []interface{}) error {
 	dedupedDocs := dedupeDocumentationEntries(documentationEntries)
 	dedupedItems := dedupeCollectedItems(collected)
 
 	if len(dedupedDocs) > 0 {
-		fmt.Println(documentationHdr)
+		fmt.Println(documentationHeader)
 		for _, entry := range dedupedDocs {
 			fmt.Println(entry.Kind, entry.Name)
 			if entry.Doc != "" {
