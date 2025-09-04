@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	appTypes "github.com/temirov/ctx/types"
-	"github.com/temirov/ctx/utils"
+	appTypes "github.com/temirov/ctx/internal/types"
+	"github.com/temirov/ctx/internal/utils"
 )
 
 const (
@@ -30,8 +30,11 @@ const (
 	dependencyFileName    = "dependency.js"
 	nodeModulesPattern    = nodeModulesDirName + "/\n"
 	dependencyFileContent = "dependency"
+	buildTargetPath       = "./cmd/ctx"
+	contentDataFunction   = "github.com/temirov/ctx/internal/commands.GetContentData"
 )
 
+// buildBinary compiles the ctx binary and returns its path.
 func buildBinary(testingHandle *testing.T) string {
 	testingHandle.Helper()
 
@@ -48,7 +51,7 @@ func buildBinary(testingHandle *testing.T) string {
 	}
 
 	moduleRoot := filepath.Dir(currentDirectory)
-	buildCommand := exec.Command("go", "build", "-o", binaryPath, ".")
+	buildCommand := exec.Command("go", "build", "-o", binaryPath, buildTargetPath)
 	buildCommand.Dir = moduleRoot
 
 	combinedOutput, buildError := buildCommand.CombinedOutput()
@@ -59,6 +62,7 @@ func buildBinary(testingHandle *testing.T) string {
 	return binaryPath
 }
 
+// runCommand executes the binary with arguments and returns stdout.
 func runCommand(testingHandle *testing.T, binaryPath string, arguments []string, workingDirectory string) string {
 	testingHandle.Helper()
 
@@ -89,6 +93,7 @@ func runCommand(testingHandle *testing.T, binaryPath string, arguments []string,
 	return stdout
 }
 
+// runCommandExpectError runs the binary expecting a failure and returns combined output.
 func runCommandExpectError(testingHandle *testing.T, binaryPath string, arguments []string, workingDirectory string) string {
 	testingHandle.Helper()
 
@@ -109,6 +114,7 @@ func runCommandExpectError(testingHandle *testing.T, binaryPath string, argument
 	return output
 }
 
+// runCommandWithWarnings runs the binary and returns stdout while allowing warnings.
 func runCommandWithWarnings(testingHandle *testing.T, binaryPath string, arguments []string, workingDirectory string) string {
 	testingHandle.Helper()
 
@@ -140,6 +146,7 @@ func runCommandWithWarnings(testingHandle *testing.T, binaryPath string, argumen
 	return stdout
 }
 
+// setupTestDirectory creates a temporary directory populated with the provided layout.
 func setupTestDirectory(testingHandle *testing.T, layout map[string]string) string {
 	testingHandle.Helper()
 
@@ -168,6 +175,7 @@ func setupTestDirectory(testingHandle *testing.T, layout map[string]string) stri
 	return root
 }
 
+// getModuleRoot returns the repository root directory.
 func getModuleRoot(testingHandle *testing.T) string {
 	testingHandle.Helper()
 
@@ -208,7 +216,7 @@ func TestCTX(testingHandle *testing.T) {
 			name: "DocFlagCallChainRaw",
 			arguments: []string{
 				"callchain",
-				"github.com/temirov/ctx/commands.GetContentData",
+				contentDataFunction,
 				"--doc",
 				"--format",
 				"raw",
@@ -316,13 +324,13 @@ func TestCTX(testingHandle *testing.T) {
 			name: "CallChainRaw",
 			arguments: []string{
 				appTypes.CommandCallChain,
-				"github.com/temirov/ctx/commands.GetContentData",
+				contentDataFunction,
 				"--format",
 				appTypes.FormatRaw,
 			},
 			prepare: func(t *testing.T) string { return getModuleRoot(t) },
 			validate: func(t *testing.T, output string) {
-				if !strings.Contains(output, "Target Function: github.com/temirov/ctx/commands.GetContentData") {
+				if !strings.Contains(output, "Target Function: "+contentDataFunction) {
 					t.Fatalf("missing target function in output")
 				}
 			},
@@ -331,7 +339,7 @@ func TestCTX(testingHandle *testing.T) {
 			name: "CallChainJSON",
 			arguments: []string{
 				appTypes.CommandCallChain,
-				"github.com/temirov/ctx/commands.GetContentData",
+				contentDataFunction,
 				"--format",
 				appTypes.FormatJSON,
 			},
@@ -345,7 +353,7 @@ func TestCTX(testingHandle *testing.T) {
 					t.Fatalf("expected at least one element, got zero")
 				}
 				chain := list[0]
-				if chain.TargetFunction != "github.com/temirov/ctx/commands.GetContentData" {
+				if chain.TargetFunction != contentDataFunction {
 					t.Fatalf("unexpected target function %q", chain.TargetFunction)
 				}
 			},
