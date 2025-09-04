@@ -137,7 +137,7 @@ func ShouldIgnoreByPath(relativePath string, ignorePatterns []string) bool {
 			if isMatched {
 				return true
 			}
-			if isDirectoryPattern && strings.HasPrefix(normalizedPath, cleanedPattern+"/") {
+			if isDirectoryPattern && (normalizedPath == cleanedPattern || strings.HasPrefix(normalizedPath, cleanedPattern+"/")) {
 				return true
 			}
 		}
