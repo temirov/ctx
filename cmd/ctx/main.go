@@ -36,6 +36,10 @@ const (
 	treeShortDescription       = "display directory tree"
 	contentShortDescription    = "show file contents"
 	callchainShortDescription  = "analyze call chains"
+	callChainDepthFlagName     = "depth"
+	unsupportedCommandMessage  = "unsupported command"
+	defaultCallChainDepth      = 1
+	callChainDepthDescription  = "traversal depth"
 )
 
 // main is the entry point of the application.
@@ -104,6 +108,7 @@ func createTreeCommand() *cobra.Command {
 				!disableGitignore,
 				!disableIgnoreFile,
 				includeGit,
+				defaultCallChainDepth,
 				outputFormatLower,
 				withDocumentation,
 			)
@@ -148,6 +153,7 @@ func createContentCommand() *cobra.Command {
 				!disableGitignore,
 				!disableIgnoreFile,
 				includeGit,
+				defaultCallChainDepth,
 				outputFormatLower,
 				withDocumentation,
 			)
@@ -167,6 +173,7 @@ func createContentCommand() *cobra.Command {
 func createCallChainCommand() *cobra.Command {
 	var outputFormat string = types.FormatJSON
 	var withDocumentation bool
+	var callChainDepth int = defaultCallChainDepth
 
 	callChainCommand := &cobra.Command{
 		Use:     callchainUse,
@@ -185,6 +192,7 @@ func createCallChainCommand() *cobra.Command {
 				true,
 				true,
 				false,
+				callChainDepth,
 				outputFormatLower,
 				withDocumentation,
 			)
@@ -193,10 +201,11 @@ func createCallChainCommand() *cobra.Command {
 
 	callChainCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, "output format")
 	callChainCommand.Flags().BoolVar(&withDocumentation, documentationFlagName, false, "include documentation")
+	callChainCommand.Flags().IntVar(&callChainDepth, callChainDepthFlagName, defaultCallChainDepth, callChainDepthDescription)
 	return callChainCommand
 }
 
-// runTool executes the appropriate command logic based on the provided parameters.
+// runTool executes the command with the provided configuration including call chain depth.
 func runTool(
 	commandName string,
 	paths []string,
@@ -204,6 +213,7 @@ func runTool(
 	useGitignore bool,
 	useIgnoreFile bool,
 	includeGit bool,
+	callChainDepth int,
 	format string,
 	documentationEnabled bool,
 ) error {
@@ -219,23 +229,24 @@ func runTool(
 
 	switch commandName {
 	case types.CommandCallChain:
-		return runCallChain(paths[0], format, documentationEnabled, collector, workingDirectory)
+		return runCallChain(paths[0], format, callChainDepth, documentationEnabled, collector, workingDirectory)
 	case types.CommandTree, types.CommandContent:
 		return runTreeOrContentCommand(commandName, paths, exclusionFolder, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, collector)
 	default:
-		return fmt.Errorf("unsupported command")
+		return fmt.Errorf(unsupportedCommandMessage)
 	}
 }
 
-// runCallChain processes the callchain command for the specified target.
+// runCallChain processes the callchain command for the specified target and depth.
 func runCallChain(
 	target string,
 	format string,
+	callChainDepth int,
 	withDocumentation bool,
 	collector *docs.Collector,
 	moduleRoot string,
 ) error {
-	data, err := commands.GetCallChainData(target, withDocumentation, collector, moduleRoot)
+	data, err := commands.GetCallChainData(target, callChainDepth, withDocumentation, collector, moduleRoot)
 	if err != nil {
 		return err
 	}
