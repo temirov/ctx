@@ -108,9 +108,12 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 	return deduplicatedFilePatterns, nil
 }
 
-// LoadRecursiveIgnorePatterns traverses a directory tree rooted at rootDirectoryPath and aggregates ignore patterns and binary content patterns.
-// Patterns from .ignore and .gitignore files found in each directory are prefixed with that directory's relative path.
-// The .git directory is ignored by default unless includeGit is true. The exclusion folder pattern is appended when provided.
+// LoadRecursiveIgnorePatterns walks rootDirectoryPath and aggregates ignore patterns and binary content patterns.
+// Patterns from utils.IgnoreFileName and utils.GitIgnoreFileName in each nested directory are prefixed with that directory's
+// path relative to rootDirectoryPath. For example, a pattern listed in utils.GitIgnoreFileName within a child directory is
+// returned with the directory's relative path prepended. Patterns from utils.GitIgnoreFileName are handled the same way as
+// those from utils.IgnoreFileName. The directory named utils.GitDirectoryName is ignored by default unless includeGit is
+// true. When exclusionFolder is provided, a pattern using utils.ExclusionPrefix is appended.
 func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionFolder string, useGitignore bool, useIgnoreFile bool, includeGit bool) ([]string, []string, error) {
 	var aggregatedPatterns []string
 	var aggregatedBinaryContentPatterns []string
