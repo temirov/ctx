@@ -24,6 +24,14 @@ var serviceFiles = map[string]struct{}{
 	GitIgnoreFileName: {},
 }
 
+// pathSeparator is the slash used to separate path segments.
+const pathSeparator = "/"
+
+// normalizeToForwardSlash converts path separators in value to forward slashes.
+func normalizeToForwardSlash(value string) string {
+	return strings.ReplaceAll(filepath.ToSlash(value), "\\", pathSeparator)
+}
+
 // DeduplicatePatterns removes duplicate patterns from a slice while preserving order.
 // The first occurrence of each unique pattern is kept.
 func DeduplicatePatterns(patterns []string) []string {
@@ -104,50 +112,68 @@ func ShouldIgnore(directoryEntry os.DirEntry, ignorePatterns []string, isRootLev
 	return false
 }
 
-// ShouldIgnoreByPath checks if a path relative to its processing root should be ignored.
-// It considers exclusion patterns, directory patterns, filename patterns, and service files.
-// Used by the content command's walk function (filepath.WalkDir).
+// ShouldIgnoreByPath reports whether relativePath should be ignored.
+// Both relativePath and ignorePatterns are converted to forward-slash form.
+// Patterns are matched hierarchically against path segments. A pattern ending
+// with a slash ignores the directory and all of its descendants, preventing
+// further traversal.
 func ShouldIgnoreByPath(relativePath string, ignorePatterns []string) bool {
-	normalizedPath := filepath.ToSlash(relativePath)
-	pathComponents := strings.Split(normalizedPath, "/")
+	normalizedPath := normalizeToForwardSlash(relativePath)
+	pathSegments := strings.Split(normalizedPath, pathSeparator)
 	entryName := ""
-	if len(pathComponents) > 0 {
-		entryName = pathComponents[len(pathComponents)-1]
+	if len(pathSegments) > 0 {
+		entryName = pathSegments[len(pathSegments)-1]
 	}
-
 	if _, isServiceFile := serviceFiles[entryName]; isServiceFile {
 		return true
 	}
-
-	for _, pattern := range ignorePatterns {
-		if strings.HasPrefix(pattern, ExclusionPrefix) {
-			exclusionName := strings.TrimPrefix(pattern, ExclusionPrefix)
-			if len(pathComponents) >= 1 && pathComponents[0] == exclusionName {
+	for _, currentPattern := range ignorePatterns {
+		normalizedPattern := normalizeToForwardSlash(currentPattern)
+		if strings.HasPrefix(normalizedPattern, ExclusionPrefix) {
+			exclusionName := strings.TrimPrefix(normalizedPattern, ExclusionPrefix)
+			if len(pathSegments) > 0 && pathSegments[0] == exclusionName {
 				return true
 			}
 			continue
 		}
-
-		isDirectoryPattern := strings.HasSuffix(pattern, "/")
-		cleanedPattern := strings.TrimSuffix(pattern, "/")
-
-		if !strings.Contains(cleanedPattern, "/") {
-			isMatched, _ := filepath.Match(cleanedPattern, entryName)
-			if isMatched {
+		isDirectoryPattern := strings.HasSuffix(normalizedPattern, pathSeparator)
+		trimmedPattern := strings.TrimSuffix(normalizedPattern, pathSeparator)
+		if !strings.Contains(trimmedPattern, pathSeparator) {
+			isMatched, matchError := filepath.Match(trimmedPattern, entryName)
+			if matchError == nil && isMatched {
 				return true
 			}
-		} else {
-			isMatched, _ := filepath.Match(pattern, normalizedPath)
-			if isMatched {
+			continue
+		}
+		patternSegments := strings.Split(trimmedPattern, pathSeparator)
+		if isDirectoryPattern {
+			if len(pathSegments) < len(patternSegments) {
+				continue
+			}
+			if matchAllSegments(pathSegments[:len(patternSegments)], patternSegments) {
 				return true
 			}
-			if isDirectoryPattern && (normalizedPath == cleanedPattern || strings.HasPrefix(normalizedPath, cleanedPattern+"/")) {
-				return true
-			}
+			continue
+		}
+		if len(pathSegments) != len(patternSegments) {
+			continue
+		}
+		if matchAllSegments(pathSegments, patternSegments) {
+			return true
 		}
 	}
-
 	return false
+}
+
+// matchAllSegments reports whether each pattern segment matches the corresponding path segment.
+func matchAllSegments(pathSegments, patternSegments []string) bool {
+	for segmentIndex := range patternSegments {
+		isMatched, matchError := filepath.Match(patternSegments[segmentIndex], pathSegments[segmentIndex])
+		if matchError != nil || !isMatched {
+			return false
+		}
+	}
+	return true
 }
 
 // ShouldDisplayBinaryContentByPath checks if a path should reveal binary content based on binary content patterns.
