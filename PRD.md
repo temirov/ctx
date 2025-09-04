@@ -72,6 +72,41 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
     - Uses standard Gitignore semantics (glob patterns). One pattern per line. Non-empty lines not beginning with `#`
       considered.
 
+### Binary Content Handling
+
+- When the `content` command encounters a binary file, it records the MIME type and omits the content. This occurs when `.ignore` contains no directives:
+
+  ```
+  # .ignore
+  # (no show-binary-content directives)
+  ```
+
+  ```bash
+  ctx content image.png --format raw
+  File: image.png
+  Mime Type: image/png
+  (binary content omitted)
+  End of file: image.png
+  ```
+
+- Lines in `.ignore` prefixed with `show-binary-content:` list paths whose binary contents are base64-encoded and included in output:
+
+  ```
+  show-binary-content: image.png
+  ```
+
+  ```bash
+  ctx content . --format json
+  [
+    {
+      "path": "image.png",
+      "type": "binary",
+      "content": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PdpvJwAAAABJRU5ErkJggg==",
+      "mimeType": "image/png"
+    }
+  ]
+  ```
+
 ### Error Handling
 
 - Invalid command or flag combinations cause immediate program termination with usage info.
