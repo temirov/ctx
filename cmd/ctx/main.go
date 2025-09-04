@@ -277,19 +277,19 @@ func runTreeOrContentCommand(
 	var collected []interface{}
 	for _, info := range validatedPaths {
 		if info.IsDir {
-			patterns, err := config.LoadRecursiveIgnorePatterns(info.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile, includeGit)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: skipping %s: %v\n", info.AbsolutePath, err)
+			ignorePatternList, binaryContentPatternList, loadError := config.LoadRecursiveIgnorePatterns(info.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile, includeGit)
+			if loadError != nil {
+				fmt.Fprintf(os.Stderr, "Warning: skipping %s: %v\n", info.AbsolutePath, loadError)
 				continue
 			}
 			if commandName == types.CommandTree {
-				nodes, err := commands.GetTreeData(info.AbsolutePath, patterns)
-				if err == nil && len(nodes) > 0 {
+				nodes, dataError := commands.GetTreeData(info.AbsolutePath, ignorePatternList, binaryContentPatternList)
+				if dataError == nil && len(nodes) > 0 {
 					collected = append(collected, nodes[0])
 				}
 			} else {
-				files, err := commands.GetContentData(info.AbsolutePath, patterns)
-				if err == nil {
+				files, dataError := commands.GetContentData(info.AbsolutePath, ignorePatternList, binaryContentPatternList)
+				if dataError == nil {
 					for index := range files {
 						collected = append(collected, &files[index])
 					}
@@ -310,15 +310,15 @@ func runTreeOrContentCommand(
 					MimeType: mimeType,
 				})
 			} else {
-				data, err := os.ReadFile(info.AbsolutePath)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to read %s: %v\n", info.AbsolutePath, err)
+				fileBytes, fileReadError := os.ReadFile(info.AbsolutePath)
+				if fileReadError != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to read %s: %v\n", info.AbsolutePath, fileReadError)
 					continue
 				}
 				fileType := types.NodeTypeFile
-				content := string(data)
+				content := string(fileBytes)
 				mimeType := ""
-				if utils.IsBinary(data) {
+				if utils.IsBinary(fileBytes) {
 					fileType = types.NodeTypeBinary
 					content = ""
 					mimeType = utils.DetectMimeType(info.AbsolutePath)
