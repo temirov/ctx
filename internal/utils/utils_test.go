@@ -1,0 +1,292 @@
+package utils_test
+
+import (
+	"encoding/base64"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/temirov/ctx/internal/utils"
+)
+
+// textFileName defines the name of the text file used in tests.
+const textFileName = "sample.txt"
+
+// binaryFileName defines the name of the binary file used in tests.
+const binaryFileName = "sample.bin"
+
+// binaryBase64Content holds the base64 representation of the binary file content.
+const binaryBase64Content = "AAE="
+
+// TestDeduplicatePatterns verifies that DeduplicatePatterns removes duplicate patterns.
+func TestDeduplicatePatterns(testingInstance *testing.T) {
+	testCases := []struct {
+		testName string
+		patterns []string
+		expected []string
+	}{
+		{
+			testName: "removes duplicates",
+			patterns: []string{"a", "b", "a"},
+			expected: []string{"a", "b"},
+		},
+		{
+			testName: "keeps unique",
+			patterns: []string{"a", "b"},
+			expected: []string{"a", "b"},
+		},
+	}
+	for index, testCase := range testCases {
+		actual := utils.DeduplicatePatterns(testCase.patterns)
+		if len(actual) != len(testCase.expected) {
+			testingInstance.Errorf("case %d (%s): expected length %d, got %d", index, testCase.testName, len(testCase.expected), len(actual))
+			continue
+		}
+		for position, value := range actual {
+			if value != testCase.expected[position] {
+				testingInstance.Errorf("case %d (%s): expected %s at position %d, got %s", index, testCase.testName, testCase.expected[position], position, value)
+			}
+		}
+	}
+}
+
+// TestContainsString verifies that ContainsString locates strings in a slice.
+func TestContainsString(testingInstance *testing.T) {
+	testCases := []struct {
+		testName string
+		slice    []string
+		target   string
+		expected bool
+	}{
+		{
+			testName: "contains target",
+			slice:    []string{"alpha", "beta"},
+			target:   "beta",
+			expected: true,
+		},
+		{
+			testName: "missing target",
+			slice:    []string{"alpha", "beta"},
+			target:   "gamma",
+			expected: false,
+		},
+	}
+	for index, testCase := range testCases {
+		actual := utils.ContainsString(testCase.slice, testCase.target)
+		if actual != testCase.expected {
+			testingInstance.Errorf("case %d (%s): expected %t, got %t", index, testCase.testName, testCase.expected, actual)
+		}
+	}
+}
+
+// TestRelativePathOrSelf verifies relative path calculations.
+func TestRelativePathOrSelf(testingInstance *testing.T) {
+	temporaryRoot := testingInstance.TempDir()
+	subPath := filepath.Join(temporaryRoot, textFileName)
+	creationError := os.WriteFile(subPath, []byte("content"), 0600)
+	if creationError != nil {
+		testingInstance.Fatalf("failed to create file: %v", creationError)
+	}
+	testCases := []struct {
+		testName string
+		fullPath string
+		root     string
+		expected string
+	}{
+		{
+			testName: "root path returns dot",
+			fullPath: temporaryRoot,
+			root:     temporaryRoot,
+			expected: ".",
+		},
+		{
+			testName: "sub path returns relative",
+			fullPath: subPath,
+			root:     temporaryRoot,
+			expected: textFileName,
+		},
+	}
+	for index, testCase := range testCases {
+		actual := utils.RelativePathOrSelf(testCase.fullPath, testCase.root)
+		if actual != testCase.expected {
+			testingInstance.Errorf("case %d (%s): expected %s, got %s", index, testCase.testName, testCase.expected, actual)
+		}
+	}
+}
+
+// TestShouldIgnoreByPath verifies path ignoring logic.
+func TestShouldIgnoreByPath(testingInstance *testing.T) {
+	testCases := []struct {
+		testName       string
+		relativePath   string
+		patterns       []string
+		expectedIgnore bool
+	}{
+		{
+			testName:       "service file",
+			relativePath:   ".gitignore",
+			patterns:       nil,
+			expectedIgnore: true,
+		},
+		{
+			testName:       "exclude pattern",
+			relativePath:   "dir/file.txt",
+			patterns:       []string{"EXCL:dir"},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "directory pattern for directory",
+			relativePath:   "dir",
+			patterns:       []string{"dir/"},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "nested directory pattern",
+			relativePath:   "dir/file.txt",
+			patterns:       []string{"dir/*"},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "wildcard file pattern",
+			relativePath:   "dir/file.txt",
+			patterns:       []string{"*.txt"},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "path pattern",
+			relativePath:   "dir/file.txt",
+			patterns:       []string{"dir/*.txt"},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "not ignored",
+			relativePath:   "dir/file.txt",
+			patterns:       []string{"*.md"},
+			expectedIgnore: false,
+		},
+	}
+	for index, testCase := range testCases {
+		actual := utils.ShouldIgnoreByPath(testCase.relativePath, testCase.patterns)
+		if actual != testCase.expectedIgnore {
+			testingInstance.Errorf("case %d (%s): expected %t, got %t", index, testCase.testName, testCase.expectedIgnore, actual)
+		}
+	}
+}
+
+// TestShouldDisplayBinaryContentByPath verifies binary content display rules.
+func TestShouldDisplayBinaryContentByPath(testingInstance *testing.T) {
+	testCases := []struct {
+		testName     string
+		relativePath string
+		patterns     []string
+		expected     bool
+	}{
+		{
+			testName:     "exact match",
+			relativePath: "dir/" + binaryFileName,
+			patterns:     []string{"dir/" + binaryFileName},
+			expected:     true,
+		},
+		{
+			testName:     "directory pattern",
+			relativePath: "dir/sub/" + binaryFileName,
+			patterns:     []string{"dir/"},
+			expected:     true,
+		},
+		{
+			testName:     "wildcard pattern",
+			relativePath: binaryFileName,
+			patterns:     []string{"*.bin"},
+			expected:     true,
+		},
+		{
+			testName:     "no match",
+			relativePath: "dir/" + binaryFileName,
+			patterns:     []string{"other/"},
+			expected:     false,
+		},
+	}
+	for index, testCase := range testCases {
+		actual := utils.ShouldDisplayBinaryContentByPath(testCase.relativePath, testCase.patterns)
+		if actual != testCase.expected {
+			testingInstance.Errorf("case %d (%s): expected %t, got %t", index, testCase.testName, testCase.expected, actual)
+		}
+	}
+}
+
+// TestIsBinary verifies detection of binary data in byte slices.
+func TestIsBinary(testingInstance *testing.T) {
+	testCases := []struct {
+		testName string
+		data     []byte
+		expected bool
+	}{
+		{
+			testName: "utf8 text",
+			data:     []byte("hello"),
+			expected: false,
+		},
+		{
+			testName: "null byte",
+			data:     []byte{0x00, 0x01},
+			expected: true,
+		},
+		{
+			testName: "invalid utf8",
+			data:     []byte{0xff},
+			expected: true,
+		},
+		{
+			testName: "empty slice",
+			data:     []byte{},
+			expected: false,
+		},
+	}
+	for index, testCase := range testCases {
+		actual := utils.IsBinary(testCase.data)
+		if actual != testCase.expected {
+			testingInstance.Errorf("case %d (%s): expected %t, got %t", index, testCase.testName, testCase.expected, actual)
+		}
+	}
+}
+
+// TestIsFileBinary verifies binary file detection.
+func TestIsFileBinary(testingInstance *testing.T) {
+	temporaryRoot := testingInstance.TempDir()
+	textPath := filepath.Join(temporaryRoot, textFileName)
+	binaryPath := filepath.Join(temporaryRoot, binaryFileName)
+	textWriteError := os.WriteFile(textPath, []byte("hello"), 0600)
+	if textWriteError != nil {
+		testingInstance.Fatalf("writing text file: %v", textWriteError)
+	}
+	binaryBytes, decodeError := base64.StdEncoding.DecodeString(binaryBase64Content)
+	if decodeError != nil {
+		testingInstance.Fatalf("decoding base64: %v", decodeError)
+	}
+	binaryWriteError := os.WriteFile(binaryPath, binaryBytes, 0600)
+	if binaryWriteError != nil {
+		testingInstance.Fatalf("writing binary file: %v", binaryWriteError)
+	}
+	testCases := []struct {
+		testName string
+		path     string
+		expected bool
+	}{
+		{
+			testName: "text file",
+			path:     textPath,
+			expected: false,
+		},
+		{
+			testName: "binary file",
+			path:     binaryPath,
+			expected: true,
+		},
+	}
+	for index, testCase := range testCases {
+		actual := utils.IsFileBinary(testCase.path)
+		if actual != testCase.expected {
+			testingInstance.Errorf("case %d (%s): expected %t, got %t", index, testCase.testName, testCase.expected, actual)
+		}
+	}
+}
