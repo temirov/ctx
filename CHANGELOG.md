@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.0.11] - 2025-09-04
+
+### Features ✨
+
+1. **Depth-Controlled Call Chain Traversal**
+    - Added a `--depth` flag to the `callchain` (`cc`) command to limit call graph traversal.
+    - The default depth `1` reports only direct callers and callees.
+
+---
+
 ## [v0.0.10] - 2025-04-19
 
 ### Features ✨

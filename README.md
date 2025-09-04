@@ -32,6 +32,12 @@ and **optional embedded documentation** for referenced packages and symbols.
       functions. When `--doc` is used, documentation for referenced external packages/functions is appended.
     - *JSON format:* Outputs a JSON object with `targetFunction`, `callers`, `callees`, a `functions` map (name →
       source), and (when `--doc`) a `documentation` array.
+    - *Depth control (`--depth`):* Limits traversal of callers and callees. The default depth is `1`, which yields only
+      direct callers and callees. For example:
+
+      ```bash
+      ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2
+      ```
 - **Exclusion Patterns (for `tree` and `content`):**
     - Reads patterns from a `.ignore` file located at the root of each processed directory (can be disabled with
       `--no-ignore`).
@@ -105,7 +111,7 @@ ctx content main.go pkg --doc --format json
 Analyze the call chain for a function including docs:
 
 ```bash
-ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --doc --format raw
+ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 --doc --format raw
 ```
 
 ## Output Formats
