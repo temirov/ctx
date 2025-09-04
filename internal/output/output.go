@@ -42,16 +42,16 @@ func RenderCallChainRaw(data *types.CallChainOutput) string {
 	if len(data.Callers) == 0 {
 		buf.WriteString("  (none)\n")
 	} else {
-		for _, c := range data.Callers {
-			buf.WriteString(" " + c + "\n")
+		for _, callerName := range data.Callers {
+			buf.WriteString(" " + callerName + "\n")
 		}
 	}
 	buf.WriteString("Callees:\n")
 	if data.Callees == nil || len(*data.Callees) == 0 {
 		buf.WriteString("  (none)\n")
 	} else {
-		for _, c := range *data.Callees {
-			buf.WriteString(" " + c + "\n")
+		for _, calleeName := range *data.Callees {
+			buf.WriteString(" " + calleeName + "\n")
 		}
 	}
 	buf.WriteString("\n")
@@ -64,10 +64,10 @@ func RenderCallChainRaw(data *types.CallChainOutput) string {
 	}
 	if len(data.Documentation) > 0 {
 		buf.WriteString(callchainDocsHeader + "\n")
-		for _, e := range data.Documentation {
-			buf.WriteString(e.Kind + " " + e.Name + "\n")
-			if e.Doc != "" {
-				buf.WriteString(e.Doc + "\n")
+		for _, documentationEntry := range data.Documentation {
+			buf.WriteString(documentationEntry.Kind + " " + documentationEntry.Name + "\n")
+			if documentationEntry.Doc != "" {
+				buf.WriteString(documentationEntry.Doc + "\n")
 			}
 			buf.WriteString("\n")
 		}
@@ -234,11 +234,11 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 func dedupeDocumentationEntries(entries []types.DocumentationEntry) []types.DocumentationEntry {
 	seen := make(map[string]struct{}, len(entries))
 	var out []types.DocumentationEntry
-	for _, e := range entries {
-		key := e.Kind + ":" + e.Name
+	for _, documentationEntry := range entries {
+		key := documentationEntry.Kind + ":" + documentationEntry.Name
 		if _, exists := seen[key]; !exists {
 			seen[key] = struct{}{}
-			out = append(out, e)
+			out = append(out, documentationEntry)
 		}
 	}
 	return out
@@ -295,12 +295,12 @@ func orderedFunctionNames(data *types.CallChainOutput) []string {
 		}
 	}
 	add(data.TargetFunction)
-	for _, c := range data.Callers {
-		add(c)
+	for _, callerName := range data.Callers {
+		add(callerName)
 	}
 	if data.Callees != nil {
-		for _, c := range *data.Callees {
-			add(c)
+		for _, calleeName := range *data.Callees {
+			add(calleeName)
 		}
 	}
 	var others []string
