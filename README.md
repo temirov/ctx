@@ -10,7 +10,7 @@ and **optional embedded documentation** for referenced packages and symbols.
 - **Mixed File/Directory Processing:** Accepts one or more file and/or directory paths as input for `tree` and `content`
   commands.
 - **Call Chain Analysis:** Analyzes the call graph for a specified function using the `callchain` command. Provide the
-  fully qualified (or suffix) function name as the sole argument.
+  fully qualified (or suffix) function name as the sole argument. The traversal depth is configurable with `--depth`.
 - **Embedded Documentation (`--doc`):** When the `--doc` flag is used with the `content` or `callchain` command,
   ctx embeds documentation for imported third-party packages and referenced functions in the output (both *raw* and
   *json* formats).
@@ -85,6 +85,7 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--git`               | tree, content      | Include the `.git` directory during traversal. |
 | `--format <raw|json|xml>` | all commands       | Select output format (default `raw`). |
 | `--doc`               | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
+| `--depth <number>`    | callchain          | Limit call graph traversal depth (default `1`). |
 | `--version`           | all commands       | Print ctx version and exit. |
 
 ### Examples
