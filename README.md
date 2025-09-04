@@ -38,6 +38,7 @@ and **optional embedded documentation** for referenced packages and symbols.
     - Reads patterns from a `.gitignore` file located at the root of each processed directory by default (can be
       disabled with `--no-gitignore`).
     - Skips the `.git` directory unless the `--git` flag is provided.
+    - `.ignore` lines prefixed with `show-binary-content:` designate paths whose binary contents are base64-encoded and included in output.
     - A global exclusion flag (`-e` or `--e`) excludes a designated folder if it appears as a direct child in any
       specified directory.
 - **Command Abbreviations:**
@@ -117,6 +118,12 @@ ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --doc --fo
 ## Configuration
 
 Exclusion patterns are loaded **only** during directory traversal; explicitly listed file paths are never ignored.
+
+Lines in `.ignore` starting with `show-binary-content:` mark paths whose binary contents are base64-encoded and included in output:
+
+```
+show-binary-content: assets/logo.png
+```
 
 ## License
 
