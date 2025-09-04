@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/temirov/ctx/internal/utils"
 )
 
 // writeTestFile creates a file with the specified content, failing the test on error.
@@ -25,13 +27,13 @@ func TestLoadRecursiveIgnorePatternsNestedIgnore(testingHandle *testing.T) {
 	)
 
 	rootDirectory := testingHandle.TempDir()
-	writeTestFile(testingHandle, filepath.Join(rootDirectory, ignoreFileName), rootPatternName+"\n")
+	writeTestFile(testingHandle, filepath.Join(rootDirectory, utils.IgnoreFileName), rootPatternName+"\n")
 
 	nestedDirectoryPath := filepath.Join(rootDirectory, nestedDirName)
 	if makeDirErr := os.MkdirAll(nestedDirectoryPath, 0o755); makeDirErr != nil {
 		testingHandle.Fatalf("failed to create nested directory: %v", makeDirErr)
 	}
-	writeTestFile(testingHandle, filepath.Join(nestedDirectoryPath, ignoreFileName), nestedPatternName+"\n")
+	writeTestFile(testingHandle, filepath.Join(nestedDirectoryPath, utils.IgnoreFileName), nestedPatternName+"\n")
 
 	patternList, binaryPatternList, loadError := LoadRecursiveIgnorePatterns(rootDirectory, "", false, true, false)
 	if loadError != nil {
@@ -58,13 +60,13 @@ func TestLoadRecursiveIgnorePatternsNestedGitIgnore(testingHandle *testing.T) {
 	)
 
 	rootDirectory := testingHandle.TempDir()
-	writeTestFile(testingHandle, filepath.Join(rootDirectory, gitIgnoreFileName), rootGitPattern+"\n")
+	writeTestFile(testingHandle, filepath.Join(rootDirectory, utils.GitIgnoreFileName), rootGitPattern+"\n")
 
 	nestedDirectoryPath := filepath.Join(rootDirectory, nestedGitDir)
 	if makeDirErr := os.MkdirAll(nestedDirectoryPath, 0o755); makeDirErr != nil {
 		testingHandle.Fatalf("failed to create nested directory: %v", makeDirErr)
 	}
-	writeTestFile(testingHandle, filepath.Join(nestedDirectoryPath, gitIgnoreFileName), nestedGitPattern+"\n")
+	writeTestFile(testingHandle, filepath.Join(nestedDirectoryPath, utils.GitIgnoreFileName), nestedGitPattern+"\n")
 
 	patternList, binaryPatternList, loadError := LoadRecursiveIgnorePatterns(rootDirectory, "", true, false, false)
 	if loadError != nil {
@@ -90,13 +92,13 @@ func TestLoadRecursiveIgnorePatternsBinaryContent(testingHandle *testing.T) {
 	)
 
 	rootDirectory := testingHandle.TempDir()
-	writeTestFile(testingHandle, filepath.Join(rootDirectory, ignoreFileName), showBinaryContentDirective+binaryPatternName+"\n")
+	writeTestFile(testingHandle, filepath.Join(rootDirectory, utils.IgnoreFileName), showBinaryContentDirective+binaryPatternName+"\n")
 
 	nestedDirectoryPath := filepath.Join(rootDirectory, nestedDirectoryName)
 	if makeDirError := os.MkdirAll(nestedDirectoryPath, 0o755); makeDirError != nil {
 		testingHandle.Fatalf("failed to create nested directory: %v", makeDirError)
 	}
-	writeTestFile(testingHandle, filepath.Join(nestedDirectoryPath, ignoreFileName), showBinaryContentDirective+binaryPatternName+"\n")
+	writeTestFile(testingHandle, filepath.Join(nestedDirectoryPath, utils.IgnoreFileName), showBinaryContentDirective+binaryPatternName+"\n")
 
 	patternList, binaryPatternList, loadError := LoadRecursiveIgnorePatterns(rootDirectory, "", false, true, false)
 	if loadError != nil {
