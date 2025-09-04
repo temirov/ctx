@@ -17,21 +17,22 @@ import (
 )
 
 const (
-	visibleFileName       = "visible.txt"
-	hiddenFileName        = "hidden.txt"
-	visibleFileContent    = "visible"
-	hiddenFileContent     = "secret"
-	includeGitFlag        = "--git"
-	versionFlag           = "--version"
-	treeAlias             = "t"
-	subDirectoryName      = "sub"
-	gitignoreFileName     = ".gitignore"
-	nodeModulesDirName    = "node_modules"
-	dependencyFileName    = "dependency.js"
-	nodeModulesPattern    = nodeModulesDirName + "/\n"
-	dependencyFileContent = "dependency"
-	buildTargetPath       = "./cmd/ctx"
-	contentDataFunction   = "github.com/temirov/ctx/internal/commands.GetContentData"
+	visibleFileName              = "visible.txt"
+	hiddenFileName               = "hidden.txt"
+	visibleFileContent           = "visible"
+	hiddenFileContent            = "secret"
+	includeGitFlag               = "--git"
+	versionFlag                  = "--version"
+	treeAlias                    = "t"
+	subDirectoryName             = "sub"
+	gitignoreFileName            = ".gitignore"
+	nodeModulesDirName           = "node_modules"
+	dependencyFileName           = "dependency.js"
+	nodeModulesPattern           = nodeModulesDirName + "/\n"
+	dependencyFileContent        = "dependency"
+	commandDirectoryRelativePath = "cmd/ctx"
+	integrationBinaryBaseName    = "ctx_integration_binary"
+	contentDataFunction          = "github.com/temirov/ctx/internal/commands.GetContentData"
 )
 
 // buildBinary compiles the ctx binary and returns its path.
@@ -39,24 +40,20 @@ func buildBinary(testingHandle *testing.T) string {
 	testingHandle.Helper()
 
 	temporaryDirectory := testingHandle.TempDir()
-	binaryName := "ctx_integration_binary"
+	binaryName := integrationBinaryBaseName
 	if runtime.GOOS == "windows" {
 		binaryName += ".exe"
 	}
 	binaryPath := filepath.Join(temporaryDirectory, binaryName)
 
-	currentDirectory, directoryError := os.Getwd()
-	if directoryError != nil {
-		testingHandle.Fatalf("failed to determine current working directory: %v", directoryError)
-	}
-
-	moduleRoot := filepath.Dir(currentDirectory)
-	buildCommand := exec.Command("go", "build", "-o", binaryPath, buildTargetPath)
-	buildCommand.Dir = moduleRoot
+	moduleRootDirectory := getModuleRoot(testingHandle)
+	commandDirectory := filepath.Join(moduleRootDirectory, commandDirectoryRelativePath)
+	buildCommand := exec.Command("go", "build", "-o", binaryPath, ".")
+	buildCommand.Dir = commandDirectory
 
 	combinedOutput, buildError := buildCommand.CombinedOutput()
 	if buildError != nil {
-		testingHandle.Fatalf("build failed in %s: %v\n%s", moduleRoot, buildError, string(combinedOutput))
+		testingHandle.Fatalf("build failed in %s: %v\n%s", commandDirectory, buildError, string(combinedOutput))
 	}
 
 	return binaryPath
