@@ -19,6 +19,8 @@ const (
 	GitDirectoryName = ".git"
 )
 
+const pathSegmentSeparator = "/"
+
 var serviceFiles = map[string]struct{}{
 	IgnoreFileName:    {},
 	GitIgnoreFileName: {},
@@ -104,50 +106,75 @@ func ShouldIgnore(directoryEntry os.DirEntry, ignorePatterns []string, isRootLev
 	return false
 }
 
-// ShouldIgnoreByPath checks if a path relative to its processing root should be ignored.
-// It considers exclusion patterns, directory patterns, filename patterns, and service files.
-// Used by the content command's walk function (filepath.WalkDir).
+// ShouldIgnoreByPath reports whether a path relative to the processing root
+// should be excluded from further processing. The candidate path and every
+// ignore pattern are converted to forward-slash form before evaluation. Patterns
+// are split into hierarchical segments, allowing nested directory prefixes such
+// as "subdir/node_modules/" and "subdir/.clasp.json" to match. A pattern ending
+// with a trailing slash matches the specified directory and all descendant paths,
+// preventing recursion into that directory. Other patterns match an exact path
+// where each segment is evaluated with filepath.Match semantics.
 func ShouldIgnoreByPath(relativePath string, ignorePatterns []string) bool {
-	normalizedPath := filepath.ToSlash(relativePath)
-	pathComponents := strings.Split(normalizedPath, "/")
-	entryName := ""
-	if len(pathComponents) > 0 {
-		entryName = pathComponents[len(pathComponents)-1]
+	normalizedPath := strings.ReplaceAll(relativePath, "\\", pathSegmentSeparator)
+	pathSegments := strings.Split(normalizedPath, pathSegmentSeparator)
+	lastSegment := ""
+	if len(pathSegments) > 0 {
+		lastSegment = pathSegments[len(pathSegments)-1]
 	}
 
-	if _, isServiceFile := serviceFiles[entryName]; isServiceFile {
+	if _, isServiceFile := serviceFiles[lastSegment]; isServiceFile {
 		return true
 	}
 
-	for _, pattern := range ignorePatterns {
-		if strings.HasPrefix(pattern, ExclusionPrefix) {
-			exclusionName := strings.TrimPrefix(pattern, ExclusionPrefix)
-			if len(pathComponents) >= 1 && pathComponents[0] == exclusionName {
+	for _, patternValue := range ignorePatterns {
+		normalizedPattern := strings.ReplaceAll(patternValue, "\\", pathSegmentSeparator)
+
+		if strings.HasPrefix(normalizedPattern, ExclusionPrefix) {
+			exclusionPattern := strings.TrimPrefix(normalizedPattern, ExclusionPrefix)
+			exclusionSegments := strings.Split(exclusionPattern, pathSegmentSeparator)
+			if len(pathSegments) >= len(exclusionSegments) && segmentsMatch(pathSegments[:len(exclusionSegments)], exclusionSegments) {
 				return true
 			}
 			continue
 		}
 
-		isDirectoryPattern := strings.HasSuffix(pattern, "/")
-		cleanedPattern := strings.TrimSuffix(pattern, "/")
+		isDirectoryPattern := strings.HasSuffix(normalizedPattern, pathSegmentSeparator)
+		trimmedPattern := strings.TrimSuffix(normalizedPattern, pathSegmentSeparator)
+		patternSegments := strings.Split(trimmedPattern, pathSegmentSeparator)
 
-		if !strings.Contains(cleanedPattern, "/") {
-			isMatched, _ := filepath.Match(cleanedPattern, entryName)
-			if isMatched {
+		if isDirectoryPattern {
+			if len(pathSegments) >= len(patternSegments) && segmentsMatch(pathSegments[:len(patternSegments)], patternSegments) {
 				return true
 			}
-		} else {
-			isMatched, _ := filepath.Match(pattern, normalizedPath)
-			if isMatched {
+			continue
+		}
+
+		if len(patternSegments) == 1 {
+			isMatched, matchError := filepath.Match(patternSegments[0], lastSegment)
+			if matchError == nil && isMatched {
 				return true
 			}
-			if isDirectoryPattern && (normalizedPath == cleanedPattern || strings.HasPrefix(normalizedPath, cleanedPattern+"/")) {
-				return true
-			}
+			continue
+		}
+
+		if len(pathSegments) == len(patternSegments) && segmentsMatch(pathSegments, patternSegments) {
+			return true
 		}
 	}
 
 	return false
+}
+
+// segmentsMatch reports whether each pattern segment matches the corresponding
+// path segment using filepath.Match semantics.
+func segmentsMatch(pathSegments, patternSegments []string) bool {
+	for segmentIndex, patternSegment := range patternSegments {
+		isMatched, matchError := filepath.Match(patternSegment, pathSegments[segmentIndex])
+		if matchError != nil || !isMatched {
+			return false
+		}
+	}
+	return true
 }
 
 // ShouldDisplayBinaryContentByPath checks if a path should reveal binary content based on binary content patterns.

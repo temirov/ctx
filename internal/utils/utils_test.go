@@ -18,6 +18,15 @@ const binaryFileName = "sample.bin"
 // binaryBase64Content holds the base64 representation of the binary file content.
 const binaryBase64Content = "AAE="
 
+const (
+	nodeModulesDirectoryPath     = "subdir/node_modules"
+	nodeModulesPattern           = "subdir/node_modules/"
+	nodeModulesPackagePath       = "subdir/node_modules/package.json"
+	claspConfigurationPath       = "subdir/.clasp.json"
+	nestedClaspConfigurationPath = "subdir/nested/.clasp.json"
+	windowsNodeModulesPattern    = "subdir\\node_modules\\"
+)
+
 // TestDeduplicatePatterns verifies that DeduplicatePatterns removes duplicate patterns.
 func TestDeduplicatePatterns(testingInstance *testing.T) {
 	testCases := []struct {
@@ -157,6 +166,36 @@ func TestShouldIgnoreByPath(testingInstance *testing.T) {
 			relativePath:   "dir/file.txt",
 			patterns:       []string{"dir/*.txt"},
 			expectedIgnore: true,
+		},
+		{
+			testName:       "nested directory prefix",
+			relativePath:   nodeModulesDirectoryPath,
+			patterns:       []string{nodeModulesPattern},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "nested directory content",
+			relativePath:   nodeModulesPackagePath,
+			patterns:       []string{nodeModulesPattern},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "normalized windows directory pattern",
+			relativePath:   nodeModulesDirectoryPath,
+			patterns:       []string{windowsNodeModulesPattern},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "nested file path",
+			relativePath:   claspConfigurationPath,
+			patterns:       []string{claspConfigurationPath},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "deeper path than file pattern",
+			relativePath:   nestedClaspConfigurationPath,
+			patterns:       []string{claspConfigurationPath},
+			expectedIgnore: false,
 		},
 		{
 			testName:       "not ignored",
