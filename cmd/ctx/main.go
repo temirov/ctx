@@ -30,16 +30,30 @@ const (
 	defaultPath                = "."
 	rootUse                    = "ctx"
 	rootShortDescription       = "ctx CLI"
-	treeUse                    = "tree [paths...]"
-	contentUse                 = "content [paths...]"
-	callchainUse               = "callchain <function>"
-	treeShortDescription       = "display directory tree"
-	contentShortDescription    = "show file contents"
-	callchainShortDescription  = "analyze call chains"
-	callChainDepthFlagName     = "depth"
-	unsupportedCommandMessage  = "unsupported command"
-	defaultCallChainDepth      = 1
-	callChainDepthDescription  = "traversal depth"
+	// rootUsageTemplate describes usage information for the root command.
+	rootUsageTemplate = `Usage:
+  ctx <tree|t|content|c|callchain|cc> [paths] [flags]
+
+Flags:
+  -%[1]s, --%[1]s string   %[9]s
+      --%[2]s              %[10]s
+      --%[3]s              %[11]s
+      --%[4]s              %[12]s
+  -%[5]s, --%[5]s string   %[13]s
+      --%[6]s              %[14]s
+      --%[7]s              display application version
+  -%[8]s, --%[8]s int      %[15]s
+`
+	treeUse                         = "tree [paths...]"
+	contentUse                      = "content [paths...]"
+	callchainUse                    = "callchain <function>"
+	treeShortDescription            = "display directory tree"
+	contentShortDescription         = "show file contents"
+	callchainShortDescription       = "analyze call chains"
+	callChainDepthFlagName          = "depth"
+	unsupportedCommandMessage       = "unsupported command"
+	defaultCallChainDepth           = 1
+	callChainDepthDescription       = "traversal depth"
 	exclusionFlagDescription        = "exclude folder"
 	disableGitignoreFlagDescription = "do not use .gitignore"
 	disableIgnoreFlagDescription    = "do not use .ignore"
@@ -89,6 +103,24 @@ func createRootCommand() *cobra.Command {
 		},
 	}
 	rootCommand.PersistentFlags().BoolVar(&showVersion, versionFlagName, false, "display application version")
+	rootCommand.SetUsageTemplate(fmt.Sprintf(
+		rootUsageTemplate,
+		exclusionFlagName,
+		noGitignoreFlagName,
+		noIgnoreFlagName,
+		includeGitFlagName,
+		formatFlagName,
+		documentationFlagName,
+		versionFlagName,
+		callChainDepthFlagName,
+		exclusionFlagDescription,
+		disableGitignoreFlagDescription,
+		disableIgnoreFlagDescription,
+		includeGitFlagDescription,
+		formatFlagDescription,
+		documentationFlagDescription,
+		callChainDepthDescription,
+	))
 	rootCommand.AddCommand(
 		createTreeCommand(),
 		createContentCommand(),
