@@ -36,6 +36,8 @@ const (
 	integrationBinaryBaseName    = "ctx_integration_binary"
 	contentDataFunction          = "github.com/temirov/ctx/internal/commands.GetContentData"
 
+	usageSnippet = "Usage:\n  ctx"
+
 	binaryFixtureFileName      = "fixture.png"
 	expectedBinaryMimeType     = "image/png"
 	ignoreFileName             = ".ignore"
@@ -218,6 +220,16 @@ func TestCTX(testingHandle *testing.T) {
 		expectWarning bool
 		validate      func(*testing.T, string)
 	}{
+		{
+			name:      "NoArgumentsDisplaysHelp",
+			arguments: nil,
+			prepare:   func(testingHandle *testing.T) string { return setupTestDirectory(testingHandle, nil) },
+			validate: func(testingHandle *testing.T, output string) {
+				if !strings.Contains(output, usageSnippet) {
+					testingHandle.Fatalf("expected help output containing %q\n%s", usageSnippet, output)
+				}
+			},
+		},
 		{
 			name: "DocFlagCallChainRaw",
 			arguments: []string{
