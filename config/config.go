@@ -12,9 +12,10 @@ import (
 )
 
 const (
-	ignoreFileName    = ".ignore"
-	gitIgnoreFileName = ".gitignore"
-	exclusionPrefix   = "EXCL:"
+	ignoreFileName      = ".ignore"
+	gitIgnoreFileName   = ".gitignore"
+	exclusionPrefix     = "EXCL:"
+	gitDirectoryPattern = utils.GitDirectoryName + "/"
 )
 
 // LoadIgnoreFilePatterns reads a specified ignore file (if it exists) and returns a slice of ignore patterns.
@@ -51,9 +52,10 @@ func LoadIgnoreFilePatterns(ignoreFilePath string) ([]string, error) {
 	return patterns, nil
 }
 
-// LoadCombinedIgnorePatterns loads patterns from .ignore and/or .gitignore files within a directory,
-// adds the exclusion folder pattern if specified, and returns the combined, deduplicated list.
-func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder string, useGitignore bool, useIgnoreFile bool) ([]string, error) {
+// LoadCombinedIgnorePatterns aggregates patterns from .ignore and/or .gitignore files within a directory.
+// The .git directory is excluded by default unless includeGit is true.
+// The exclusion folder pattern is appended when provided.
+func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder string, useGitignore bool, useIgnoreFile bool, includeGit bool) ([]string, error) {
 	var combinedPatterns []string
 
 	if useIgnoreFile {
@@ -72,6 +74,10 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 			return nil, fmt.Errorf("loading %s from %s: %w", gitIgnoreFileName, absoluteDirectoryPath, loadError)
 		}
 		combinedPatterns = append(combinedPatterns, gitignoreFilePatterns...)
+	}
+
+	if !includeGit {
+		combinedPatterns = append(combinedPatterns, gitDirectoryPattern)
 	}
 
 	deduplicatedFilePatterns := utils.DeduplicatePatterns(combinedPatterns)

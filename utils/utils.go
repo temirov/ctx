@@ -12,6 +12,7 @@ const (
 	IgnoreFileName    = ".ignore"
 	GitIgnoreFileName = ".gitignore"
 	ExclusionPrefix   = "EXCL:"
+	GitDirectoryName  = ".git"
 )
 
 var serviceFiles = map[string]struct{}{
