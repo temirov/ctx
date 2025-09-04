@@ -58,7 +58,9 @@ func createRootCommand() *cobra.Command {
 		Use:          rootUse,
 		Short:        rootShortDescription,
 		SilenceUsage: true,
-		Run:          func(command *cobra.Command, arguments []string) {},
+		RunE: func(command *cobra.Command, arguments []string) error {
+			return command.Help()
+		},
 		PersistentPreRun: func(command *cobra.Command, arguments []string) {
 			if showVersion {
 				fmt.Printf(versionTemplate, utils.GetApplicationVersion())
