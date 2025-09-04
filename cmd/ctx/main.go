@@ -41,7 +41,13 @@ const (
 	defaultCallChainDepth      = 1
 	callChainDepthDescription  = "traversal depth"
 	// invalidFormatMessage is used when an unsupported format is requested.
-	invalidFormatMessage = "Invalid format value '%s'"
+	invalidFormatMessage            = "Invalid format value '%s'"
+	exclusionFlagDescription        = "exclude folder"
+	disableGitignoreFlagDescription = "do not use .gitignore"
+	disableIgnoreFlagDescription    = "do not use .ignore"
+	includeGitFlagDescription       = "include git directory"
+	formatFlagDescription           = "output format"
+	documentationFlagDescription    = "include documentation"
 )
 
 // isSupportedFormat reports whether the provided format is recognized.
@@ -89,14 +95,27 @@ func createRootCommand() *cobra.Command {
 	return rootCommand
 }
 
+// pathOptions stores configuration for path-related flags.
+type pathOptions struct {
+	exclusionFolder   string
+	disableGitignore  bool
+	disableIgnoreFile bool
+	includeGit        bool
+}
+
+// addPathFlags registers path-related flags on the command.
+func addPathFlags(command *cobra.Command, options *pathOptions) {
+	command.Flags().StringVarP(&options.exclusionFolder, exclusionFlagName, exclusionFlagName, "", exclusionFlagDescription)
+	command.Flags().BoolVar(&options.disableGitignore, noGitignoreFlagName, false, disableGitignoreFlagDescription)
+	command.Flags().BoolVar(&options.disableIgnoreFile, noIgnoreFlagName, false, disableIgnoreFlagDescription)
+	command.Flags().BoolVar(&options.includeGit, includeGitFlagName, false, includeGitFlagDescription)
+}
+
 // createTreeCommand returns the tree subcommand.
 func createTreeCommand() *cobra.Command {
-	var exclusionFolder string
-	var disableGitignore bool
-	var disableIgnoreFile bool
-	var includeGit bool
+	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
-	var withDocumentation bool
+	var documentationEnabled bool
 
 	treeCommand := &cobra.Command{
 		Use:     treeUse,
@@ -107,9 +126,9 @@ func createTreeCommand() *cobra.Command {
 			if len(arguments) == 0 {
 				arguments = []string{defaultPath}
 			}
-			if withDocumentation {
+			if documentationEnabled {
 				fmt.Fprintln(os.Stderr, documentationIgnoredNotice)
-				withDocumentation = false
+				documentationEnabled = false
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
 			if !isSupportedFormat(outputFormatLower) {
@@ -118,34 +137,28 @@ func createTreeCommand() *cobra.Command {
 			return runTool(
 				types.CommandTree,
 				arguments,
-				exclusionFolder,
-				!disableGitignore,
-				!disableIgnoreFile,
-				includeGit,
+				pathConfiguration.exclusionFolder,
+				!pathConfiguration.disableGitignore,
+				!pathConfiguration.disableIgnoreFile,
+				pathConfiguration.includeGit,
 				defaultCallChainDepth,
 				outputFormatLower,
-				withDocumentation,
+				documentationEnabled,
 			)
 		},
 	}
 
-	treeCommand.Flags().StringVarP(&exclusionFolder, exclusionFlagName, exclusionFlagName, "", "exclude folder")
-	treeCommand.Flags().BoolVar(&disableGitignore, noGitignoreFlagName, false, "do not use .gitignore")
-	treeCommand.Flags().BoolVar(&disableIgnoreFile, noIgnoreFlagName, false, "do not use .ignore")
-	treeCommand.Flags().BoolVar(&includeGit, includeGitFlagName, false, "include git directory")
-	treeCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, "output format")
-	treeCommand.Flags().BoolVar(&withDocumentation, documentationFlagName, false, "include documentation")
+	addPathFlags(treeCommand, &pathConfiguration)
+	treeCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
+	treeCommand.Flags().BoolVar(&documentationEnabled, documentationFlagName, false, documentationFlagDescription)
 	return treeCommand
 }
 
 // createContentCommand returns the content subcommand.
 func createContentCommand() *cobra.Command {
-	var exclusionFolder string
-	var disableGitignore bool
-	var disableIgnoreFile bool
-	var includeGit bool
+	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
-	var withDocumentation bool
+	var documentationEnabled bool
 
 	contentCommand := &cobra.Command{
 		Use:     contentUse,
@@ -163,30 +176,27 @@ func createContentCommand() *cobra.Command {
 			return runTool(
 				types.CommandContent,
 				arguments,
-				exclusionFolder,
-				!disableGitignore,
-				!disableIgnoreFile,
-				includeGit,
+				pathConfiguration.exclusionFolder,
+				!pathConfiguration.disableGitignore,
+				!pathConfiguration.disableIgnoreFile,
+				pathConfiguration.includeGit,
 				defaultCallChainDepth,
 				outputFormatLower,
-				withDocumentation,
+				documentationEnabled,
 			)
 		},
 	}
 
-	contentCommand.Flags().StringVarP(&exclusionFolder, exclusionFlagName, exclusionFlagName, "", "exclude folder")
-	contentCommand.Flags().BoolVar(&disableGitignore, noGitignoreFlagName, false, "do not use .gitignore")
-	contentCommand.Flags().BoolVar(&disableIgnoreFile, noIgnoreFlagName, false, "do not use .ignore")
-	contentCommand.Flags().BoolVar(&includeGit, includeGitFlagName, false, "include git directory")
-	contentCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, "output format")
-	contentCommand.Flags().BoolVar(&withDocumentation, documentationFlagName, false, "include documentation")
+	addPathFlags(contentCommand, &pathConfiguration)
+	contentCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
+	contentCommand.Flags().BoolVar(&documentationEnabled, documentationFlagName, false, documentationFlagDescription)
 	return contentCommand
 }
 
 // createCallChainCommand returns the callchain subcommand.
 func createCallChainCommand() *cobra.Command {
 	var outputFormat string = types.FormatJSON
-	var withDocumentation bool
+	var documentationEnabled bool
 	var callChainDepth int = defaultCallChainDepth
 
 	callChainCommand := &cobra.Command{
@@ -208,13 +218,13 @@ func createCallChainCommand() *cobra.Command {
 				false,
 				callChainDepth,
 				outputFormatLower,
-				withDocumentation,
+				documentationEnabled,
 			)
 		},
 	}
 
-	callChainCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, "output format")
-	callChainCommand.Flags().BoolVar(&withDocumentation, documentationFlagName, false, "include documentation")
+	callChainCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
+	callChainCommand.Flags().BoolVar(&documentationEnabled, documentationFlagName, false, documentationFlagDescription)
 	callChainCommand.Flags().IntVar(&callChainDepth, callChainDepthFlagName, defaultCallChainDepth, callChainDepthDescription)
 	return callChainCommand
 }
