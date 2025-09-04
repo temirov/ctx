@@ -32,6 +32,7 @@ const (
 	dependencyFileContent = "dependency"
 	buildTargetPath       = "./cmd/ctx"
 	contentDataFunction   = "github.com/temirov/ctx/internal/commands.GetContentData"
+	binaryMimeType        = "application/octet-stream"
 )
 
 // buildBinary compiles the ctx binary and returns its path.
@@ -425,6 +426,9 @@ func TestCTX(testingHandle *testing.T) {
 				if files[0].Content != "" {
 					t.Fatalf("expected empty content for binary file, got %q", files[0].Content)
 				}
+				if files[0].MimeType != binaryMimeType {
+					t.Fatalf("expected MIME type %q, got %q", binaryMimeType, files[0].MimeType)
+				}
 			},
 		},
 		{
@@ -452,6 +456,9 @@ func TestCTX(testingHandle *testing.T) {
 				child := nodes[0].Children[0]
 				if child.Type != appTypes.NodeTypeBinary {
 					t.Fatalf("expected type %q, got %q", appTypes.NodeTypeBinary, child.Type)
+				}
+				if child.MimeType != binaryMimeType {
+					t.Fatalf("expected MIME type %q, got %q", binaryMimeType, child.MimeType)
 				}
 			},
 		},

@@ -17,6 +17,8 @@ const (
 	callchainMetaHdr = "----- CALLCHAIN METADATA -----"
 	callchainFuncHdr = "----- FUNCTIONS -----"
 	callchainDocsHdr = "--- DOCS ---"
+	binaryOmittedFmt = "(binary %s content omitted)"
+	binaryNodeFmt    = "[Binary %s] %s"
 )
 
 // RenderCallChainRaw returns the call‑chain output in raw text format.
@@ -116,7 +118,7 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 			if commandName == types.CommandContent {
 				fmt.Printf("File: %s\n", v.Path)
 				if v.Type == types.NodeTypeBinary {
-					fmt.Println("(binary content omitted)")
+					fmt.Printf(binaryOmittedFmt+"\n", v.MimeType)
 				} else {
 					fmt.Println(v.Content)
 				}
@@ -128,7 +130,7 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 				if v.Type == types.NodeTypeFile {
 					fmt.Printf("[File] %s\n", v.Path)
 				} else if v.Type == types.NodeTypeBinary {
-					fmt.Printf("[Binary] %s\n", v.Path)
+					fmt.Printf(binaryNodeFmt+"\n", v.MimeType, v.Path)
 				} else {
 					fmt.Printf("\n--- Directory Tree: %s ---\n", v.Path)
 					printTree(v, "")
@@ -189,7 +191,7 @@ func printTree(node *types.TreeOutputNode, prefix string) {
 		fmt.Printf("%s[File] %s\n", prefix, node.Path)
 		return
 	case types.NodeTypeBinary:
-		fmt.Printf("%s[Binary] %s\n", prefix, node.Path)
+		fmt.Printf("%s"+binaryNodeFmt+"\n", prefix, node.MimeType, node.Path)
 		return
 	}
 	fmt.Printf("%s%s\n", prefix, node.Path)

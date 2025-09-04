@@ -29,17 +29,21 @@ type DocumentationEntry struct {
 
 // FileOutput represents one file returned by the content command.
 type FileOutput struct {
-	Path          string               `json:"path"`
-	Type          string               `json:"type"`
+	Path string `json:"path"`
+	Type string `json:"type"`
+	// MimeType is the MIME type of the file when the type is NodeTypeBinary.
+	MimeType      string               `json:"mimeType,omitempty"`
 	Content       string               `json:"content"`
 	Documentation []DocumentationEntry `json:"documentation,omitempty"`
 }
 
 // TreeOutputNode represents a node of a directory tree returned by the tree command.
 type TreeOutputNode struct {
-	Path     string            `json:"path"`
-	Name     string            `json:"name"`
-	Type     string            `json:"type"`
+	Path string `json:"path"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	// MimeType is the MIME type when the node represents binary content.
+	MimeType string            `json:"mimeType,omitempty"`
 	Children []*TreeOutputNode `json:"children,omitempty"`
 }
 

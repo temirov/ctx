@@ -57,9 +57,9 @@ func buildTreeNodes(currentDirectoryPath string, rootDirectoryPath string, ignor
 
 		if entry.IsDir() {
 			node.Type = types.NodeTypeDirectory
-			childNodes, err := buildTreeNodes(childPath, rootDirectoryPath, ignorePatterns)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Skipping subdirectory %s due to error: %v\n", childPath, err)
+			childNodes, buildError := buildTreeNodes(childPath, rootDirectoryPath, ignorePatterns)
+			if buildError != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Skipping subdirectory %s due to error: %v\n", childPath, buildError)
 				node.Children = nil
 			} else {
 				node.Children = childNodes
@@ -67,6 +67,7 @@ func buildTreeNodes(currentDirectoryPath string, rootDirectoryPath string, ignor
 		} else {
 			if utils.IsFileBinary(childPath) {
 				node.Type = types.NodeTypeBinary
+				node.MimeType = utils.DetectMimeType(childPath)
 			} else {
 				node.Type = types.NodeTypeFile
 			}
