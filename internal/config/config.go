@@ -17,40 +17,49 @@ const (
 	gitIgnoreFileName   = ".gitignore"
 	exclusionPrefix     = "EXCL:"
 	gitDirectoryPattern = utils.GitDirectoryName + "/"
+	// showBinaryContentDirective marks patterns whose binary content should be displayed.
+	showBinaryContentDirective = "show-binary-content:"
 )
 
-// LoadIgnoreFilePatterns reads a specified ignore file (if it exists) and returns a slice of ignore patterns.
-// Blank lines and lines beginning with '#' are skipped.
+// LoadIgnoreFilePatterns reads a specified ignore file and returns ignore patterns and binary content patterns.
 //
 // #nosec G304
-func LoadIgnoreFilePatterns(ignoreFilePath string) ([]string, error) {
-	fileHandle, openError := os.Open(ignoreFilePath)
-	if openError != nil {
-		if os.IsNotExist(openError) {
-			return nil, nil
+func LoadIgnoreFilePatterns(ignoreFilePath string) ([]string, []string, error) {
+	fileHandle, openFileError := os.Open(ignoreFilePath)
+	if openFileError != nil {
+		if os.IsNotExist(openFileError) {
+			return nil, nil, nil
 		}
-		return nil, openError
+		return nil, nil, openFileError
 	}
 	defer func() {
-		closeErr := fileHandle.Close()
-		if closeErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to close %s: %v\n", ignoreFilePath, closeErr)
+		closeError := fileHandle.Close()
+		if closeError != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to close %s: %v\n", ignoreFilePath, closeError)
 		}
 	}()
 
-	var patterns []string
+	var ignorePatterns []string
+	var binaryContentPatterns []string
 	scanner := bufio.NewScanner(fileHandle)
 	for scanner.Scan() {
-		lineValue := strings.TrimSpace(scanner.Text())
-		if lineValue == "" || strings.HasPrefix(lineValue, "#") {
+		trimmedLine := strings.TrimSpace(scanner.Text())
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
 			continue
 		}
-		patterns = append(patterns, lineValue)
+		if strings.HasPrefix(trimmedLine, showBinaryContentDirective) {
+			pattern := strings.TrimSpace(strings.TrimPrefix(trimmedLine, showBinaryContentDirective))
+			if pattern != "" {
+				binaryContentPatterns = append(binaryContentPatterns, pattern)
+			}
+			continue
+		}
+		ignorePatterns = append(ignorePatterns, trimmedLine)
 	}
 	if scanError := scanner.Err(); scanError != nil {
-		return nil, scanError
+		return nil, nil, scanError
 	}
-	return patterns, nil
+	return ignorePatterns, binaryContentPatterns, nil
 }
 
 // LoadCombinedIgnorePatterns aggregates patterns from .ignore and/or .gitignore files within a directory.
@@ -61,7 +70,7 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 
 	if useIgnoreFile {
 		ignoreFilePath := filepath.Join(absoluteDirectoryPath, ignoreFileName)
-		ignoreFilePatterns, loadError := LoadIgnoreFilePatterns(ignoreFilePath)
+		ignoreFilePatterns, _, loadError := LoadIgnoreFilePatterns(ignoreFilePath)
 		if loadError != nil {
 			return nil, fmt.Errorf("loading %s from %s: %w", ignoreFileName, absoluteDirectoryPath, loadError)
 		}
@@ -70,11 +79,11 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 
 	if useGitignore {
 		gitIgnoreFilePath := filepath.Join(absoluteDirectoryPath, gitIgnoreFileName)
-		gitignoreFilePatterns, loadError := LoadIgnoreFilePatterns(gitIgnoreFilePath)
+		gitIgnoreFilePatterns, _, loadError := LoadIgnoreFilePatterns(gitIgnoreFilePath)
 		if loadError != nil {
 			return nil, fmt.Errorf("loading %s from %s: %w", gitIgnoreFileName, absoluteDirectoryPath, loadError)
 		}
-		combinedPatterns = append(combinedPatterns, gitignoreFilePatterns...)
+		combinedPatterns = append(combinedPatterns, gitIgnoreFilePatterns...)
 	}
 
 	if !includeGit {
@@ -102,11 +111,12 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 	return deduplicatedFilePatterns, nil
 }
 
-// LoadRecursiveIgnorePatterns traverses a directory tree rooted at rootDirectoryPath and aggregates ignore patterns.
+// LoadRecursiveIgnorePatterns traverses a directory tree rooted at rootDirectoryPath and aggregates ignore patterns and binary content patterns.
 // Patterns from .ignore and .gitignore files found in each directory are prefixed with that directory's relative path.
 // The .git directory is ignored by default unless includeGit is true. The exclusion folder pattern is appended when provided.
-func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionFolder string, useGitignore bool, useIgnoreFile bool, includeGit bool) ([]string, error) {
+func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionFolder string, useGitignore bool, useIgnoreFile bool, includeGit bool) ([]string, []string, error) {
 	var aggregatedPatterns []string
+	var aggregatedBinaryContentPatterns []string
 
 	walkFunction := func(currentDirectoryPath string, directoryEntry fs.DirEntry, walkError error) error {
 		if walkError != nil {
@@ -127,18 +137,21 @@ func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionFolder strin
 
 		if useIgnoreFile {
 			ignoreFilePath := filepath.Join(currentDirectoryPath, ignoreFileName)
-			ignorePatterns, loadError := LoadIgnoreFilePatterns(ignoreFilePath)
+			ignorePatterns, binaryContentPatterns, loadError := LoadIgnoreFilePatterns(ignoreFilePath)
 			if loadError != nil {
 				return fmt.Errorf("loading %s from %s: %w", ignoreFileName, currentDirectoryPath, loadError)
 			}
 			for _, pattern := range ignorePatterns {
 				aggregatedPatterns = append(aggregatedPatterns, prefix+pattern)
 			}
+			for _, binaryPattern := range binaryContentPatterns {
+				aggregatedBinaryContentPatterns = append(aggregatedBinaryContentPatterns, prefix+binaryPattern)
+			}
 		}
 
 		if useGitignore {
 			gitIgnoreFilePath := filepath.Join(currentDirectoryPath, gitIgnoreFileName)
-			gitIgnorePatterns, loadError := LoadIgnoreFilePatterns(gitIgnoreFilePath)
+			gitIgnorePatterns, _, loadError := LoadIgnoreFilePatterns(gitIgnoreFilePath)
 			if loadError != nil {
 				return fmt.Errorf("loading %s from %s: %w", gitIgnoreFileName, currentDirectoryPath, loadError)
 			}
@@ -150,8 +163,8 @@ func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionFolder strin
 		return nil
 	}
 
-	if err := filepath.WalkDir(rootDirectoryPath, walkFunction); err != nil {
-		return nil, err
+	if walkError := filepath.WalkDir(rootDirectoryPath, walkFunction); walkError != nil {
+		return nil, nil, walkError
 	}
 
 	if !includeGit {
@@ -159,6 +172,7 @@ func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionFolder strin
 	}
 
 	deduplicatedPatterns := utils.DeduplicatePatterns(aggregatedPatterns)
+	deduplicatedBinaryPatterns := utils.DeduplicatePatterns(aggregatedBinaryContentPatterns)
 
 	trimmedExclusion := strings.TrimSpace(exclusionFolder)
 	if trimmedExclusion != "" {
@@ -176,5 +190,5 @@ func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionFolder strin
 		}
 	}
 
-	return deduplicatedPatterns, nil
+	return deduplicatedPatterns, deduplicatedBinaryPatterns, nil
 }

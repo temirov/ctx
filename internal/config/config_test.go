@@ -33,9 +33,9 @@ func TestLoadRecursiveIgnorePatternsNestedIgnore(testingHandle *testing.T) {
 	}
 	writeTestFile(testingHandle, filepath.Join(nestedDirectoryPath, ignoreFileName), nestedPatternName+"\n")
 
-	patternList, loadErr := LoadRecursiveIgnorePatterns(rootDirectory, "", false, true, false)
-	if loadErr != nil {
-		testingHandle.Fatalf("LoadRecursiveIgnorePatterns failed: %v", loadErr)
+	patternList, binaryPatternList, loadError := LoadRecursiveIgnorePatterns(rootDirectory, "", false, true, false)
+	if loadError != nil {
+		testingHandle.Fatalf("LoadRecursiveIgnorePatterns failed: %v", loadError)
 	}
 
 	sort.Strings(patternList)
@@ -43,6 +43,9 @@ func TestLoadRecursiveIgnorePatternsNestedIgnore(testingHandle *testing.T) {
 	sort.Strings(expectedPatterns)
 	if !reflect.DeepEqual(patternList, expectedPatterns) {
 		testingHandle.Fatalf("unexpected patterns: got %v want %v", patternList, expectedPatterns)
+	}
+	if len(binaryPatternList) != 0 {
+		testingHandle.Fatalf("expected no binary content patterns, got %v", binaryPatternList)
 	}
 }
 
@@ -63,9 +66,9 @@ func TestLoadRecursiveIgnorePatternsNestedGitIgnore(testingHandle *testing.T) {
 	}
 	writeTestFile(testingHandle, filepath.Join(nestedDirectoryPath, gitIgnoreFileName), nestedGitPattern+"\n")
 
-	patternList, loadErr := LoadRecursiveIgnorePatterns(rootDirectory, "", true, false, false)
-	if loadErr != nil {
-		testingHandle.Fatalf("LoadRecursiveIgnorePatterns failed: %v", loadErr)
+	patternList, binaryPatternList, loadError := LoadRecursiveIgnorePatterns(rootDirectory, "", true, false, false)
+	if loadError != nil {
+		testingHandle.Fatalf("LoadRecursiveIgnorePatterns failed: %v", loadError)
 	}
 
 	sort.Strings(patternList)
@@ -73,5 +76,41 @@ func TestLoadRecursiveIgnorePatternsNestedGitIgnore(testingHandle *testing.T) {
 	sort.Strings(expectedPatterns)
 	if !reflect.DeepEqual(patternList, expectedPatterns) {
 		testingHandle.Fatalf("unexpected patterns: got %v want %v", patternList, expectedPatterns)
+	}
+	if len(binaryPatternList) != 0 {
+		testingHandle.Fatalf("expected no binary content patterns, got %v", binaryPatternList)
+	}
+}
+
+// TestLoadRecursiveIgnorePatternsBinaryContent verifies aggregation of binary content patterns.
+func TestLoadRecursiveIgnorePatternsBinaryContent(testingHandle *testing.T) {
+	const (
+		binaryPatternName   = "data.bin"
+		nestedDirectoryName = "nested"
+	)
+
+	rootDirectory := testingHandle.TempDir()
+	writeTestFile(testingHandle, filepath.Join(rootDirectory, ignoreFileName), showBinaryContentDirective+binaryPatternName+"\n")
+
+	nestedDirectoryPath := filepath.Join(rootDirectory, nestedDirectoryName)
+	if makeDirError := os.MkdirAll(nestedDirectoryPath, 0o755); makeDirError != nil {
+		testingHandle.Fatalf("failed to create nested directory: %v", makeDirError)
+	}
+	writeTestFile(testingHandle, filepath.Join(nestedDirectoryPath, ignoreFileName), showBinaryContentDirective+binaryPatternName+"\n")
+
+	patternList, binaryPatternList, loadError := LoadRecursiveIgnorePatterns(rootDirectory, "", false, true, false)
+	if loadError != nil {
+		testingHandle.Fatalf("LoadRecursiveIgnorePatterns failed: %v", loadError)
+	}
+
+	if len(patternList) != 1 || patternList[0] != gitDirectoryPattern {
+		testingHandle.Fatalf("unexpected ignore patterns: %v", patternList)
+	}
+
+	sort.Strings(binaryPatternList)
+	expectedBinaryPatterns := []string{binaryPatternName, nestedDirectoryName + "/" + binaryPatternName}
+	sort.Strings(expectedBinaryPatterns)
+	if !reflect.DeepEqual(binaryPatternList, expectedBinaryPatterns) {
+		testingHandle.Fatalf("unexpected binary content patterns: got %v want %v", binaryPatternList, expectedBinaryPatterns)
 	}
 }
