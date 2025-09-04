@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/temirov/ctx/types"
-	"github.com/temirov/ctx/utils"
+	"github.com/temirov/ctx/internal/types"
+	"github.com/temirov/ctx/internal/utils"
 )
 
 // GetContentData returns FileOutput slices for the specified directory.

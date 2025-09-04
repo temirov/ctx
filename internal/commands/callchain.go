@@ -10,8 +10,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/temirov/ctx/docs"
-	apptypes "github.com/temirov/ctx/types"
+	"github.com/temirov/ctx/internal/docs"
+	apptypes "github.com/temirov/ctx/internal/types"
 	"golang.org/x/tools/go/callgraph"
 	"golang.org/x/tools/go/callgraph/static"
 	"golang.org/x/tools/go/packages"
@@ -127,6 +127,7 @@ func GetCallChainData(
 	return output, nil
 }
 
+// composeQualifiedName returns the fully qualified name for a function declaration.
 func composeQualifiedName(pkg *packages.Package, decl *ast.FuncDecl) string {
 	name := decl.Name.Name
 	if decl.Recv != nil && len(decl.Recv.List) > 0 {
@@ -137,6 +138,7 @@ func composeQualifiedName(pkg *packages.Package, decl *ast.FuncDecl) string {
 	return pkg.PkgPath + "." + name
 }
 
+// selectFunctionNode finds the graph node matching the candidate function name.
 func selectFunctionNode(graph *callgraph.Graph, candidate string) *callgraph.Node {
 	short := candidate
 	if i := strings.LastIndex(candidate, "."); i >= 0 && i < len(candidate)-1 {

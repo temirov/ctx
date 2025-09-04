@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/temirov/ctx/types"
-	"github.com/temirov/ctx/utils"
+	"github.com/temirov/ctx/internal/types"
+	"github.com/temirov/ctx/internal/utils"
 )
 
 // GetTreeData generates the tree structure data for a given directory.
@@ -34,6 +34,7 @@ func GetTreeData(rootDirPath string, ignorePatterns []string) ([]*types.TreeOutp
 	return []*types.TreeOutputNode{rootNode}, nil
 }
 
+// buildTreeNodes recursively builds child nodes for the directory tree.
 func buildTreeNodes(currentDirectoryPath string, rootDirectoryPath string, ignorePatterns []string) ([]*types.TreeOutputNode, error) {
 	var nodes []*types.TreeOutputNode
 

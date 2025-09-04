@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/temirov/ctx/utils"
+	"github.com/temirov/ctx/internal/utils"
 )
 
 const (
