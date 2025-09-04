@@ -3,6 +3,7 @@ package tests
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -34,6 +35,13 @@ const (
 	commandDirectoryRelativePath = "cmd/ctx"
 	integrationBinaryBaseName    = "ctx_integration_binary"
 	contentDataFunction          = "github.com/temirov/ctx/internal/commands.GetContentData"
+
+	binaryFixtureFileName      = "fixture.png"
+	expectedBinaryMimeType     = "image/png"
+	ignoreFileName             = ".ignore"
+	showBinaryContentDirective = "show-binary-content:"
+	unmatchedBinaryFixtureName = "unmatched.bin"
+	onePixelPNGBase64Content   = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
 )
 
 // buildBinary compiles the ctx binary and returns its path.
@@ -485,8 +493,12 @@ func TestCTX(testingHandle *testing.T) {
 				".",
 			},
 			prepare: func(t *testing.T) string {
+				binaryBytes, decodeError := base64.StdEncoding.DecodeString(onePixelPNGBase64Content)
+				if decodeError != nil {
+					t.Fatalf("failed to decode binary fixture: %v", decodeError)
+				}
 				return setupTestDirectory(t, map[string]string{
-					"bin.dat": "\x00\x01\x02",
+					binaryFixtureFileName: string(binaryBytes),
 				})
 			},
 			validate: func(t *testing.T, output string) {
@@ -497,11 +509,15 @@ func TestCTX(testingHandle *testing.T) {
 				if len(files) != 1 {
 					t.Fatalf("expected one item, got %d", len(files))
 				}
-				if files[0].Type != appTypes.NodeTypeBinary {
-					t.Fatalf("expected type %q, got %q", appTypes.NodeTypeBinary, files[0].Type)
+				fileOutput := files[0]
+				if fileOutput.Type != appTypes.NodeTypeBinary {
+					t.Fatalf("expected type %q, got %q", appTypes.NodeTypeBinary, fileOutput.Type)
 				}
-				if files[0].Content != "" {
-					t.Fatalf("expected empty content for binary file, got %q", files[0].Content)
+				if fileOutput.Content != "" {
+					t.Fatalf("expected empty content for binary file, got %q", fileOutput.Content)
+				}
+				if fileOutput.MimeType != expectedBinaryMimeType {
+					t.Fatalf("expected MIME type %q, got %q", expectedBinaryMimeType, fileOutput.MimeType)
 				}
 			},
 		},
@@ -512,8 +528,12 @@ func TestCTX(testingHandle *testing.T) {
 				".",
 			},
 			prepare: func(t *testing.T) string {
+				binaryBytes, decodeError := base64.StdEncoding.DecodeString(onePixelPNGBase64Content)
+				if decodeError != nil {
+					t.Fatalf("failed to decode binary fixture: %v", decodeError)
+				}
 				return setupTestDirectory(t, map[string]string{
-					"bin.dat": "\x00\x01\x02",
+					binaryFixtureFileName: string(binaryBytes),
 				})
 			},
 			validate: func(t *testing.T, output string) {
@@ -530,6 +550,77 @@ func TestCTX(testingHandle *testing.T) {
 				child := nodes[0].Children[0]
 				if child.Type != appTypes.NodeTypeBinary {
 					t.Fatalf("expected type %q, got %q", appTypes.NodeTypeBinary, child.Type)
+				}
+				if child.MimeType != expectedBinaryMimeType {
+					t.Fatalf("expected MIME type %q, got %q", expectedBinaryMimeType, child.MimeType)
+				}
+			},
+		},
+		{
+			name: "BinaryFileContentIgnoreDefault",
+			arguments: []string{
+				appTypes.CommandContent,
+				".",
+			},
+			prepare: func(t *testing.T) string {
+				binaryBytes, decodeError := base64.StdEncoding.DecodeString(onePixelPNGBase64Content)
+				if decodeError != nil {
+					t.Fatalf("failed to decode binary fixture: %v", decodeError)
+				}
+				ignoreContent := showBinaryContentDirective + unmatchedBinaryFixtureName + "\n"
+				return setupTestDirectory(t, map[string]string{
+					binaryFixtureFileName: string(binaryBytes),
+					ignoreFileName:        ignoreContent,
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				var files []appTypes.FileOutput
+				if err := json.Unmarshal([]byte(output), &files); err != nil {
+					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(files) != 1 {
+					t.Fatalf("expected one item, got %d", len(files))
+				}
+				fileOutput := files[0]
+				if fileOutput.Content != "" {
+					t.Fatalf("expected empty content for binary file, got %q", fileOutput.Content)
+				}
+				if fileOutput.MimeType != expectedBinaryMimeType {
+					t.Fatalf("expected MIME type %q, got %q", expectedBinaryMimeType, fileOutput.MimeType)
+				}
+			},
+		},
+		{
+			name: "BinaryFileContentShowDirective",
+			arguments: []string{
+				appTypes.CommandContent,
+				".",
+			},
+			prepare: func(t *testing.T) string {
+				binaryBytes, decodeError := base64.StdEncoding.DecodeString(onePixelPNGBase64Content)
+				if decodeError != nil {
+					t.Fatalf("failed to decode binary fixture: %v", decodeError)
+				}
+				ignoreContent := showBinaryContentDirective + binaryFixtureFileName + "\n"
+				return setupTestDirectory(t, map[string]string{
+					binaryFixtureFileName: string(binaryBytes),
+					ignoreFileName:        ignoreContent,
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				var files []appTypes.FileOutput
+				if err := json.Unmarshal([]byte(output), &files); err != nil {
+					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(files) != 1 {
+					t.Fatalf("expected one item, got %d", len(files))
+				}
+				fileOutput := files[0]
+				if fileOutput.Content != onePixelPNGBase64Content {
+					t.Fatalf("expected base64 content for binary file")
+				}
+				if fileOutput.MimeType != expectedBinaryMimeType {
+					t.Fatalf("expected MIME type %q, got %q", expectedBinaryMimeType, fileOutput.MimeType)
 				}
 			},
 		},
