@@ -27,16 +27,16 @@ func IsBinary(data []byte) bool {
 // IsFileBinary reads up to sniffLen bytes from the file at path and determines
 // if the content appears to be binary.
 func IsFileBinary(path string) bool {
-	f, err := os.Open(path)
+	fileHandle, err := os.Open(path)
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer fileHandle.Close()
 
-	buf := make([]byte, sniffLen)
-	n, err := f.Read(buf)
+	buffer := make([]byte, sniffLen)
+	bytesRead, err := fileHandle.Read(buffer)
 	if err != nil && err != io.EOF {
 		return false
 	}
-	return IsBinary(buf[:n])
+	return IsBinary(buffer[:bytesRead])
 }
