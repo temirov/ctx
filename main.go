@@ -22,6 +22,7 @@ const (
 	flagExcludeL    = "--e"
 	flagNoGitignore = "--no-gitignore"
 	flagNoIgnore    = "--no-ignore"
+	flagGit         = "--git"
 	flagFormat      = "--format"
 	flagDoc         = "--doc"
 	defaultPath     = "."
@@ -34,18 +35,19 @@ func main() {
 			os.Exit(0)
 		}
 	}
-	command, paths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat, documentationEnabled := parseArgsOrExit()
-	if err := runTool(command, paths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat, documentationEnabled); err != nil {
+	command, paths, exclusionFolder, useGitignore, useIgnoreFile, includeGit, outputFormat, documentationEnabled := parseArgsOrExit()
+	if err := runTool(command, paths, exclusionFolder, useGitignore, useIgnoreFile, includeGit, outputFormat, documentationEnabled); err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 }
 
-func parseArgsOrExit() (string, []string, string, bool, bool, string, bool) {
+func parseArgsOrExit() (string, []string, string, bool, bool, bool, string, bool) {
 	if len(os.Args) < 2 {
 		printUsage()
 	}
 	useGitignore := true
 	useIgnoreFile := true
+	includeGit := false
 	outputFormat := types.FormatJSON
 	withDoc := false
 
@@ -85,6 +87,9 @@ func parseArgsOrExit() (string, []string, string, bool, bool, string, bool) {
 				i++
 			case flagNoIgnore:
 				useIgnoreFile = false
+				i++
+			case flagGit:
+				includeGit = true
 				i++
 			case flagFormat:
 				if i+1 >= len(args) {
@@ -126,12 +131,12 @@ func parseArgsOrExit() (string, []string, string, bool, bool, string, bool) {
 		fmt.Fprintln(os.Stderr, "--doc ignored for tree")
 		withDoc = false
 	}
-	return command, paths, exclusionFolder, useGitignore, useIgnoreFile, outputFormat, withDoc
+	return command, paths, exclusionFolder, useGitignore, useIgnoreFile, includeGit, outputFormat, withDoc
 }
 
 func printUsage() {
 	exe := filepath.Base(os.Args[0])
-	fmt.Printf("Usage:\n  %s <tree|t|content|c|callchain|cc> [paths] [-e folder] [--no-gitignore] [--no-ignore] [--format raw|json] [--doc]\n", exe)
+	fmt.Printf("Usage:\n  %s <tree|t|content|c|callchain|cc> [paths] [-e folder] [--no-gitignore] [--no-ignore] [--git] [--format raw|json] [--doc]\n", exe)
 	os.Exit(1)
 }
 
@@ -139,7 +144,7 @@ func runTool(
 	command string,
 	paths []string,
 	exclusionFolder string,
-	useGitignore, useIgnoreFile bool,
+	useGitignore, useIgnoreFile, includeGit bool,
 	format string,
 	documentationEnabled bool,
 ) error {
@@ -157,7 +162,7 @@ func runTool(
 	case types.CommandCallChain:
 		return runCallChain(paths[0], format, documentationEnabled, collector, root)
 	case types.CommandTree, types.CommandContent:
-		return runTreeOrContentCommand(command, paths, exclusionFolder, useGitignore, useIgnoreFile, format, documentationEnabled, collector)
+		return runTreeOrContentCommand(command, paths, exclusionFolder, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, collector)
 	default:
 		return fmt.Errorf("unsupported command")
 	}
@@ -189,7 +194,7 @@ func runTreeOrContentCommand(
 	command string,
 	paths []string,
 	exclusionFolder string,
-	useGitignore, useIgnoreFile bool,
+	useGitignore, useIgnoreFile, includeGit bool,
 	format string,
 	withDoc bool,
 	collector *docs.Collector,
@@ -202,7 +207,7 @@ func runTreeOrContentCommand(
 	var collected []interface{}
 	for _, info := range validated {
 		if info.IsDir {
-			patterns, err := config.LoadCombinedIgnorePatterns(info.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile)
+			patterns, err := config.LoadCombinedIgnorePatterns(info.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile, includeGit)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: skipping %s: %v\n", info.AbsolutePath, err)
 				continue

@@ -1,6 +1,6 @@
 # ctx
 
-Ctx is a command‑line tool written in Go that displays a directory tree view, outputs file contents for specified
+Ctx is a command-line tool written in Go that displays a directory tree view, outputs file contents for specified
 files and directories, or analyzes the call chain for a given function in the repository. It supports exclusion patterns
 via .ignore and .gitignore files within each directory, an optional global exclusion flag, configurable output formats,
 and **optional embedded documentation** for referenced packages and symbols.
@@ -12,12 +12,12 @@ and **optional embedded documentation** for referenced packages and symbols.
 - **Call Chain Analysis:** Analyzes the call graph for a specified function using the `callchain` command. Provide the
   fully qualified (or suffix) function name as the sole argument.
 - **Embedded Documentation (`--doc`):** When the `--doc` flag is used with the `content` or `callchain` command,
-  ctx embeds documentation for imported third‑party packages and referenced functions in the output (both *raw* and
+  ctx embeds documentation for imported third-party packages and referenced functions in the output (both *raw* and
   *json* formats).
 - **Output Formats:** Supports **raw** text output (default) and **json** output using the `--format` flag for all
   commands.
 - **Tree Command (`tree`, `t`):**
-    - *Raw format:* Recursively displays the directory structure for each specified directory in a tree‑like format,
+    - *Raw format:* Recursively displays the directory structure for each specified directory in a tree-like format,
       listing explicitly provided file paths with `[File]`.
     - *JSON format:* Outputs a JSON array where each element represents an input path. Directories include a nested
       `children` array.
@@ -37,6 +37,7 @@ and **optional embedded documentation** for referenced packages and symbols.
       `--no-ignore`).
     - Reads patterns from a `.gitignore` file located at the root of each processed directory by default (can be
       disabled with `--no-gitignore`).
+    - Skips the `.git` directory unless the `--git` flag is provided.
     - A global exclusion flag (`-e` or `--e`) excludes a designated folder if it appears as a direct child in any
       specified directory.
 - **Command Abbreviations:**
@@ -48,7 +49,7 @@ and **optional embedded documentation** for referenced packages and symbols.
 
 ## Downloads
 
-Pre‑built binaries are available on the
+Pre-built binaries are available on the
 [Releases](https://github.com/temirov/ctx/releases) page for macOS (Intel & ARM), Linux (Intel), and Windows (Intel).
 
 ## Installation
@@ -75,14 +76,15 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 
 ### Common Flags
 
-| Flag                   | Applies to         | Description                                                                      |
-|------------------------|--------------------|----------------------------------------------------------------------------------|
-| `-e, --e <folder>`     | tree, content      | Exclude a direct‑child folder during directory traversal.                        |
-| `--no-gitignore`       | tree, content      | Disable loading of `.gitignore` files.                                           |
-| `--no-ignore`          | tree, content      | Disable loading of `.ignore` files.                                              |
-| `--format <raw| json>` | all commands       | Select output format (default `raw`).                                            |
-| `--doc`                | content, callchain | Embed documentation for referenced external packages and symbols into the output.|
-| `--version`            | all commands       | Print ctx version and exit.                                                      |
+| Flag                  | Applies to         | Description |
+|-----------------------|--------------------|---------------------------------------------------------------|
+| `-e, --e <folder>`    | tree, content      | Exclude a direct-child folder during directory traversal. |
+| `--no-gitignore`      | tree, content      | Disable loading of `.gitignore` files. |
+| `--no-ignore`         | tree, content      | Disable loading of `.ignore` files. |
+| `--git`               | tree, content      | Include the `.git` directory during traversal. |
+| `--format <raw|json>` | all commands       | Select output format (default `raw`). |
+| `--doc`               | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
+| `--version`           | all commands       | Print ctx version and exit. |
 
 ### Examples
 
@@ -106,10 +108,10 @@ ctx callchain github.com/temirov/ctx/commands.GetContentData --doc --format raw
 
 ## Output Formats
 
-| Format | tree command                   | content command                            | callchain command                           |
-|--------|--------------------------------|--------------------------------------------|---------------------------------------------|
+| Format | tree command                   | content command                            | callchain command |
+|--------|--------------------------------|--------------------------------------------|------------------|
 | raw    | Text tree view (`[File] path`) | File blocks (`File: path ... End of file`) | Metadata, source blocks; docs when `--doc`. |
-| json   | `[]TreeOutputNode`             | `[]FileOutput`                             | `CallChainOutput`                           |
+| json   | `[]TreeOutputNode`             | `[]FileOutput`                             | `CallChainOutput` |
 
 ## Configuration
 
@@ -118,3 +120,4 @@ Exclusion patterns are loaded **only** during directory traversal; explicitly li
 ## License
 
 ctx is released under the [MIT License](MIT-LICENSE).
+
