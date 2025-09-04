@@ -40,16 +40,17 @@ const (
 	unsupportedCommandMessage  = "unsupported command"
 	defaultCallChainDepth      = 1
 	callChainDepthDescription  = "traversal depth"
-	invalidFormatMessage       = "Invalid format value '%s'"
+	// invalidFormatMessage is used when an unsupported format is requested.
+	invalidFormatMessage = "Invalid format value '%s'"
 )
 
-// validateOutputFormat ensures that the requested output format is supported.
-func validateOutputFormat(format string) error {
+// isSupportedFormat reports whether the provided format is recognized.
+func isSupportedFormat(format string) bool {
 	switch format {
 	case types.FormatRaw, types.FormatJSON, types.FormatXML:
-		return nil
+		return true
 	default:
-		return fmt.Errorf(invalidFormatMessage, format)
+		return false
 	}
 }
 
@@ -111,8 +112,8 @@ func createTreeCommand() *cobra.Command {
 				withDocumentation = false
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
-			if err := validateOutputFormat(outputFormatLower); err != nil {
-				return err
+			if !isSupportedFormat(outputFormatLower) {
+				return fmt.Errorf(invalidFormatMessage, outputFormatLower)
 			}
 			return runTool(
 				types.CommandTree,
@@ -156,8 +157,8 @@ func createContentCommand() *cobra.Command {
 				arguments = []string{defaultPath}
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
-			if err := validateOutputFormat(outputFormatLower); err != nil {
-				return err
+			if !isSupportedFormat(outputFormatLower) {
+				return fmt.Errorf(invalidFormatMessage, outputFormatLower)
 			}
 			return runTool(
 				types.CommandContent,
@@ -195,8 +196,8 @@ func createCallChainCommand() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, arguments []string) error {
 			outputFormatLower := strings.ToLower(outputFormat)
-			if err := validateOutputFormat(outputFormatLower); err != nil {
-				return err
+			if !isSupportedFormat(outputFormatLower) {
+				return fmt.Errorf(invalidFormatMessage, outputFormatLower)
 			}
 			return runTool(
 				types.CommandCallChain,
@@ -336,7 +337,7 @@ func runTreeOrContentCommand(
 			} else {
 				fileBytes, fileReadError := os.ReadFile(info.AbsolutePath)
 				if fileReadError != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to read %s: %v\n", info.AbsolutePath, fileReadError)
+					fmt.Fprintf(os.Stderr, commands.WarningFileReadFormat, info.AbsolutePath, fileReadError)
 					continue
 				}
 				fileType := types.NodeTypeFile
