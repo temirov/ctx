@@ -45,6 +45,9 @@ func GetApplicationVersion() string {
 	return unknownVersion
 }
 
+// findGitDirectory searches upward from the provided starting directory
+// until it locates a directory containing the .git folder and returns
+// the path to that directory.
 func findGitDirectory(startDirectory string) (string, error) {
 	absoluteStartDirectory, errorAbsolute := filepath.Abs(startDirectory)
 	if errorAbsolute != nil {
