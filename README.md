@@ -119,10 +119,40 @@ ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --doc --fo
 
 Exclusion patterns are loaded **only** during directory traversal; explicitly listed file paths are never ignored.
 
-Lines in `.ignore` starting with `show-binary-content:` mark paths whose binary contents are base64-encoded and included in output:
+## Binary File Handling
+
+When a binary file is encountered, `ctx` reports its MIME type and omits the content. This is the default behavior when `.ignore` contains no directives:
 
 ```
-show-binary-content: assets/logo.png
+# .ignore
+# (no show-binary-content directives)
+```
+
+```bash
+ctx content image.png --format raw
+File: image.png
+Mime Type: image/png
+(binary content omitted)
+End of file: image.png
+```
+
+To include binary data, add a `show-binary-content:` directive to `.ignore`. Matched files are emitted as base64-encoded strings:
+
+```
+# .ignore
+show-binary-content: image.png
+```
+
+```bash
+ctx content . --format json
+[
+  {
+    "path": "image.png",
+    "type": "binary",
+    "content": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PdpvJwAAAABJRU5ErkJggg==",
+    "mimeType": "image/png"
+  }
+]
 ```
 
 ## License
