@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/temirov/ctx/types"
+	"github.com/temirov/ctx/internal/types"
 )
 
 const (
@@ -144,6 +144,7 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 	return nil
 }
 
+// dedupeDocumentationEntries returns a slice with duplicate documentation entries removed.
 func dedupeDocumentationEntries(entries []types.DocumentationEntry) []types.DocumentationEntry {
 	seen := make(map[string]struct{}, len(entries))
 	var out []types.DocumentationEntry
@@ -157,6 +158,7 @@ func dedupeDocumentationEntries(entries []types.DocumentationEntry) []types.Docu
 	return out
 }
 
+// dedupeCollectedItems returns a slice with duplicate collected items removed.
 func dedupeCollectedItems(items []interface{}) []interface{} {
 	seen := make(map[string]struct{}, len(items))
 	var out []interface{}
@@ -180,6 +182,7 @@ func dedupeCollectedItems(items []interface{}) []interface{} {
 	return out
 }
 
+// printTree recursively prints a directory tree to stdout.
 func printTree(node *types.TreeOutputNode, prefix string) {
 	switch node.Type {
 	case types.NodeTypeFile:
@@ -195,6 +198,7 @@ func printTree(node *types.TreeOutputNode, prefix string) {
 	}
 }
 
+// orderedFunctionNames returns a deterministic ordering of function names.
 func orderedFunctionNames(data *types.CallChainOutput) []string {
 	seen := map[string]struct{}{}
 	var order []string

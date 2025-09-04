@@ -9,12 +9,12 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/temirov/ctx/commands"
-	"github.com/temirov/ctx/config"
-	"github.com/temirov/ctx/docs"
-	"github.com/temirov/ctx/output"
-	"github.com/temirov/ctx/types"
-	"github.com/temirov/ctx/utils"
+	"github.com/temirov/ctx/internal/commands"
+	"github.com/temirov/ctx/internal/config"
+	"github.com/temirov/ctx/internal/docs"
+	"github.com/temirov/ctx/internal/output"
+	"github.com/temirov/ctx/internal/types"
+	"github.com/temirov/ctx/internal/utils"
 )
 
 const (

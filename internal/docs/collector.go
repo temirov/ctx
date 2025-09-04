@@ -15,7 +15,7 @@ import (
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/temirov/ctx/types"
+	"github.com/temirov/ctx/internal/types"
 )
 
 type Collector struct {
@@ -146,6 +146,7 @@ func (c *Collector) CollectFromFile(filePath string) ([]types.DocumentationEntry
 	return entries, nil
 }
 
+// loadPackageDoc loads documentation for the specified import path.
 func loadPackageDoc(importPath string) *doc.Package {
 	cfg := &packages.Config{Mode: packages.NeedSyntax | packages.NeedFiles}
 	if pkgs, err := packages.Load(cfg, importPath); err == nil && len(pkgs) > 0 && len(pkgs[0].Syntax) > 0 {
@@ -171,6 +172,7 @@ func loadPackageDoc(importPath string) *doc.Package {
 	return pkg
 }
 
+// findSymbolDoc retrieves documentation text for the named symbol.
 func findSymbolDoc(pkg *doc.Package, symbol string) string {
 	for _, f := range pkg.Funcs {
 		if f.Name == symbol {

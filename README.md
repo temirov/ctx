@@ -103,7 +103,7 @@ ctx content main.go pkg --doc --format json
 Analyze the call chain for a function including docs:
 
 ```bash
-ctx callchain github.com/temirov/ctx/commands.GetContentData --doc --format raw
+ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --doc --format raw
 ```
 
 ## Output Formats
