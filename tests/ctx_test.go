@@ -17,12 +17,19 @@ import (
 )
 
 const (
-	visibleFileName    = "visible.txt"
-	hiddenFileName     = "hidden.txt"
-	visibleFileContent = "visible"
-	hiddenFileContent  = "secret"
-	includeGitFlag     = "--git"
-	versionFlag        = "--version"
+	visibleFileName       = "visible.txt"
+	hiddenFileName        = "hidden.txt"
+	visibleFileContent    = "visible"
+	hiddenFileContent     = "secret"
+	includeGitFlag        = "--git"
+	versionFlag           = "--version"
+	treeAlias             = "t"
+	subDirectoryName      = "sub"
+	gitignoreFileName     = ".gitignore"
+	nodeModulesDirName    = "node_modules"
+	dependencyFileName    = "dependency.js"
+	nodeModulesPattern    = nodeModulesDirName + "/\n"
+	dependencyFileContent = "dependency"
 )
 
 func buildBinary(testingHandle *testing.T) string {
@@ -183,6 +190,7 @@ func getModuleRoot(testingHandle *testing.T) string {
 	}
 }
 
+// TestCTX verifies the ctx CLI across diverse scenarios.
 func TestCTX(testingHandle *testing.T) {
 	binary := buildBinary(testingHandle)
 
@@ -533,6 +541,35 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if _, ok := names[visibleFileName]; !ok {
 					t.Fatalf("expected %s in output", visibleFileName)
+				}
+			},
+		},
+		{
+			name:      "NestedGitignoreExcluded",
+			arguments: []string{treeAlias},
+			prepare: func(t *testing.T) string {
+				layout := map[string]string{
+					filepath.Join(subDirectoryName, gitignoreFileName):                      nodeModulesPattern,
+					filepath.Join(subDirectoryName, nodeModulesDirName, dependencyFileName): dependencyFileContent,
+					filepath.Join(subDirectoryName, visibleFileName):                        visibleFileContent,
+				}
+				return setupTestDirectory(t, layout)
+			},
+			validate: func(t *testing.T, output string) {
+				var nodes []appTypes.TreeOutputNode
+				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
+					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(nodes) != 1 {
+					t.Fatalf("expected one root node, got %d", len(nodes))
+				}
+				rootChildren := nodes[0].Children
+				if len(rootChildren) != 1 || rootChildren[0].Name != subDirectoryName {
+					t.Fatalf("expected root child %s, got %#v", subDirectoryName, rootChildren)
+				}
+				subNode := rootChildren[0]
+				if len(subNode.Children) != 1 || subNode.Children[0].Name != visibleFileName {
+					t.Fatalf("expected only %s in %s, got %#v", visibleFileName, subDirectoryName, subNode.Children)
 				}
 			},
 		},
