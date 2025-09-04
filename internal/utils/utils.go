@@ -145,3 +145,22 @@ func ShouldIgnoreByPath(relativePath string, ignorePatterns []string) bool {
 
 	return false
 }
+
+// ShouldDisplayBinaryContentByPath checks if a path should reveal binary content based on binary content patterns.
+func ShouldDisplayBinaryContentByPath(relativePath string, binaryContentPatterns []string) bool {
+	normalizedPath := filepath.ToSlash(relativePath)
+	for _, patternValue := range binaryContentPatterns {
+		trimmedPattern := strings.TrimSuffix(patternValue, "/")
+		if strings.HasSuffix(patternValue, "/") {
+			if normalizedPath == trimmedPattern || strings.HasPrefix(normalizedPath, trimmedPattern+"/") {
+				return true
+			}
+			continue
+		}
+		isMatched, _ := filepath.Match(patternValue, normalizedPath)
+		if isMatched {
+			return true
+		}
+	}
+	return false
+}
