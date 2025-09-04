@@ -291,10 +291,14 @@ func runTreeOrContentCommand(
 			}
 		} else {
 			if commandName == types.CommandTree {
+				nodeType := types.NodeTypeFile
+				if utils.IsFileBinary(info.AbsolutePath) {
+					nodeType = types.NodeTypeBinary
+				}
 				collected = append(collected, &types.TreeOutputNode{
 					Path: info.AbsolutePath,
 					Name: filepath.Base(info.AbsolutePath),
-					Type: types.NodeTypeFile,
+					Type: nodeType,
 				})
 			} else {
 				data, err := os.ReadFile(info.AbsolutePath)
@@ -302,10 +306,16 @@ func runTreeOrContentCommand(
 					fmt.Fprintf(os.Stderr, "Warning: failed to read %s: %v\n", info.AbsolutePath, err)
 					continue
 				}
+				fileType := types.NodeTypeFile
+				content := string(data)
+				if utils.IsBinary(data) {
+					fileType = types.NodeTypeBinary
+					content = ""
+				}
 				collected = append(collected, &types.FileOutput{
 					Path:    info.AbsolutePath,
-					Type:    types.NodeTypeFile,
-					Content: string(data),
+					Type:    fileType,
+					Content: content,
 				})
 			}
 		}
