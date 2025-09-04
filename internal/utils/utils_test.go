@@ -34,6 +34,33 @@ const wildcardTextPattern = "*.txt"
 // wildcardMarkdownPattern defines a pattern matching markdown files.
 const wildcardMarkdownPattern = "*.md"
 
+// nestedDirectoryName defines the directory used for nested path tests.
+const nestedDirectoryName = "subdir"
+
+// nodeModulesDirectoryPattern defines the ignore pattern for the node_modules directory inside nestedDirectoryName.
+const nodeModulesDirectoryPattern = nestedDirectoryName + "/node_modules/"
+
+// backslashNodeModulesDirectoryPattern defines the same pattern with backslashes to verify normalization.
+const backslashNodeModulesDirectoryPattern = nestedDirectoryName + `\node_modules\`
+
+// nodeModulesDirectoryPath defines the path to the node_modules directory.
+const nodeModulesDirectoryPath = nestedDirectoryName + "/node_modules"
+
+// nodeModulesFilePath defines a file inside the node_modules directory.
+const nodeModulesFilePath = nestedDirectoryName + "/node_modules/index.js"
+
+// claspFilePattern defines the ignore pattern for a clasp configuration file inside nestedDirectoryName.
+const claspFilePattern = nestedDirectoryName + "/.clasp.json"
+
+// nestedFilePath defines the path to the clasp configuration file inside nestedDirectoryName.
+const nestedFilePath = nestedDirectoryName + "/.clasp.json"
+
+// unrelatedNodeModulesFilePath defines a node_modules path in an unrelated directory.
+const unrelatedNodeModulesFilePath = "other/" + nodeModulesFilePath
+
+// unrelatedNestedFilePath defines the clasp configuration file path in an unrelated directory.
+const unrelatedNestedFilePath = "other/" + nestedFilePath
+
 // mockDirEntry implements os.DirEntry for testing.
 type mockDirEntry struct {
 	entryName string
@@ -254,6 +281,42 @@ func TestShouldIgnoreByPath(testingInstance *testing.T) {
 			testName:       "not ignored",
 			relativePath:   "dir/file.txt",
 			patterns:       []string{"*.md"},
+			expectedIgnore: false,
+		},
+		{
+			testName:       "nested directory with slash",
+			relativePath:   nodeModulesFilePath,
+			patterns:       []string{nodeModulesDirectoryPattern},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "nested directory with backslashes",
+			relativePath:   nodeModulesFilePath,
+			patterns:       []string{backslashNodeModulesDirectoryPattern},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "directory match short circuits",
+			relativePath:   nodeModulesDirectoryPath,
+			patterns:       []string{nodeModulesDirectoryPattern},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "nested file pattern",
+			relativePath:   nestedFilePath,
+			patterns:       []string{claspFilePattern},
+			expectedIgnore: true,
+		},
+		{
+			testName:       "nested file pattern no match",
+			relativePath:   unrelatedNestedFilePath,
+			patterns:       []string{claspFilePattern},
+			expectedIgnore: false,
+		},
+		{
+			testName:       "nested directory pattern no match",
+			relativePath:   unrelatedNodeModulesFilePath,
+			patterns:       []string{nodeModulesDirectoryPattern},
 			expectedIgnore: false,
 		},
 	}
