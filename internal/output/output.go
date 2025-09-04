@@ -26,6 +26,10 @@ const (
 	xmlItemName           = "item"
 	xmlCallchainsName     = "callchains"
 	xmlCallchainName      = "callchain"
+	binaryContentOmitted  = "(binary content omitted)"
+	mimeTypeLabel         = "Mime Type: "
+	binaryNodeFormat      = "[Binary] %s (%s%s)\n"
+	binaryTreeFormat      = "%s[Binary] %s (%s%s)\n"
 )
 
 // RenderCallChainRaw returns the call‑chain output in raw text format.
@@ -193,7 +197,8 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 			if commandName == types.CommandContent {
 				fmt.Printf("File: %s\n", v.Path)
 				if v.Type == types.NodeTypeBinary {
-					fmt.Println("(binary content omitted)")
+					fmt.Printf("%s%s\n", mimeTypeLabel, v.MimeType)
+					fmt.Println(binaryContentOmitted)
 				} else {
 					fmt.Println(v.Content)
 				}
@@ -205,7 +210,7 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 				if v.Type == types.NodeTypeFile {
 					fmt.Printf("[File] %s\n", v.Path)
 				} else if v.Type == types.NodeTypeBinary {
-					fmt.Printf("[Binary] %s\n", v.Path)
+					fmt.Printf(binaryNodeFormat, v.Path, mimeTypeLabel, v.MimeType)
 				} else {
 					fmt.Printf("\n--- Directory Tree: %s ---\n", v.Path)
 					printTree(v, "")
@@ -266,7 +271,7 @@ func printTree(node *types.TreeOutputNode, prefix string) {
 		fmt.Printf("%s[File] %s\n", prefix, node.Path)
 		return
 	case types.NodeTypeBinary:
-		fmt.Printf("%s[Binary] %s\n", prefix, node.Path)
+		fmt.Printf(binaryTreeFormat, prefix, node.Path, mimeTypeLabel, node.MimeType)
 		return
 	}
 	fmt.Printf("%s%s\n", prefix, node.Path)
