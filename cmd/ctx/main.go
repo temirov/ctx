@@ -308,7 +308,7 @@ func runTreeOrContentCommand(
 				continue
 			}
 			if commandName == types.CommandTree {
-				nodes, dataError := commands.GetTreeData(info.AbsolutePath, ignorePatternList, binaryContentPatternList)
+				nodes, dataError := commands.GetTreeData(info.AbsolutePath, ignorePatternList)
 				if dataError == nil && len(nodes) > 0 {
 					collected = append(collected, nodes[0])
 				}
