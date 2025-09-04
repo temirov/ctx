@@ -43,7 +43,7 @@ func NewCollector(repositoryRoot string) (*Collector, error) {
 
 // CollectFromFile returns documentation entries for every imported package and
 // every selector expression that refers to an external package in the source file.
-func (c *Collector) CollectFromFile(filePath string) ([]types.DocumentationEntry, error) {
+func (collector *Collector) CollectFromFile(filePath string) ([]types.DocumentationEntry, error) {
 	fileSet := token.NewFileSet()
 	fileAST, parseErr := parser.ParseFile(fileSet, filePath, nil, parser.ParseComments)
 	if parseErr != nil {
@@ -51,75 +51,75 @@ func (c *Collector) CollectFromFile(filePath string) ([]types.DocumentationEntry
 	}
 
 	aliasToImport := map[string]string{}
-	for _, imp := range fileAST.Imports {
-		importPath := strings.Trim(imp.Path.Value, `"`)
-		if imp.Name != nil && imp.Name.Name != "_" && imp.Name.Name != "." {
-			aliasToImport[imp.Name.Name] = importPath
+	for _, importSpec := range fileAST.Imports {
+		importPath := strings.Trim(importSpec.Path.Value, `"`)
+		if importSpec.Name != nil && importSpec.Name.Name != "_" && importSpec.Name.Name != "." {
+			aliasToImport[importSpec.Name.Name] = importPath
 		} else {
 			aliasToImport[filepath.Base(importPath)] = importPath
 		}
 	}
 
-	var entries []types.DocumentationEntry
-	seen := map[string]struct{}{}
+	var documentationEntries []types.DocumentationEntry
+	seenEntries := map[string]struct{}{}
 
 	addPackageEntry := func(importPath string) {
-		if strings.HasPrefix(importPath, c.currentModulePath) {
+		if strings.HasPrefix(importPath, collector.currentModulePath) {
 			return
 		}
-		if _, ok := seen["pkg:"+importPath]; ok {
+		if _, exists := seenEntries["pkg:"+importPath]; exists {
 			return
 		}
-		if _, cached := c.packageCache[importPath]; !cached {
-			c.packageCache[importPath] = loadPackageDoc(importPath)
+		if _, cached := collector.packageCache[importPath]; !cached {
+			collector.packageCache[importPath] = loadPackageDoc(importPath)
 		}
-		if pkg := c.packageCache[importPath]; pkg != nil && strings.TrimSpace(pkg.Doc) != "" {
-			entries = append(entries, types.DocumentationEntry{
+		if packageDoc := collector.packageCache[importPath]; packageDoc != nil && strings.TrimSpace(packageDoc.Doc) != "" {
+			documentationEntries = append(documentationEntries, types.DocumentationEntry{
 				Kind: "package",
 				Name: importPath,
-				Doc:  strings.TrimSpace(pkg.Doc),
+				Doc:  strings.TrimSpace(packageDoc.Doc),
 			})
 		}
-		seen["pkg:"+importPath] = struct{}{}
+		seenEntries["pkg:"+importPath] = struct{}{}
 	}
 
 	addSymbolEntry := func(importPath, symbol string) {
-		if strings.HasPrefix(importPath, c.currentModulePath) {
+		if strings.HasPrefix(importPath, collector.currentModulePath) {
 			return
 		}
 		key := importPath + "." + symbol
-		if _, ok := seen["sym:"+key]; ok {
+		if _, exists := seenEntries["sym:"+key]; exists {
 			return
 		}
-		if text, cached := c.textCache[key]; cached {
+		if text, cached := collector.textCache[key]; cached {
 			if text != "" {
-				entries = append(entries, types.DocumentationEntry{
+				documentationEntries = append(documentationEntries, types.DocumentationEntry{
 					Kind: "function",
 					Name: key,
 					Doc:  text,
 				})
 			}
-			seen["sym:"+key] = struct{}{}
+			seenEntries["sym:"+key] = struct{}{}
 			return
 		}
-		pkg := c.packageCache[importPath]
-		if pkg == nil {
-			pkg = loadPackageDoc(importPath)
-			c.packageCache[importPath] = pkg
+		packageDoc := collector.packageCache[importPath]
+		if packageDoc == nil {
+			packageDoc = loadPackageDoc(importPath)
+			collector.packageCache[importPath] = packageDoc
 		}
 		text := ""
-		if pkg != nil {
-			text = strings.TrimSpace(findSymbolDoc(pkg, symbol))
+		if packageDoc != nil {
+			text = strings.TrimSpace(findSymbolDoc(packageDoc, symbol))
 		}
-		c.textCache[key] = text
+		collector.textCache[key] = text
 		if text != "" {
-			entries = append(entries, types.DocumentationEntry{
+			documentationEntries = append(documentationEntries, types.DocumentationEntry{
 				Kind: "function",
 				Name: key,
 				Doc:  text,
 			})
 		}
-		seen["sym:"+key] = struct{}{}
+		seenEntries["sym:"+key] = struct{}{}
 	}
 
 	for _, importPath := range aliasToImport {
@@ -127,67 +127,67 @@ func (c *Collector) CollectFromFile(filePath string) ([]types.DocumentationEntry
 	}
 
 	ast.Inspect(fileAST, func(node ast.Node) bool {
-		sel, ok := node.(*ast.SelectorExpr)
+		selector, ok := node.(*ast.SelectorExpr)
 		if !ok {
 			return true
 		}
-		ident, ok := sel.X.(*ast.Ident)
+		identifier, ok := selector.X.(*ast.Ident)
 		if !ok {
 			return true
 		}
-		importPath, exists := aliasToImport[ident.Name]
+		importPath, exists := aliasToImport[identifier.Name]
 		if !exists {
 			return true
 		}
-		addSymbolEntry(importPath, sel.Sel.Name)
+		addSymbolEntry(importPath, selector.Sel.Name)
 		return true
 	})
 
-	return entries, nil
+	return documentationEntries, nil
 }
 
 // loadPackageDoc loads documentation for the specified import path.
 func loadPackageDoc(importPath string) *doc.Package {
-	cfg := &packages.Config{Mode: packages.NeedSyntax | packages.NeedFiles}
-	if pkgs, err := packages.Load(cfg, importPath); err == nil && len(pkgs) > 0 && len(pkgs[0].Syntax) > 0 {
-		pkg, _ := doc.NewFromFiles(pkgs[0].Fset, pkgs[0].Syntax, importPath)
-		return pkg
+	packagesConfig := &packages.Config{Mode: packages.NeedSyntax | packages.NeedFiles}
+	if loadedPackages, loadErr := packages.Load(packagesConfig, importPath); loadErr == nil && len(loadedPackages) > 0 && len(loadedPackages[0].Syntax) > 0 {
+		packageDoc, _ := doc.NewFromFiles(loadedPackages[0].Fset, loadedPackages[0].Syntax, importPath)
+		return packageDoc
 	}
-	buildPkg, err := build.Default.Import(importPath, "", build.FindOnly)
-	if err != nil {
+	buildPackage, importErr := build.Default.Import(importPath, "", build.FindOnly)
+	if importErr != nil {
 		return nil
 	}
-	fs := token.NewFileSet()
-	dirMap, err := parser.ParseDir(fs, buildPkg.Dir, nil, parser.ParseComments)
-	if err != nil {
+	fileSet := token.NewFileSet()
+	directoryASTMap, parseErr := parser.ParseDir(fileSet, buildPackage.Dir, nil, parser.ParseComments)
+	if parseErr != nil {
 		return nil
 	}
 	var files []*ast.File
-	for _, p := range dirMap {
-		for _, f := range p.Files {
-			files = append(files, f)
+	for _, astPackage := range directoryASTMap {
+		for _, fileAST := range astPackage.Files {
+			files = append(files, fileAST)
 		}
 	}
-	pkg, _ := doc.NewFromFiles(fs, files, importPath)
-	return pkg
+	packageDoc, _ := doc.NewFromFiles(fileSet, files, importPath)
+	return packageDoc
 }
 
 // findSymbolDoc retrieves documentation text for the named symbol.
-func findSymbolDoc(pkg *doc.Package, symbol string) string {
-	for _, f := range pkg.Funcs {
-		if f.Name == symbol {
-			return f.Doc
+func findSymbolDoc(packageDoc *doc.Package, symbol string) string {
+	for _, functionDoc := range packageDoc.Funcs {
+		if functionDoc.Name == symbol {
+			return functionDoc.Doc
 		}
 	}
-	for _, t := range pkg.Types {
-		for _, m := range t.Methods {
-			if m.Name == symbol {
-				return m.Doc
+	for _, typeDoc := range packageDoc.Types {
+		for _, methodDoc := range typeDoc.Methods {
+			if methodDoc.Name == symbol {
+				return methodDoc.Doc
 			}
 		}
-		for _, f := range t.Funcs {
-			if f.Name == symbol {
-				return f.Doc
+		for _, functionDoc := range typeDoc.Funcs {
+			if functionDoc.Name == symbol {
+				return functionDoc.Doc
 			}
 		}
 	}
