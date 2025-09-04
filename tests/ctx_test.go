@@ -15,6 +15,23 @@ import (
 	appTypes "github.com/temirov/ctx/types"
 )
 
+const (
+	// readableFileName is the name of the file that contains readable content.
+	readableFileName = "readable.txt"
+	// unreadableFileName is the name of the file that lacks read permissions.
+	unreadableFileName = "unreadable.txt"
+	// readableFileContent is the content written to the readable file.
+	readableFileContent = "OK"
+	// unreadablePlaceholderToken indicates that an unreadable file should be created.
+	unreadablePlaceholderToken = "<UNREADABLE>"
+	// unreadablePlaceholderContent is the text written before restricting permissions.
+	unreadablePlaceholderContent = "unreadable placeholder"
+	// skipUnreadableFileReadableMessage is used when the unreadable file remains accessible.
+	skipUnreadableFileReadableMessage = "skipping unreadable file test as file is readable"
+	// skipUnreadableFileWindowsMessage is used when the unreadable file test is skipped on Windows.
+	skipUnreadableFileWindowsMessage = "skipping unreadable file test on Windows"
+)
+
 func buildBinary(testingHandle *testing.T) string {
 	testingHandle.Helper()
 
@@ -139,8 +156,8 @@ func setupTestDirectory(testingHandle *testing.T, layout map[string]string) stri
 		parent := filepath.Dir(absolutePath)
 		_ = os.MkdirAll(parent, 0o755)
 
-		if content == "<UNREADABLE>" {
-			_ = os.WriteFile(absolutePath, []byte("unreadable placeholder"), 0o644)
+		if content == unreadablePlaceholderToken {
+			_ = os.WriteFile(absolutePath, []byte(unreadablePlaceholderContent), 0o644)
 			_ = os.Chmod(absolutePath, 0o000)
 			continue
 		}
@@ -349,19 +366,24 @@ func TestCTX(testingHandle *testing.T) {
 			name: "JsonFormatContentUnreadableFile",
 			arguments: []string{
 				appTypes.CommandContent,
-				"readable.txt",
-				"unreadable.txt",
+				readableFileName,
+				unreadableFileName,
 				"--format",
 				appTypes.FormatJSON,
 			},
 			prepare: func(t *testing.T) string {
 				if runtime.GOOS == "windows" {
-					t.Skip("Skipping unreadable file test on Windows")
+					t.Skip(skipUnreadableFileWindowsMessage)
 				}
-				return setupTestDirectory(t, map[string]string{
-					"readable.txt":   "OK",
-					"unreadable.txt": "<UNREADABLE>",
+				root := setupTestDirectory(t, map[string]string{
+					readableFileName:   readableFileContent,
+					unreadableFileName: unreadablePlaceholderToken,
 				})
+				unreadablePath := filepath.Join(root, unreadableFileName)
+				if _, err := os.ReadFile(unreadablePath); err == nil {
+					t.Skip(skipUnreadableFileReadableMessage)
+				}
+				return root
 			},
 			expectWarning: true,
 			validate: func(t *testing.T, output string) {
