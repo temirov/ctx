@@ -19,22 +19,28 @@ import (
 )
 
 const (
-	visibleFileName              = "visible.txt"
-	hiddenFileName               = "hidden.txt"
-	visibleFileContent           = "visible"
-	hiddenFileContent            = "secret"
-	includeGitFlag               = "--git"
-	versionFlag                  = "--version"
-	treeAlias                    = "t"
-	subDirectoryName             = "sub"
-	gitignoreFileName            = ".gitignore"
-	nodeModulesDirName           = "node_modules"
-	dependencyFileName           = "dependency.js"
-	nodeModulesPattern           = nodeModulesDirName + "/\n"
-	dependencyFileContent        = "dependency"
-	commandDirectoryRelativePath = "cmd/ctx"
-	integrationBinaryBaseName    = "ctx_integration_binary"
-	contentDataFunction          = "github.com/temirov/ctx/internal/commands.GetContentData"
+	visibleFileName                 = "visible.txt"
+	hiddenFileName                  = "hidden.txt"
+	visibleFileContent              = "visible"
+	hiddenFileContent               = "secret"
+	includeGitFlag                  = "--git"
+	versionFlag                     = "--version"
+	treeAlias                       = "t"
+	subDirectoryName                = "sub"
+	gitignoreFileName               = ".gitignore"
+	nodeModulesDirName              = "node_modules"
+	dependencyFileName              = "dependency.js"
+	nodeModulesPattern              = nodeModulesDirName + "/\n"
+	dependencyFileContent           = "dependency"
+	commandDirectoryRelativePath    = "cmd/ctx"
+	integrationBinaryBaseName       = "ctx_integration_binary"
+	contentDataFunction             = "github.com/temirov/ctx/internal/commands.GetContentData"
+	runTreeOrContentCommandFunction = "github.com/temirov/ctx/cmd/ctx.runTreeOrContentCommand"
+	runToolFunction                 = "github.com/temirov/ctx/cmd/ctx.runTool"
+	callChainAlias                  = "cc"
+	formatFlag                      = "--format"
+	depthFlag                       = "--depth"
+	depthTwoValue                   = "2"
 
 	usageSnippet = "Usage:\n  ctx"
 
@@ -453,6 +459,73 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if wrapper.Chains[0].TargetFunction != contentDataFunction {
 					t.Fatalf("unexpected target function %q", wrapper.Chains[0].TargetFunction)
+				}
+			},
+		},
+		{
+			name: "CallChainAliasDefaultDepthReturnsOnlyDirectCallers",
+			arguments: []string{
+				callChainAlias,
+				contentDataFunction,
+				formatFlag,
+				appTypes.FormatJSON,
+			},
+			prepare: func(t *testing.T) string { return getModuleRoot(t) },
+			validate: func(t *testing.T, output string) {
+				var callChains []appTypes.CallChainOutput
+				if err := json.Unmarshal([]byte(output), &callChains); err != nil {
+					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(callChains) != 1 {
+					t.Fatalf("expected one call chain, got %d", len(callChains))
+				}
+				callers := callChains[0].Callers
+				if len(callers) != 1 {
+					t.Fatalf("expected one direct caller, got %d", len(callers))
+				}
+				if callers[0] != runTreeOrContentCommandFunction {
+					t.Fatalf("expected caller %s, got %s", runTreeOrContentCommandFunction, callers[0])
+				}
+			},
+		},
+		{
+			name: "CallChainAliasDepthTwoIncludesSecondLevelCallers",
+			arguments: []string{
+				callChainAlias,
+				contentDataFunction,
+				depthFlag,
+				depthTwoValue,
+				formatFlag,
+				appTypes.FormatJSON,
+			},
+			prepare: func(t *testing.T) string { return getModuleRoot(t) },
+			validate: func(t *testing.T, output string) {
+				var callChains []appTypes.CallChainOutput
+				if err := json.Unmarshal([]byte(output), &callChains); err != nil {
+					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(callChains) != 1 {
+					t.Fatalf("expected one call chain, got %d", len(callChains))
+				}
+				callers := callChains[0].Callers
+				if len(callers) != 2 {
+					t.Fatalf("expected two callers, got %d", len(callers))
+				}
+				hasDirectCaller := false
+				hasSecondLevelCaller := false
+				for _, caller := range callers {
+					if caller == runTreeOrContentCommandFunction {
+						hasDirectCaller = true
+					}
+					if caller == runToolFunction {
+						hasSecondLevelCaller = true
+					}
+				}
+				if !hasDirectCaller {
+					t.Fatalf("missing caller %s", runTreeOrContentCommandFunction)
+				}
+				if !hasSecondLevelCaller {
+					t.Fatalf("missing caller %s", runToolFunction)
 				}
 			},
 		},
