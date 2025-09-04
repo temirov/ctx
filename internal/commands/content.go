@@ -10,6 +10,13 @@ import (
 	"github.com/temirov/ctx/internal/utils"
 )
 
+const (
+	// WarningAccessPathFormat is used when a path cannot be accessed during traversal.
+	WarningAccessPathFormat = "Warning: error accessing path %s: %v\n"
+	// WarningFileReadFormat is used when a file cannot be read.
+	WarningFileReadFormat = "Warning: failed to read file %s: %v\n"
+)
+
 // GetContentData returns FileOutput slices for the specified directory.
 func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatterns []string) ([]types.FileOutput, error) {
 	absoluteRootPath, absolutePathError := filepath.Abs(rootPath)
@@ -22,7 +29,7 @@ func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatte
 
 	directoryWalkError := filepath.WalkDir(cleanedRootPath, func(walkedPath string, directoryEntry os.DirEntry, accessError error) error {
 		if accessError != nil {
-			fmt.Fprintf(os.Stderr, "Warning: error accessing path %s: %v\n", walkedPath, accessError)
+			fmt.Fprintf(os.Stderr, WarningAccessPathFormat, walkedPath, accessError)
 			if directoryEntry != nil && directoryEntry.IsDir() {
 				return filepath.SkipDir
 			}
@@ -45,7 +52,7 @@ func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatte
 
 		fileBytes, fileReadError := os.ReadFile(walkedPath)
 		if fileReadError != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to read file %s: %v\n", walkedPath, fileReadError)
+			fmt.Fprintf(os.Stderr, WarningFileReadFormat, walkedPath, fileReadError)
 			return nil
 		}
 
