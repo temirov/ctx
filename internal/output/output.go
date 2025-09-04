@@ -198,7 +198,11 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 				fmt.Printf("File: %s\n", v.Path)
 				if v.Type == types.NodeTypeBinary {
 					fmt.Printf("%s%s\n", mimeTypeLabel, v.MimeType)
-					fmt.Println(binaryContentOmitted)
+					if v.Content == "" {
+						fmt.Println(binaryContentOmitted)
+					} else {
+						fmt.Println(v.Content)
+					}
 				} else {
 					fmt.Println(v.Content)
 				}
