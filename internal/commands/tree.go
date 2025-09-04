@@ -10,11 +10,15 @@ import (
 	"github.com/temirov/ctx/internal/utils"
 )
 
+const (
+	// warningSkipSubdirFormat is used when a subdirectory cannot be processed.
+	warningSkipSubdirFormat = "Warning: Skipping subdirectory %s due to error: %v\n"
+)
+
 // GetTreeData generates the tree structure data for a given directory.
 // It returns a slice containing a single root node representing the directory.
 // Warnings for skipped subdirectories are printed to stderr.
-func GetTreeData(rootDirectoryPath string, ignorePatterns []string, binaryContentPatterns []string) ([]*types.TreeOutputNode, error) {
-	_ = binaryContentPatterns
+func GetTreeData(rootDirectoryPath string, ignorePatterns []string) ([]*types.TreeOutputNode, error) {
 	absoluteRootDirPath, absolutePathError := filepath.Abs(rootDirectoryPath)
 	if absolutePathError != nil {
 		return nil, fmt.Errorf("getting absolute path for %s: %w", rootDirectoryPath, absolutePathError)
@@ -26,7 +30,7 @@ func GetTreeData(rootDirectoryPath string, ignorePatterns []string, binaryConten
 		Type: types.NodeTypeDirectory,
 	}
 
-	children, buildError := buildTreeNodes(absoluteRootDirPath, absoluteRootDirPath, ignorePatterns, binaryContentPatterns)
+	children, buildError := buildTreeNodes(absoluteRootDirPath, absoluteRootDirPath, ignorePatterns)
 	if buildError != nil {
 		return nil, fmt.Errorf("building tree for %s: %w", rootDirectoryPath, buildError)
 	}
@@ -36,8 +40,7 @@ func GetTreeData(rootDirectoryPath string, ignorePatterns []string, binaryConten
 }
 
 // buildTreeNodes recursively builds child nodes for the directory tree.
-func buildTreeNodes(currentDirectoryPath string, rootDirectoryPath string, ignorePatterns []string, binaryContentPatterns []string) ([]*types.TreeOutputNode, error) {
-	_ = binaryContentPatterns
+func buildTreeNodes(currentDirectoryPath string, rootDirectoryPath string, ignorePatterns []string) ([]*types.TreeOutputNode, error) {
 	var nodes []*types.TreeOutputNode
 
 	directoryEntries, readDirectoryError := os.ReadDir(currentDirectoryPath)
@@ -59,9 +62,9 @@ func buildTreeNodes(currentDirectoryPath string, rootDirectoryPath string, ignor
 
 		if directoryEntry.IsDir() {
 			node.Type = types.NodeTypeDirectory
-			childNodes, buildError := buildTreeNodes(childPath, rootDirectoryPath, ignorePatterns, binaryContentPatterns)
+			childNodes, buildError := buildTreeNodes(childPath, rootDirectoryPath, ignorePatterns)
 			if buildError != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Skipping subdirectory %s due to error: %v\n", childPath, buildError)
+				fmt.Fprintf(os.Stderr, warningSkipSubdirFormat, childPath, buildError)
 				node.Children = nil
 			} else {
 				node.Children = childNodes

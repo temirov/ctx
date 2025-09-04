@@ -40,14 +40,16 @@ const (
 	unsupportedCommandMessage  = "unsupported command"
 	defaultCallChainDepth      = 1
 	callChainDepthDescription  = "traversal depth"
-	// invalidFormatMessage is used when an unsupported format is requested.
-	invalidFormatMessage            = "Invalid format value '%s'"
 	exclusionFlagDescription        = "exclude folder"
 	disableGitignoreFlagDescription = "do not use .gitignore"
 	disableIgnoreFlagDescription    = "do not use .ignore"
 	includeGitFlagDescription       = "include git directory"
 	formatFlagDescription           = "output format"
 	documentationFlagDescription    = "include documentation"
+	// invalidFormatMessage is used when an unsupported format is requested.
+	invalidFormatMessage = "Invalid format value '%s'"
+	// warningSkipPathFormat is used when a path is skipped due to an error.
+	warningSkipPathFormat = "Warning: skipping %s: %v\n"
 )
 
 // isSupportedFormat reports whether the provided format is recognized.
@@ -314,11 +316,11 @@ func runTreeOrContentCommand(
 		if info.IsDir {
 			ignorePatternList, binaryContentPatternList, loadError := config.LoadRecursiveIgnorePatterns(info.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile, includeGit)
 			if loadError != nil {
-				fmt.Fprintf(os.Stderr, "Warning: skipping %s: %v\n", info.AbsolutePath, loadError)
+				fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, loadError)
 				continue
 			}
 			if commandName == types.CommandTree {
-				nodes, dataError := commands.GetTreeData(info.AbsolutePath, ignorePatternList, binaryContentPatternList)
+				nodes, dataError := commands.GetTreeData(info.AbsolutePath, ignorePatternList)
 				if dataError == nil && len(nodes) > 0 {
 					collected = append(collected, nodes[0])
 				}
