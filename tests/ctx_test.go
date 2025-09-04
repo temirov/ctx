@@ -22,6 +22,7 @@ const (
 	visibleFileContent = "visible"
 	hiddenFileContent  = "secret"
 	includeGitFlag     = "--git"
+	versionFlag        = "--version"
 )
 
 func buildBinary(testingHandle *testing.T) string {
@@ -343,7 +344,7 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name:          "VersionFlag",
-			arguments:     []string{"--version"},
+			arguments:     []string{versionFlag},
 			prepare:       func(t *testing.T) string { return setupTestDirectory(t, nil) },
 			expectError:   false,
 			expectWarning: false,
