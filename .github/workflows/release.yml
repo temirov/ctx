@@ -24,10 +24,10 @@ jobs:
       - name: BuildCTXBinaries
         run: |
           mkdir -p dist
-          GOOS=linux   GOARCH=amd64   go build -ldflags="-s -w" -o dist/ctx_linux_amd64 main.go
-          GOOS=darwin  GOARCH=amd64   go build -ldflags="-s -w" -o dist/ctx_darwin_amd64 main.go
-          GOOS=darwin  GOARCH=arm64   go build -ldflags="-s -w" -o dist/ctx_darwin_arm64 main.go
-          GOOS=windows GOARCH=amd64   go build -ldflags="-s -w" -o dist/ctx_windows_amd64.exe main.go
+          GOOS=linux   GOARCH=amd64   go build -ldflags="-s -w" -o dist/ctx_linux_amd64   ./cmd/ctx
+          GOOS=darwin  GOARCH=amd64   go build -ldflags="-s -w" -o dist/ctx_darwin_amd64  ./cmd/ctx
+          GOOS=darwin  GOARCH=arm64   go build -ldflags="-s -w" -o dist/ctx_darwin_arm64 ./cmd/ctx
+          GOOS=windows GOARCH=amd64   go build -ldflags="-s -w" -o dist/ctx_windows_amd64.exe ./cmd/ctx
 
       - name: GenerateChecksums
         run: |
