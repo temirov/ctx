@@ -8,7 +8,7 @@ import (
 
 const errorLogFormat = "Error: %v"
 
-// main is the entry point for the ctx command.
+// main is the entry point for the ctx application.
 func main() {
 	if err := cli.Execute(); err != nil {
 		log.Fatalf(errorLogFormat, err)
