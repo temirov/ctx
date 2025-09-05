@@ -70,8 +70,8 @@ func LoadIgnoreFilePatterns(ignoreFilePath string) ([]string, []string, error) {
 
 // LoadCombinedIgnorePatterns aggregates patterns from .ignore and/or .gitignore files within a directory.
 // The .git directory is excluded by default unless includeGit is true.
-// The exclusion folder pattern is appended when provided.
-func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder string, useGitignore bool, useIgnoreFile bool, includeGit bool) ([]string, error) {
+// The provided exclusionPatterns are appended to the result.
+func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionPatterns []string, useGitignore bool, useIgnoreFile bool, includeGit bool) ([]string, error) {
 	var combinedPatterns []string
 
 	if useIgnoreFile {
@@ -98,19 +98,13 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 
 	deduplicatedFilePatterns := utils.DeduplicatePatterns(combinedPatterns)
 
-	trimmedExclusion := strings.TrimSpace(exclusionFolder)
-	if trimmedExclusion != "" {
-		normalizedExclusion := strings.TrimSuffix(trimmedExclusion, "/")
-		exclusionPattern := utils.ExclusionPrefix + normalizedExclusion
-		isPresent := false
-		for _, pattern := range deduplicatedFilePatterns {
-			if pattern == exclusionPattern {
-				isPresent = true
-				break
-			}
+	for _, pattern := range exclusionPatterns {
+		trimmedPattern := strings.TrimSpace(pattern)
+		if trimmedPattern == "" {
+			continue
 		}
-		if !isPresent {
-			deduplicatedFilePatterns = append(deduplicatedFilePatterns, exclusionPattern)
+		if !utils.ContainsString(deduplicatedFilePatterns, trimmedPattern) {
+			deduplicatedFilePatterns = append(deduplicatedFilePatterns, trimmedPattern)
 		}
 	}
 
@@ -122,8 +116,8 @@ func LoadCombinedIgnorePatterns(absoluteDirectoryPath string, exclusionFolder st
 // path relative to rootDirectoryPath. For example, a pattern listed in utils.GitIgnoreFileName within a child directory is
 // returned with the directory's relative path prepended. Patterns from utils.GitIgnoreFileName are handled the same way as
 // those from utils.IgnoreFileName. The directory named utils.GitDirectoryName is ignored by default unless includeGit is
-// true. When exclusionFolder is provided, a pattern using utils.ExclusionPrefix is appended.
-func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionFolder string, useGitignore bool, useIgnoreFile bool, includeGit bool) ([]string, []string, error) {
+// true. The provided exclusionPatterns are appended to the result.
+func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionPatterns []string, useGitignore bool, useIgnoreFile bool, includeGit bool) ([]string, []string, error) {
 	var aggregatedPatterns []string
 	var aggregatedBinaryContentPatterns []string
 
@@ -183,19 +177,13 @@ func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionFolder strin
 	deduplicatedPatterns := utils.DeduplicatePatterns(aggregatedPatterns)
 	deduplicatedBinaryPatterns := utils.DeduplicatePatterns(aggregatedBinaryContentPatterns)
 
-	trimmedExclusion := strings.TrimSpace(exclusionFolder)
-	if trimmedExclusion != "" {
-		normalizedExclusion := strings.TrimSuffix(trimmedExclusion, "/")
-		exclusionPattern := utils.ExclusionPrefix + normalizedExclusion
-		isPresent := false
-		for _, pattern := range deduplicatedPatterns {
-			if pattern == exclusionPattern {
-				isPresent = true
-				break
-			}
+	for _, pattern := range exclusionPatterns {
+		trimmedPattern := strings.TrimSpace(pattern)
+		if trimmedPattern == "" {
+			continue
 		}
-		if !isPresent {
-			deduplicatedPatterns = append(deduplicatedPatterns, exclusionPattern)
+		if !utils.ContainsString(deduplicatedPatterns, trimmedPattern) {
+			deduplicatedPatterns = append(deduplicatedPatterns, trimmedPattern)
 		}
 	}
 
