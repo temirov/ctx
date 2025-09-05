@@ -83,7 +83,7 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	disableIgnoreFlagDescription    = "do not use .ignore"
 	includeGitFlagDescription       = "include git directory"
 	formatFlagDescription           = "output format"
-	documentationFlagDescription    = "include documentation"
+	documentationFlagDescription    = "include documentation; tree command does not support documentation"
 	invalidFormatMessage            = "Invalid format value '%s'"
 	warningSkipPathFormat           = "Warning: skipping %s: %v\n"
 )
