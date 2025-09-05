@@ -1,15 +1,49 @@
 # Changelog
 
+## [v0.0.13] - 2025-09-05
+
+### Highlights
+
+* **Repository structure improvements.** Exposed a root-level `main.go` for easier CLI builds, with shared Cobra setup
+  for consistency. (#60 2686dae, c63e0af)
+* **More flexible exclusion handling.** Multiple adhoc exclusion patterns are now supported in a single run. (#61
+  fec03ce, 6aa9093)
+* **Streamlined release flow.** Documented release steps for contributors and automated CI to run only on Go file
+  changes. (#62 822d428, d9c9cd5, #63 7900db2, 30c2263)
+
+### Features ✨
+
+* Expose root-level `main.go` entry point and shared CLI configuration. (#60 2686dae, c63e0af)
+
+### Improvements ⚙️
+
+* Allow multiple exclusion patterns via `-e/--exclude`. (#61 fec03ce, 6aa9093)
+
+### Docs 📚
+
+* Add release preparation and publishing instructions. (#62 822d428, d9c9cd5)
+
+### CI & Maintenance
+
+* Run tests only when Go files change. (#63 7900db2, 30c2263)
+
+**Upgrade notes:** No breaking changes. Builds, flags, and outputs remain compatible.
+
 ## [v0.0.12] - 2025-09-04
 
 ### Highlights
 
-* **End-to-end MIME detection.** All files now get a detected MIME type; `tree` nodes include `mime` for file entries. (#57 e7ad015, #56 c587e9c, b58837c, b628a44)
-* **CLI UX overhaul.** Custom usage template, improved help layout, and command aliases shown in help; help displays when no command is provided. (#55 a99dc40, a93b618, #47 aa8f792, #45 3de79fb, 60f0d10)
-* **Ignore system hardening.** Refined path-based ignore logic, centralized ignore constants, clarified docs, and added `[binary]` section support in `.ignore`. (#54 14b5190, #51 ff3756a, #52 96c691c, #32 a6f07cb, 31d4603)
+* **End-to-end MIME detection.** All files now get a detected MIME type; `tree` nodes include `mime` for file entries. (
+  #57 e7ad015, #56 c587e9c, b58837c, b628a44)
+* **CLI UX overhaul.** Custom usage template, improved help layout, and command aliases shown in help; help displays
+  when no command is provided. (#55 a99dc40, a93b618, #47 aa8f792, #45 3de79fb, 60f0d10)
+* **Ignore system hardening.** Refined path-based ignore logic, centralized ignore constants, clarified docs, and added
+  `[binary]` section support in `.ignore`. (#54 14b5190, #51 ff3756a, #52 96c691c, #32 a6f07cb, 31d4603)
 * **Stricter output validation.** Centralized output-format checks. (#35 e2b78f7, c83a8b4)
 * **XML output format.** Added `xml` to supported output formats. (#20 da50618, 8f72db5)
-* **Much broader test coverage.** New and expanded tests across `content/ctx`, ignore handling (including nested `.gitignore`), MIME detection, utilities, and output. (#53 1f7585b, #50 048a866, #48 0267170, #30 52fb374, #27 7a98f75, 9203bbb, a117010, 6fe58e4, 73b7b01)
+* **Much broader test coverage.** New and expanded tests across `content/ctx`, ignore handling (including nested
+  `.gitignore`), MIME detection, utilities, and output. (#53 1f7585b, #50 048a866, #48 0267170, #30 52fb374, #27
+  7a98f75, 9203bbb, a117010, 6fe58e4, 73b7b01)
 
 ### Features ✨
 
@@ -21,7 +55,8 @@
 * Support repeatable exclusion flag with glob pattern matching for tree and content commands.
 * Improve help output and adopt a custom usage template. (#55 a99dc40, a93b618, #47 aa8f792)
 * Show command aliases in help (Cobra help template override). (#45 3de79fb, c311f97)
-* Refine path-based ignore handling and centralize ignore constants/messages. (#51 ff3756a, #41 ac2da74, 22bb964, a64d9cd, 59c829b)
+* Refine path-based ignore handling and centralize ignore constants/messages. (#51 ff3756a, #41 ac2da74, 22bb964,
+  a64d9cd, 59c829b)
 * Extract common path flags and flag-registration helpers for consistency. (#44 cab1575, 101c207)
 * Validate output formats via a single function. (#35 e2b78f7, c83a8b4)
 
@@ -40,7 +75,8 @@
 
 * Add content command test for nested `.gitignore` and broader `ShouldIgnore` coverage. (#53 1f7585b, f6d517c, 1abe325)
 * Add fixtures (incl. Google Sheets add-on) and extend `ctx_test.go`. (#50 048a866, a117010)
-* Add tests for internal utils and output functions; call-chain depth tests; binary MIME tests. (#48 0267170, 6adc791, 9203bbb, 73b7b01)
+* Add tests for internal utils and output functions; call-chain depth tests; binary MIME tests. (#48 0267170, 6adc791,
+  9203bbb, 73b7b01)
 
 ### Refactors 🧹
 
@@ -53,14 +89,16 @@
 * Run Go tests on pull requests. (#7 d8df33c, c0c0c95)
 * License update. (c31641f)
 
-**Upgrade notes:** No breaking changes expected in this release. Existing CLI flags and outputs remain compatible; the new XML format and richer help/alias displays are additive.
+**Upgrade notes:** No breaking changes expected in this release. Existing CLI flags and outputs remain compatible; the
+new XML format and richer help/alias displays are additive.
 
 ## [v0.0.11] - 2025-04-20
 
 ### Features ✨
 
 1. **Binary Section in `.ignore`**
-    - `.ignore` files now support a `[binary]` section listing patterns whose binary contents are base64-encoded in output.
+    - `.ignore` files now support a `[binary]` section listing patterns whose binary contents are base64-encoded in
+      output.
     - The legacy `show-binary-content:` directive has been removed.
 
 ## [v0.0.10] - 2025-04-19
