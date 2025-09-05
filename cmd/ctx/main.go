@@ -18,38 +18,29 @@ import (
 )
 
 const (
-	exclusionFlagName          = "e"
-	noGitignoreFlagName        = "no-gitignore"
-	noIgnoreFlagName           = "no-ignore"
-	includeGitFlagName         = "git"
-	formatFlagName             = "format"
-	documentationFlagName      = "doc"
-	versionFlagName            = "version"
-	versionTemplate            = "ctx version: %s\n"
-	documentationIgnoredNotice = "--doc ignored for tree"
-	defaultPath                = "."
-	rootUse                    = "ctx"
-	rootShortDescription       = "ctx CLI"
-	// rootUsageTemplate describes usage information for the root command.
-	rootUsageTemplate = `Usage:
-  ctx <tree|t|content|c|callchain|cc> [paths] [flags]
-
-Flags:
-  -%[1]s, --%[1]s string   %[9]s
-      --%[2]s              %[10]s
-      --%[3]s              %[11]s
-      --%[4]s              %[12]s
-  -%[5]s, --%[5]s string   %[13]s
-      --%[6]s              %[14]s
-      --%[7]s              display application version
-  -%[8]s, --%[8]s int      %[15]s
-`
+	exclusionFlagName               = "e"
+	noGitignoreFlagName             = "no-gitignore"
+	noIgnoreFlagName                = "no-ignore"
+	includeGitFlagName              = "git"
+	formatFlagName                  = "format"
+	documentationFlagName           = "doc"
+	versionFlagName                 = "version"
+	versionTemplate                 = "ctx version: %s\n"
+	documentationIgnoredNotice      = "--doc ignored for tree"
+	defaultPath                     = "."
+	rootUse                         = "ctx"
+	rootShortDescription            = "ctx command line interface"
+	rootLongDescription             = "ctx displays directory trees, file contents, and call chains"
+	versionFlagDescription          = "display application version"
 	treeUse                         = "tree [paths...]"
 	contentUse                      = "content [paths...]"
 	callchainUse                    = "callchain <function>"
-	treeShortDescription            = "display directory tree"
-	contentShortDescription         = "show file contents"
-	callchainShortDescription       = "analyze call chains"
+	treeAlias                       = "t"
+	contentAlias                    = "c"
+	callchainAlias                  = "cc"
+	treeShortDescription            = "display directory tree (" + treeAlias + ")"
+	contentShortDescription         = "show file contents (" + contentAlias + ")"
+	callchainShortDescription       = "analyze call chains (" + callchainAlias + ")"
 	callChainDepthFlagName          = "depth"
 	unsupportedCommandMessage       = "unsupported command"
 	defaultCallChainDepth           = 1
@@ -60,33 +51,8 @@ Flags:
 	includeGitFlagDescription       = "include git directory"
 	formatFlagDescription           = "output format"
 	documentationFlagDescription    = "include documentation"
-	// invalidFormatMessage is used when an unsupported format is requested.
-	invalidFormatMessage = "Invalid format value '%s'"
-	// warningSkipPathFormat is used when a path is skipped due to an error.
-	warningSkipPathFormat        = "Warning: skipping %s: %v\n"
-	aliasFormat                  = "%s (%s)"
-	commandDisplayNameAnnotation = "commandDisplayName"
-	helpTemplate                 = `{{with (or .Long .Short)}}{{.}}\n\n{{end}}Usage:
-  {{.UseLine}}
-{{if .HasAvailableSubCommands}}
-Available Commands:
-{{- range .Commands}}{{- if or .IsAvailableCommand (eq .Name "help")}}
-  {{rpad (index .Annotations "%s") .NamePadding }}{{.Short}}
-{{- end}}{{- end}}
-{{end}}{{if .HasAvailableLocalFlags}}
-Flags:
-{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
-{{end}}{{if .HasAvailableInheritedFlags}}
-Global Flags:
-{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}
-{{end}}{{if .HasHelpSubCommands}}
-Additional help topics:
-{{- range .Commands}}{{- if .IsAdditionalHelpTopicCommand}}
-  {{rpad .CommandPath .CommandPathPadding }}{{.Short}}
-{{- end}}{{- end}}
-{{end}}{{if not .HasSubCommands}}
-{{.UseLine}}{{if .HasExample}}\n\nExamples:\n{{.Example}}{{end}}
-{{end}}`
+	invalidFormatMessage            = "Invalid format value '%s'"
+	warningSkipPathFormat           = "Warning: skipping %s: %v\n"
 )
 
 // isSupportedFormat reports whether the provided format is recognized.
@@ -97,22 +63,6 @@ func isSupportedFormat(format string) bool {
 	default:
 		return false
 	}
-}
-
-// FormatCommandWithAliases returns the command name joined with its aliases.
-// Aliases are comma-separated and enclosed in parentheses. If no aliases are
-// defined, only the command name is returned.
-func FormatCommandWithAliases(commandUsage string, commandAliases []string) string {
-	usageParts := strings.Fields(commandUsage)
-	if len(usageParts) == 0 {
-		return commandUsage
-	}
-	commandName := usageParts[0]
-	if len(commandAliases) == 0 {
-		return commandName
-	}
-	aliasList := strings.Join(commandAliases, ", ")
-	return fmt.Sprintf(aliasFormat, commandName, aliasList)
 }
 
 // main is the entry point of the application.
@@ -130,6 +80,7 @@ func createRootCommand() *cobra.Command {
 	rootCommand := &cobra.Command{
 		Use:          rootUse,
 		Short:        rootShortDescription,
+		Long:         rootLongDescription,
 		SilenceUsage: true,
 		RunE: func(command *cobra.Command, arguments []string) error {
 			return command.Help()
@@ -141,25 +92,7 @@ func createRootCommand() *cobra.Command {
 			}
 		},
 	}
-	rootCommand.PersistentFlags().BoolVar(&showVersion, versionFlagName, false, "display application version")
-	rootCommand.SetUsageTemplate(fmt.Sprintf(
-		rootUsageTemplate,
-		exclusionFlagName,
-		noGitignoreFlagName,
-		noIgnoreFlagName,
-		includeGitFlagName,
-		formatFlagName,
-		documentationFlagName,
-		versionFlagName,
-		callChainDepthFlagName,
-		exclusionFlagDescription,
-		disableGitignoreFlagDescription,
-		disableIgnoreFlagDescription,
-		includeGitFlagDescription,
-		formatFlagDescription,
-		documentationFlagDescription,
-		callChainDepthDescription,
-	))
+	rootCommand.PersistentFlags().BoolVar(&showVersion, versionFlagName, false, versionFlagDescription)
 	rootCommand.AddCommand(
 		createTreeCommand(),
 		createContentCommand(),
@@ -167,14 +100,6 @@ func createRootCommand() *cobra.Command {
 	)
 	rootCommand.InitDefaultHelpCmd()
 	rootCommand.InitDefaultCompletionCmd()
-	for _, subCommand := range rootCommand.Commands() {
-		formattedName := FormatCommandWithAliases(subCommand.Use, subCommand.Aliases) + " "
-		if subCommand.Annotations == nil {
-			subCommand.Annotations = make(map[string]string)
-		}
-		subCommand.Annotations[commandDisplayNameAnnotation] = formattedName
-	}
-	rootCommand.SetHelpTemplate(fmt.Sprintf(helpTemplate, commandDisplayNameAnnotation))
 	return rootCommand
 }
 
@@ -202,7 +127,7 @@ func createTreeCommand() *cobra.Command {
 
 	treeCommand := &cobra.Command{
 		Use:     treeUse,
-		Aliases: []string{"t"},
+		Aliases: []string{treeAlias},
 		Short:   treeShortDescription,
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(command *cobra.Command, arguments []string) error {
@@ -245,7 +170,7 @@ func createContentCommand() *cobra.Command {
 
 	contentCommand := &cobra.Command{
 		Use:     contentUse,
-		Aliases: []string{"c"},
+		Aliases: []string{contentAlias},
 		Short:   contentShortDescription,
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(command *cobra.Command, arguments []string) error {
@@ -284,7 +209,7 @@ func createCallChainCommand() *cobra.Command {
 
 	callChainCommand := &cobra.Command{
 		Use:     callchainUse,
-		Aliases: []string{"cc"},
+		Aliases: []string{callchainAlias},
 		Short:   callchainShortDescription,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, arguments []string) error {
