@@ -1,7 +1,10 @@
+[binary]
+*.png
+
+[ignore]
 .idea/
 *.iml
 .ignore
 .gitignore
 *.txt
 .golangci.yml
-

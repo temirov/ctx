@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.0.11] - 2025-04-20
+
+### Features ✨
+
+1. **Binary Section in `.ignore`**
+    - `.ignore` files now support a `[binary]` section listing patterns whose binary contents are base64-encoded in output.
+    - The legacy `show-binary-content:` directive has been removed.
+
 ## [v0.0.10] - 2025-04-19
 
 ### Features ✨

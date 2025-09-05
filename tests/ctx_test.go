@@ -60,10 +60,11 @@ const (
 
 	usageSnippet = "Usage:\n  ctx"
 
-	binaryFixtureFileName      = "fixture.png"
-	expectedBinaryMimeType     = "image/png"
-	ignoreFileName             = ".ignore"
-	showBinaryContentDirective = "show-binary-content:"
+	binaryFixtureFileName  = "fixture.png"
+	expectedBinaryMimeType = "image/png"
+	ignoreFileName         = ".ignore"
+	// binarySectionHeader identifies the section that lists binary content patterns in an ignore file.
+	binarySectionHeader        = "[binary]"
 	unmatchedBinaryFixtureName = "unmatched.bin"
 	onePixelPNGBase64Content   = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
 )
@@ -681,7 +682,7 @@ func TestCTX(testingHandle *testing.T) {
 				if decodeError != nil {
 					t.Fatalf("failed to decode binary fixture: %v", decodeError)
 				}
-				ignoreContent := showBinaryContentDirective + unmatchedBinaryFixtureName + "\n"
+				ignoreContent := binarySectionHeader + "\n" + unmatchedBinaryFixtureName + "\n"
 				return setupTestDirectory(t, map[string]string{
 					binaryFixtureFileName: string(binaryBytes),
 					ignoreFileName:        ignoreContent,
@@ -705,7 +706,7 @@ func TestCTX(testingHandle *testing.T) {
 			},
 		},
 		{
-			name: "BinaryFileContentShowDirective",
+			name: "BinaryFileContentBinarySection",
 			arguments: []string{
 				appTypes.CommandContent,
 				".",
@@ -715,7 +716,7 @@ func TestCTX(testingHandle *testing.T) {
 				if decodeError != nil {
 					t.Fatalf("failed to decode binary fixture: %v", decodeError)
 				}
-				ignoreContent := showBinaryContentDirective + binaryFixtureFileName + "\n"
+				ignoreContent := binarySectionHeader + "\n" + binaryFixtureFileName + "\n"
 				return setupTestDirectory(t, map[string]string{
 					binaryFixtureFileName: string(binaryBytes),
 					ignoreFileName:        ignoreContent,
