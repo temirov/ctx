@@ -171,7 +171,7 @@ To publish a new version:
 
    ```bash
    git tag vX.Y.Z
-   git push origin main
+   git push origin master
    git push origin vX.Y.Z
    ```
 
