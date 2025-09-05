@@ -100,7 +100,7 @@ func TestLoadRecursiveIgnorePatterns(testingHandle *testing.T) {
 			rootDirectory := testingHandle.TempDir()
 			testCase.createTestFiles(testingHandle, rootDirectory)
 
-			patternList, binaryPatternList, loadError := config.LoadRecursiveIgnorePatterns(rootDirectory, "", testCase.useGitignore, testCase.useIgnoreFile, false)
+			patternList, binaryPatternList, loadError := config.LoadRecursiveIgnorePatterns(rootDirectory, nil, testCase.useGitignore, testCase.useIgnoreFile, false)
 			if loadError != nil {
 				testingHandle.Fatalf("LoadRecursiveIgnorePatterns failed: %v", loadError)
 			}
@@ -117,5 +117,26 @@ func TestLoadRecursiveIgnorePatterns(testingHandle *testing.T) {
 				testingHandle.Fatalf("unexpected binary content patterns: got %v want %v", binaryPatternList, testCase.expectedBinaryPatterns)
 			}
 		})
+	}
+}
+
+// TestLoadRecursiveIgnorePatternsAddsExclusions verifies that provided exclusion patterns are included.
+func TestLoadRecursiveIgnorePatternsAddsExclusions(testingHandle *testing.T) {
+	const (
+		toolsPattern  = "tools"
+		githubPattern = ".github"
+		yamlPattern   = "*.yml"
+	)
+	rootDirectory := testingHandle.TempDir()
+	patterns := []string{toolsPattern, githubPattern, yamlPattern}
+	expectedPatterns := append([]string{gitDirectoryPattern}, patterns...)
+	actualPatterns, _, loadError := config.LoadRecursiveIgnorePatterns(rootDirectory, patterns, false, false, false)
+	if loadError != nil {
+		testingHandle.Fatalf("LoadRecursiveIgnorePatterns failed: %v", loadError)
+	}
+	sort.Strings(actualPatterns)
+	sort.Strings(expectedPatterns)
+	if !reflect.DeepEqual(actualPatterns, expectedPatterns) {
+		testingHandle.Fatalf("unexpected patterns: got %v want %v", actualPatterns, expectedPatterns)
 	}
 }

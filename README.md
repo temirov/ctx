@@ -45,8 +45,7 @@ and **optional embedded documentation** for referenced packages and symbols.
       disabled with `--no-gitignore`).
     - Skips the `.git` directory unless the `--git` flag is provided.
     - The `[binary]` section in `.ignore` lists patterns whose binary contents are base64-encoded and included in output.
-    - A global exclusion flag (`-e` or `--e`) excludes a designated folder if it appears as a direct child in any
-      specified directory.
+    - A repeatable exclusion flag (`-e` or `--e`) skips paths matching the supplied patterns.
 - **Command Abbreviations:**
     - `t` is an alias for `tree`.
     - `c` is an alias for `content`.
@@ -85,7 +84,7 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 
 | Flag                  | Applies to         | Description |
 |-----------------------|--------------------|---------------------------------------------------------------|
-| `-e, --e <folder>`    | tree, content      | Exclude a direct-child folder during directory traversal. |
+| `-e, --e <pattern>`   | tree, content      | Exclude paths matching the pattern; repeat for multiple patterns. |
 | `--no-gitignore`      | tree, content      | Disable loading of `.gitignore` files. |
 | `--no-ignore`         | tree, content      | Disable loading of `.ignore` files. |
 | `--git`               | tree, content      | Include the `.git` directory during traversal. |
