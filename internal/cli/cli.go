@@ -45,7 +45,7 @@ const (
 	unsupportedCommandMessage       = "unsupported command"
 	defaultCallChainDepth           = 1
 	callChainDepthDescription       = "traversal depth"
-	exclusionFlagDescription        = "exclude folder"
+	exclusionFlagDescription        = "exclude path pattern"
 	disableGitignoreFlagDescription = "do not use .gitignore"
 	disableIgnoreFlagDescription    = "do not use .ignore"
 	includeGitFlagDescription       = "include git directory"
@@ -103,7 +103,7 @@ func createRootCommand() *cobra.Command {
 
 // pathOptions stores configuration for path-related flags.
 type pathOptions struct {
-	exclusionFolder   string
+	exclusionPatterns []string
 	disableGitignore  bool
 	disableIgnoreFile bool
 	includeGit        bool
@@ -111,7 +111,7 @@ type pathOptions struct {
 
 // addPathFlags registers path-related flags on the command.
 func addPathFlags(command *cobra.Command, options *pathOptions) {
-	command.Flags().StringVarP(&options.exclusionFolder, exclusionFlagName, exclusionFlagName, "", exclusionFlagDescription)
+	command.Flags().StringArrayVarP(&options.exclusionPatterns, exclusionFlagName, exclusionFlagName, nil, exclusionFlagDescription)
 	command.Flags().BoolVar(&options.disableGitignore, noGitignoreFlagName, false, disableGitignoreFlagDescription)
 	command.Flags().BoolVar(&options.disableIgnoreFile, noIgnoreFlagName, false, disableIgnoreFlagDescription)
 	command.Flags().BoolVar(&options.includeGit, includeGitFlagName, false, includeGitFlagDescription)
@@ -143,7 +143,7 @@ func createTreeCommand() *cobra.Command {
 			return runTool(
 				types.CommandTree,
 				arguments,
-				pathConfiguration.exclusionFolder,
+				pathConfiguration.exclusionPatterns,
 				!pathConfiguration.disableGitignore,
 				!pathConfiguration.disableIgnoreFile,
 				pathConfiguration.includeGit,
@@ -182,7 +182,7 @@ func createContentCommand() *cobra.Command {
 			return runTool(
 				types.CommandContent,
 				arguments,
-				pathConfiguration.exclusionFolder,
+				pathConfiguration.exclusionPatterns,
 				!pathConfiguration.disableGitignore,
 				!pathConfiguration.disableIgnoreFile,
 				pathConfiguration.includeGit,
@@ -218,7 +218,7 @@ func createCallChainCommand() *cobra.Command {
 			return runTool(
 				types.CommandCallChain,
 				[]string{arguments[0]},
-				"",
+				nil,
 				true,
 				true,
 				false,
@@ -239,7 +239,7 @@ func createCallChainCommand() *cobra.Command {
 func runTool(
 	commandName string,
 	paths []string,
-	exclusionFolder string,
+	exclusionPatterns []string,
 	useGitignore bool,
 	useIgnoreFile bool,
 	includeGit bool,
@@ -261,7 +261,7 @@ func runTool(
 	case types.CommandCallChain:
 		return runCallChain(paths[0], format, callChainDepth, documentationEnabled, collector, workingDirectory)
 	case types.CommandTree, types.CommandContent:
-		return runTreeOrContentCommand(commandName, paths, exclusionFolder, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, collector)
+		return runTreeOrContentCommand(commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, collector)
 	default:
 		return fmt.Errorf(unsupportedCommandMessage)
 	}
@@ -302,7 +302,7 @@ func runCallChain(
 func runTreeOrContentCommand(
 	commandName string,
 	paths []string,
-	exclusionFolder string,
+	exclusionPatterns []string,
 	useGitignore bool,
 	useIgnoreFile bool,
 	includeGit bool,
@@ -318,7 +318,7 @@ func runTreeOrContentCommand(
 	var collected []interface{}
 	for _, info := range validatedPaths {
 		if info.IsDir {
-			ignorePatternList, binaryContentPatternList, loadError := config.LoadRecursiveIgnorePatterns(info.AbsolutePath, exclusionFolder, useGitignore, useIgnoreFile, includeGit)
+			ignorePatternList, binaryContentPatternList, loadError := config.LoadRecursiveIgnorePatterns(info.AbsolutePath, exclusionPatterns, useGitignore, useIgnoreFile, includeGit)
 			if loadError != nil {
 				fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, loadError)
 				continue

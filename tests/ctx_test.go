@@ -69,6 +69,13 @@ const (
 	onePixelPNGBase64Content   = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
 	expectedTextMimeType       = "text/plain; charset=utf-8"
 	mimeTypeIndicator          = "Mime Type:"
+	toolsDirectoryName         = "tools"
+	githubDirectoryName        = ".github"
+	yamlRootFileName           = "config.yml"
+	yamlPattern                = "*.yml"
+	nestedDirectoryName        = "nested"
+	nestedYamlFileName         = "nested.yml"
+	nestedTextFileName         = "keep.txt"
 )
 
 // buildBinary compiles the ctx binary and returns its path.
@@ -219,6 +226,19 @@ func setupGoogleSheetsAddonFixture(testingHandle *testing.T) string {
 	}
 	root := setupTestDirectory(testingHandle, layout)
 	return filepath.Join(root, googleSheetsAddonDirectoryName)
+}
+
+// setupExclusionPatternFixture creates a directory tree for exclusion flag tests.
+func setupExclusionPatternFixture(testingHandle *testing.T) string {
+	layout := map[string]string{
+		toolsDirectoryName + "/":  "",
+		githubDirectoryName + "/": "",
+		yamlRootFileName:          visibleFileContent,
+		visibleFileName:           visibleFileContent,
+		filepath.Join(nestedDirectoryName, nestedYamlFileName): visibleFileContent,
+		filepath.Join(nestedDirectoryName, nestedTextFileName): visibleFileContent,
+	}
+	return setupTestDirectory(testingHandle, layout)
 }
 
 // getModuleRoot returns the repository root directory.
@@ -981,6 +1001,62 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if fileOutput.MimeType != expectedTextMimeType {
 					testingHandle.Fatalf("expected MIME type %s", expectedTextMimeType)
+				}
+			},
+		},
+		{
+			name:      "ExcludePatternsTree",
+			arguments: []string{appTypes.CommandTree, "-e", toolsDirectoryName, "-e", githubDirectoryName, "-e", yamlPattern},
+			prepare:   setupExclusionPatternFixture,
+			validate: func(testingHandle *testing.T, output string) {
+				var outputNodes []appTypes.TreeOutputNode
+				if err := json.Unmarshal([]byte(output), &outputNodes); err != nil {
+					testingHandle.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(outputNodes) != 1 {
+					testingHandle.Fatalf("expected one root node, got %d", len(outputNodes))
+				}
+				rootChildren := outputNodes[0].Children
+				if len(rootChildren) != 2 {
+					testingHandle.Fatalf("expected two root children, got %d", len(rootChildren))
+				}
+				for _, childNode := range rootChildren {
+					if childNode.Name == toolsDirectoryName || childNode.Name == githubDirectoryName || childNode.Name == yamlRootFileName {
+						testingHandle.Fatalf("unexpected child %s", childNode.Name)
+					}
+					if childNode.Name == nestedDirectoryName {
+						if len(childNode.Children) != 1 || childNode.Children[0].Name != nestedTextFileName {
+							testingHandle.Fatalf("expected only %s inside %s", nestedTextFileName, nestedDirectoryName)
+						}
+						if childNode.Children[0].MimeType != expectedTextMimeType {
+							testingHandle.Fatalf("expected MIME type %s", expectedTextMimeType)
+						}
+					}
+				}
+			},
+		},
+		{
+			name:      "ExcludePatternsContent",
+			arguments: []string{appTypes.CommandContent, "-e", toolsDirectoryName, "-e", githubDirectoryName, "-e", yamlPattern},
+			prepare:   setupExclusionPatternFixture,
+			validate: func(testingHandle *testing.T, output string) {
+				var fileOutputs []appTypes.FileOutput
+				if err := json.Unmarshal([]byte(output), &fileOutputs); err != nil {
+					testingHandle.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(fileOutputs) != 2 {
+					testingHandle.Fatalf("expected two files, got %d", len(fileOutputs))
+				}
+				for _, fileOutput := range fileOutputs {
+					if strings.HasSuffix(fileOutput.Path, yamlRootFileName) || strings.HasSuffix(fileOutput.Path, nestedYamlFileName) {
+						testingHandle.Fatalf("unexpected YAML file %s", fileOutput.Path)
+					}
+					if strings.Contains(fileOutput.Path, toolsDirectoryName) || strings.Contains(fileOutput.Path, githubDirectoryName) {
+						testingHandle.Fatalf("unexpected excluded path %s", fileOutput.Path)
+					}
+					if fileOutput.MimeType != expectedTextMimeType {
+						testingHandle.Fatalf("expected MIME type %s", expectedTextMimeType)
+					}
 				}
 			},
 		},

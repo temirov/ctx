@@ -18,6 +18,7 @@
 
 ### Improvements ⚙️
 
+* Support repeatable exclusion flag with glob pattern matching for tree and content commands.
 * Improve help output and adopt a custom usage template. (#55 a99dc40, a93b618, #47 aa8f792)
 * Show command aliases in help (Cobra help template override). (#45 3de79fb, c311f97)
 * Refine path-based ignore handling and centralize ignore constants/messages. (#51 ff3756a, #41 ac2da74, 22bb964, a64d9cd, 59c829b)
