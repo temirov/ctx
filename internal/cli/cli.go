@@ -18,29 +18,62 @@ import (
 )
 
 const (
-	exclusionFlagName               = "e"
-	noGitignoreFlagName             = "no-gitignore"
-	noIgnoreFlagName                = "no-ignore"
-	includeGitFlagName              = "git"
-	formatFlagName                  = "format"
-	documentationFlagName           = "doc"
-	versionFlagName                 = "version"
-	versionTemplate                 = "ctx version: %s\n"
-	documentationIgnoredNotice      = "--doc ignored for tree"
-	defaultPath                     = "."
-	rootUse                         = "ctx"
-	rootShortDescription            = "ctx command line interface"
-	rootLongDescription             = "ctx displays directory trees, file contents, and call chains"
-	versionFlagDescription          = "display application version"
-	treeUse                         = "tree [paths...]"
-	contentUse                      = "content [paths...]"
-	callchainUse                    = "callchain <function>"
-	treeAlias                       = "t"
-	contentAlias                    = "c"
-	callchainAlias                  = "cc"
-	treeShortDescription            = "display directory tree (" + treeAlias + ")"
-	contentShortDescription         = "show file contents (" + contentAlias + ")"
-	callchainShortDescription       = "analyze call chains (" + callchainAlias + ")"
+	exclusionFlagName          = "e"
+	noGitignoreFlagName        = "no-gitignore"
+	noIgnoreFlagName           = "no-ignore"
+	includeGitFlagName         = "git"
+	formatFlagName             = "format"
+	documentationFlagName      = "doc"
+	versionFlagName            = "version"
+	versionTemplate            = "ctx version: %s\n"
+	documentationIgnoredNotice = "--doc ignored for tree"
+	defaultPath                = "."
+	rootUse                    = "ctx"
+	rootShortDescription       = "ctx command line interface"
+	rootLongDescription        = `ctx inspects project structure and source code.
+It renders directory trees, shows file content, and analyzes call chains.
+Use --format to select raw, json, or xml output, --doc to include documentation, and --version to print the application version.`
+	versionFlagDescription    = "display application version"
+	treeUse                   = "tree [paths...]"
+	contentUse                = "content [paths...]"
+	callchainUse              = "callchain <function>"
+	treeAlias                 = "t"
+	contentAlias              = "c"
+	callchainAlias            = "cc"
+	treeShortDescription      = "display directory tree (" + treeAlias + ")"
+	contentShortDescription   = "show file contents (" + contentAlias + ")"
+	callchainShortDescription = "analyze call chains (" + callchainAlias + ")"
+
+	// treeLongDescription provides detailed help for the tree command.
+	treeLongDescription = `List directories and files for one or more paths.
+Use --format to select raw, json, or xml output. The --doc flag is accepted for consistency but ignored.`
+	// treeUsageExample demonstrates tree command usage.
+	treeUsageExample = `  # Render the tree in XML format
+  ctx tree --format xml ./cmd
+
+  # Exclude vendor directory
+  ctx tree -e vendor .`
+
+	// contentLongDescription provides detailed help for the content command.
+	contentLongDescription = `Display file content for provided paths.
+Use --format to select raw, json, or xml output and --doc to include collected documentation.`
+	// contentUsageExample demonstrates content command usage.
+	contentUsageExample = `  # Show project files with documentation
+  ctx content --doc .
+
+  # Display a file in raw format
+  ctx content --format raw main.go`
+
+	// callchainLongDescription provides detailed help for the callchain command.
+	callchainLongDescription = `Analyze the call chain of a function.
+Use --depth to control traversal depth, --format for output selection, and --doc to include documentation.`
+	// callchainUsageExample demonstrates callchain command usage.
+	callchainUsageExample = `  # Analyze call chain up to depth two in JSON
+  ctx callchain fmt.Println --depth 2
+
+  # Produce XML output including documentation
+  ctx callchain mypkg.MyFunc --format xml --doc`
+
 	callChainDepthFlagName          = "depth"
 	unsupportedCommandMessage       = "unsupported command"
 	defaultCallChainDepth           = 1
@@ -127,6 +160,8 @@ func createTreeCommand() *cobra.Command {
 		Use:     treeUse,
 		Aliases: []string{treeAlias},
 		Short:   treeShortDescription,
+		Long:    treeLongDescription,
+		Example: treeUsageExample,
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(command *cobra.Command, arguments []string) error {
 			if len(arguments) == 0 {
@@ -170,6 +205,8 @@ func createContentCommand() *cobra.Command {
 		Use:     contentUse,
 		Aliases: []string{contentAlias},
 		Short:   contentShortDescription,
+		Long:    contentLongDescription,
+		Example: contentUsageExample,
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(command *cobra.Command, arguments []string) error {
 			if len(arguments) == 0 {
@@ -209,6 +246,8 @@ func createCallChainCommand() *cobra.Command {
 		Use:     callchainUse,
 		Aliases: []string{callchainAlias},
 		Short:   callchainShortDescription,
+		Long:    callchainLongDescription,
+		Example: callchainUsageExample,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, arguments []string) error {
 			outputFormatLower := strings.ToLower(outputFormat)
