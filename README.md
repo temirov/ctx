@@ -122,13 +122,15 @@ ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 
 | json   | `[]TreeOutputNode`             | `[]FileOutput`                             | `CallChainOutput` |
 | xml    | `result/code/item` nodes       | `result/code/item` nodes                   | `callchains/callchain` |
 
+All JSON and XML outputs include a `mimeType` field for every file. Raw output never displays MIME type information.
+
 ## Configuration
 
 Exclusion patterns are loaded **only** during directory traversal; explicitly listed file paths are never ignored.
 
 ## Binary File Handling
 
-When a binary file is encountered, `ctx` reports its MIME type and omits the content. This is the default behavior when `.ignore` contains no `[binary]` section and no legacy directives:
+When a binary file is encountered, `ctx` omits its content in raw output. JSON and XML results always include the file's MIME type. This is the default behavior when `.ignore` contains no `[binary]` section and no legacy directives:
 
 ```
 # .ignore
@@ -137,7 +139,6 @@ When a binary file is encountered, `ctx` reports its MIME type and omits the con
 ```bash
 ctx content image.png --format raw
 File: image.png
-Mime Type: image/png
 (binary content omitted)
 End of file: image.png
 ```

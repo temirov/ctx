@@ -9,6 +9,9 @@ import (
 	"github.com/temirov/ctx/internal/types"
 )
 
+// textMimeTypeExpected defines the MIME type expected for text files.
+const textMimeTypeExpected = "text/plain; charset=utf-8"
+
 // callChainRawExpected defines the expected raw rendering of a call chain.
 const callChainRawExpected = "----- CALLCHAIN METADATA -----\n" +
 	"Target Function: target\n" +
@@ -62,7 +65,8 @@ const jsonExpected = "{\n" +
 	"    {\n" +
 	"      \"path\": \"file.txt\",\n" +
 	"      \"type\": \"file\",\n" +
-	"      \"content\": \"data\"\n" +
+	"      \"content\": \"data\",\n" +
+	"      \"mimeType\": \"" + textMimeTypeExpected + "\"\n" +
 	"    }\n" +
 	"  ]\n" +
 	"}"
@@ -70,7 +74,7 @@ const jsonExpected = "{\n" +
 // TestRenderJSON verifies RenderJSON output and deduplication.
 func TestRenderJSON(testingInstance *testing.T) {
 	docs := []types.DocumentationEntry{{Kind: "kind", Name: "name", Doc: "doc"}, {Kind: "kind", Name: "name", Doc: "doc"}}
-	items := []interface{}{&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data"}, &types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data"}}
+	items := []interface{}{&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}, &types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}}
 	actual, err := output.RenderJSON(docs, items)
 	if err != nil {
 		testingInstance.Fatalf("render json error: %v", err)
@@ -95,6 +99,7 @@ const xmlExpected = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
 	"      <path>file.txt</path>\n" +
 	"      <type>file</type>\n" +
 	"      <content>data</content>\n" +
+	"      <mimeType>" + textMimeTypeExpected + "</mimeType>\n" +
 	"      <documentation></documentation>\n" +
 	"    </item>\n" +
 	"  </code>\n" +
@@ -103,7 +108,7 @@ const xmlExpected = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
 // TestRenderXML verifies RenderXML output and deduplication.
 func TestRenderXML(testingInstance *testing.T) {
 	docs := []types.DocumentationEntry{{Kind: "kind", Name: "name", Doc: "doc"}, {Kind: "kind", Name: "name", Doc: "doc"}}
-	items := []interface{}{&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data"}, &types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data"}}
+	items := []interface{}{&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}, &types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}}
 	actual, err := output.RenderXML(docs, items)
 	if err != nil {
 		testingInstance.Fatalf("render xml error: %v", err)
@@ -125,7 +130,7 @@ const rawExpected = "--- Documentation ---\n" +
 // TestRenderRaw verifies RenderRaw printing.
 func TestRenderRaw(testingInstance *testing.T) {
 	docs := []types.DocumentationEntry{{Kind: "kind", Name: "name", Doc: "doc"}}
-	items := []interface{}{&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data"}}
+	items := []interface{}{&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}}
 	reader, writer, pipeError := os.Pipe()
 	if pipeError != nil {
 		testingInstance.Fatalf("pipe error: %v", pipeError)

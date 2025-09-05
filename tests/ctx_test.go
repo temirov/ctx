@@ -67,6 +67,8 @@ const (
 	binarySectionHeader        = "[binary]"
 	unmatchedBinaryFixtureName = "unmatched.bin"
 	onePixelPNGBase64Content   = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
+	expectedTextMimeType       = "text/plain; charset=utf-8"
+	mimeTypeIndicator          = "Mime Type:"
 )
 
 // buildBinary compiles the ctx binary and returns its path.
@@ -304,6 +306,16 @@ func TestCTX(testingHandle *testing.T) {
 				if len(nodes) != 2 {
 					t.Fatalf("expected two top‑level nodes, got %d", len(nodes))
 				}
+				var fileNode *appTypes.TreeOutputNode
+				for i := range nodes {
+					if nodes[i].Name == "fileA.txt" {
+						fileNode = &nodes[i]
+						break
+					}
+				}
+				if fileNode == nil || fileNode.MimeType != expectedTextMimeType {
+					t.Fatalf("expected MIME type %s for fileA.txt", expectedTextMimeType)
+				}
 			},
 		},
 		{
@@ -327,6 +339,11 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if len(files) != 2 {
 					t.Fatalf("expected two items, got %d", len(files))
+				}
+				for i := range files {
+					if files[i].MimeType != expectedTextMimeType {
+						t.Fatalf("expected MIME type %s for %s", expectedTextMimeType, files[i].Path)
+					}
 				}
 			},
 		},
@@ -354,6 +371,9 @@ func TestCTX(testingHandle *testing.T) {
 				if len(wrapper.Nodes) != 1 {
 					t.Fatalf("expected one top-level node, got %d", len(wrapper.Nodes))
 				}
+				if wrapper.Nodes[0].MimeType != expectedTextMimeType {
+					t.Fatalf("expected MIME type %s", expectedTextMimeType)
+				}
 			},
 		},
 		{
@@ -380,6 +400,9 @@ func TestCTX(testingHandle *testing.T) {
 				if len(wrapper.Files) != 1 {
 					t.Fatalf("expected one item, got %d", len(wrapper.Files))
 				}
+				if wrapper.Files[0].MimeType != expectedTextMimeType {
+					t.Fatalf("expected MIME type %s", expectedTextMimeType)
+				}
 			},
 		},
 		{
@@ -403,6 +426,9 @@ func TestCTX(testingHandle *testing.T) {
 					strings.Contains(output, "End of file: "+explicitFilePath)) {
 					t.Fatalf("unexpected raw content output\n%s", output)
 				}
+				if strings.Contains(output, mimeTypeIndicator) {
+					t.Fatalf("unexpected MIME type in raw output\n%s", output)
+				}
 			},
 		},
 		{
@@ -423,6 +449,9 @@ func TestCTX(testingHandle *testing.T) {
 			validate: func(t *testing.T, output string) {
 				if !strings.Contains(output, "[File] "+explicitFilePath) {
 					t.Fatalf("unexpected raw tree output\n%s", output)
+				}
+				if strings.Contains(output, mimeTypeIndicator) {
+					t.Fatalf("unexpected MIME type in raw output\n%s", output)
 				}
 			},
 		},
@@ -598,6 +627,9 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if len(files) != 1 {
 					t.Fatalf("expected one readable item, got %d", len(files))
+				}
+				if files[0].MimeType != expectedTextMimeType {
+					t.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
 			},
 		},
@@ -801,6 +833,9 @@ func TestCTX(testingHandle *testing.T) {
 				if len(children) != 1 || children[0].Name != visibleFileName {
 					t.Fatalf("expected only %s, got %#v", visibleFileName, children)
 				}
+				if children[0].MimeType != expectedTextMimeType {
+					t.Fatalf("expected MIME type %s", expectedTextMimeType)
+				}
 			},
 		},
 		{
@@ -824,15 +859,19 @@ func TestCTX(testingHandle *testing.T) {
 				if len(nodes) != 1 {
 					t.Fatalf("expected one root node, got %d", len(nodes))
 				}
-				names := make(map[string]struct{})
+				names := make(map[string]*appTypes.TreeOutputNode)
 				for _, child := range nodes[0].Children {
-					names[child.Name] = struct{}{}
+					names[child.Name] = child
 				}
 				if _, ok := names[utils.GitDirectoryName]; !ok {
 					t.Fatalf("expected %s in output", utils.GitDirectoryName)
 				}
-				if _, ok := names[visibleFileName]; !ok {
+				visibleNode, ok := names[visibleFileName]
+				if !ok {
 					t.Fatalf("expected %s in output", visibleFileName)
+				}
+				if visibleNode.MimeType != expectedTextMimeType {
+					t.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
 			},
 		},
@@ -850,6 +889,9 @@ func TestCTX(testingHandle *testing.T) {
 				if !strings.Contains(output, visibleFileName) {
 					testingHandle.Fatalf("expected tree output to include %s\n%s", visibleFileName, output)
 				}
+				if !strings.Contains(output, expectedTextMimeType) {
+					testingHandle.Fatalf("expected MIME type %s in output\n%s", expectedTextMimeType, output)
+				}
 			},
 		},
 		{
@@ -865,6 +907,9 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if !strings.Contains(output, visibleFileName) || !strings.Contains(output, visibleFileContent) {
 					testingHandle.Fatalf("expected content output to include %s and its content\n%s", visibleFileName, output)
+				}
+				if !strings.Contains(output, expectedTextMimeType) {
+					testingHandle.Fatalf("expected MIME type %s in output\n%s", expectedTextMimeType, output)
 				}
 			},
 		},
@@ -894,6 +939,9 @@ func TestCTX(testingHandle *testing.T) {
 				subNode := rootChildren[0]
 				if len(subNode.Children) != 1 || subNode.Children[0].Name != visibleFileName {
 					t.Fatalf("expected only %s in %s, got %#v", visibleFileName, subDirectoryName, subNode.Children)
+				}
+				if subNode.Children[0].MimeType != expectedTextMimeType {
+					t.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
 			},
 		},
@@ -930,6 +978,9 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if fileOutput.Content != visibleFileContent {
 					testingHandle.Fatalf("expected content %s, got %s", visibleFileContent, fileOutput.Content)
+				}
+				if fileOutput.MimeType != expectedTextMimeType {
+					testingHandle.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
 			},
 		},
