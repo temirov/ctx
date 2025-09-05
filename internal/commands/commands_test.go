@@ -121,7 +121,7 @@ func TestGetTreeData(testingInstance *testing.T) {
 			testName:       "includes binary file",
 			ignorePatterns: nil,
 			expectedChildren: []types.TreeOutputNode{
-				{Path: textPath, Name: textFileName, Type: types.NodeTypeFile},
+				{Path: textPath, Name: textFileName, Type: types.NodeTypeFile, MimeType: textMimeTypeExpected},
 				{Path: binaryPath, Name: binaryFileName, Type: types.NodeTypeBinary, MimeType: binaryMimeTypeExpected},
 			},
 		},
@@ -129,7 +129,7 @@ func TestGetTreeData(testingInstance *testing.T) {
 			testName:       "ignores by pattern",
 			ignorePatterns: []string{binaryFileName},
 			expectedChildren: []types.TreeOutputNode{
-				{Path: textPath, Name: textFileName, Type: types.NodeTypeFile},
+				{Path: textPath, Name: textFileName, Type: types.NodeTypeFile, MimeType: textMimeTypeExpected},
 			},
 		},
 	}
