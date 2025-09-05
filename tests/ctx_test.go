@@ -25,7 +25,9 @@ const (
 	hiddenFileContent  = "secret"
 	includeGitFlag     = "--git"
 	versionFlag        = "--version"
-	treeAlias          = "t"
+	// documentationFlag enables inclusion of documentation.
+	documentationFlag = "--doc"
+	treeAlias         = "t"
 	// contentAlias represents the shorthand for the content command.
 	contentAlias          = "c"
 	subDirectoryName      = "sub"
@@ -59,6 +61,8 @@ const (
 	depthTwoValue                     = "2"
 
 	usageSnippet = "Usage:\n  ctx"
+	// unknownDocumentationFlagErrorSnippet captures the error when documentation flag is unsupported.
+	unknownDocumentationFlagErrorSnippet = "unknown flag: --doc"
 
 	binaryFixtureFileName  = "fixture.png"
 	expectedBinaryMimeType = "image/png"
@@ -293,7 +297,7 @@ func TestCTX(testingHandle *testing.T) {
 			arguments: []string{
 				"callchain",
 				contentDataFunction,
-				"--doc",
+				documentationFlag,
 				"--format",
 				"raw",
 			},
@@ -335,6 +339,22 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if fileNode == nil || fileNode.MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s for fileA.txt", expectedTextMimeType)
+				}
+			},
+		},
+		{
+			name: "DocumentationFlagTreeUnsupported",
+			arguments: []string{
+				appTypes.CommandTree,
+				documentationFlag,
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, nil)
+			},
+			expectError: true,
+			validate: func(t *testing.T, output string) {
+				if !strings.Contains(output, unknownDocumentationFlagErrorSnippet) {
+					t.Errorf("expected error for unsupported documentation flag\n%s", output)
 				}
 			},
 		},
@@ -812,7 +832,7 @@ func TestCTX(testingHandle *testing.T) {
 			arguments: []string{
 				appTypes.CommandCallChain,
 				"main.main",
-				"--doc",
+				documentationFlag,
 				"--format",
 				appTypes.FormatRaw,
 			},
