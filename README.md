@@ -5,6 +5,34 @@ files and directories, or analyzes the call chain for a given function in the re
 via .ignore and .gitignore files within each directory, an optional global exclusion flag, configurable output formats,
 and **optional embedded documentation** for referenced packages and symbols.
 
+## Quick Start
+
+Install and try ctx's core features: directory trees, file contents with optional documentation, and call-chain analysis.
+
+1. Install:
+
+   ```bash
+   go install github.com/temirov/ctx@latest
+   ```
+
+2. Show a directory tree:
+
+   ```bash
+   ctx tree . --format raw
+   ```
+
+3. View file content with docs:
+
+   ```bash
+   ctx content main.go --doc
+   ```
+
+4. Analyze a call chain:
+
+   ```bash
+   ctx callchain github.com/temirov/ctx/internal/commands.GetContentData
+   ```
+
 ## Features
 
 - **Mixed File/Directory Processing:** Accepts one or more file and/or directory paths as input for `tree` and `content`
