@@ -340,11 +340,10 @@ func runTreeOrContentCommand(
 			}
 		} else {
 			if commandName == types.CommandTree {
+				mimeType := utils.DetectMimeType(info.AbsolutePath)
 				nodeType := types.NodeTypeFile
-				mimeType := ""
 				if utils.IsFileBinary(info.AbsolutePath) {
 					nodeType = types.NodeTypeBinary
-					mimeType = utils.DetectMimeType(info.AbsolutePath)
 				}
 				collected = append(collected, &types.TreeOutputNode{
 					Path:     info.AbsolutePath,
@@ -358,13 +357,12 @@ func runTreeOrContentCommand(
 					fmt.Fprintf(os.Stderr, commands.WarningFileReadFormat, info.AbsolutePath, fileReadError)
 					continue
 				}
+				mimeType := utils.DetectMimeType(info.AbsolutePath)
 				fileType := types.NodeTypeFile
 				content := string(fileBytes)
-				mimeType := ""
 				if utils.IsBinary(fileBytes) {
 					fileType = types.NodeTypeBinary
 					content = ""
-					mimeType = utils.DetectMimeType(info.AbsolutePath)
 				}
 				collected = append(collected, &types.FileOutput{
 					Path:     info.AbsolutePath,

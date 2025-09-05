@@ -70,6 +70,7 @@ func buildTreeNodes(currentDirectoryPath string, rootDirectoryPath string, ignor
 				node.Children = childNodes
 			}
 		} else {
+			node.MimeType = utils.DetectMimeType(childPath)
 			if utils.IsFileBinary(childPath) {
 				node.Type = types.NodeTypeBinary
 			} else {
