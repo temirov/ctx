@@ -6,22 +6,25 @@ import (
 	"os"
 )
 
-const unknownMimeType = ""
+const (
+	// UnknownMimeType is returned when the MIME type of a file cannot be determined.
+	UnknownMimeType = EmptyString
+)
 
 // DetectMimeType determines the MIME type of the file at the provided path by
 // reading up to sniffLen bytes and passing them to http.DetectContentType. It
-// returns an empty string if the file cannot be read.
+// returns UnknownMimeType if the file cannot be read.
 func DetectMimeType(filePath string) string {
 	openedFile, openError := os.Open(filePath)
 	if openError != nil {
-		return unknownMimeType
+		return UnknownMimeType
 	}
 	defer openedFile.Close()
 
 	buffer := make([]byte, sniffLen)
 	bytesRead, readError := openedFile.Read(buffer)
 	if readError != nil && readError != io.EOF {
-		return unknownMimeType
+		return UnknownMimeType
 	}
 
 	return http.DetectContentType(buffer[:bytesRead])

@@ -8,6 +8,7 @@ import (
 
 	"github.com/temirov/ctx/internal/commands"
 	"github.com/temirov/ctx/internal/types"
+	"github.com/temirov/ctx/internal/utils"
 )
 
 // textFileName defines the text file name used in tests.
@@ -15,6 +16,9 @@ const textFileName = "example.txt"
 
 // textFileContent provides the text content written to the text file.
 const textFileContent = "hello"
+
+// textMimeTypeExpected is the expected MIME type for the text file.
+const textMimeTypeExpected = "text/plain; charset=utf-8"
 
 // binaryFileName defines the binary file name used in tests.
 const binaryFileName = "example.bin"
@@ -52,8 +56,8 @@ func TestGetContentData(testingInstance *testing.T) {
 			ignorePatterns:       nil,
 			binaryContentPattern: nil,
 			expectedOutputs: []types.FileOutput{
-				{Path: textPath, Type: types.NodeTypeFile, Content: textFileContent, MimeType: ""},
-				{Path: binaryPath, Type: types.NodeTypeBinary, Content: "", MimeType: binaryMimeTypeExpected},
+				{Path: textPath, Type: types.NodeTypeFile, Content: textFileContent, MimeType: textMimeTypeExpected},
+				{Path: binaryPath, Type: types.NodeTypeBinary, Content: utils.EmptyString, MimeType: binaryMimeTypeExpected},
 			},
 		},
 		{
@@ -61,7 +65,7 @@ func TestGetContentData(testingInstance *testing.T) {
 			ignorePatterns:       []string{binaryFileName},
 			binaryContentPattern: nil,
 			expectedOutputs: []types.FileOutput{
-				{Path: textPath, Type: types.NodeTypeFile, Content: textFileContent, MimeType: ""},
+				{Path: textPath, Type: types.NodeTypeFile, Content: textFileContent, MimeType: textMimeTypeExpected},
 			},
 		},
 		{
@@ -69,7 +73,7 @@ func TestGetContentData(testingInstance *testing.T) {
 			ignorePatterns:       nil,
 			binaryContentPattern: []string{binaryFileName},
 			expectedOutputs: []types.FileOutput{
-				{Path: textPath, Type: types.NodeTypeFile, Content: textFileContent, MimeType: ""},
+				{Path: textPath, Type: types.NodeTypeFile, Content: textFileContent, MimeType: textMimeTypeExpected},
 				{Path: binaryPath, Type: types.NodeTypeBinary, Content: binaryBase64Content, MimeType: binaryMimeTypeExpected},
 			},
 		},

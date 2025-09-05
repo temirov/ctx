@@ -58,14 +58,13 @@ func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatte
 
 		fileType := types.NodeTypeFile
 		fileContent := string(fileBytes)
-		mimeType := ""
+		mimeType := utils.DetectMimeType(walkedPath)
 		if utils.IsBinary(fileBytes) {
 			fileType = types.NodeTypeBinary
-			mimeType = utils.DetectMimeType(walkedPath)
 			if utils.ShouldDisplayBinaryContentByPath(relativePath, binaryContentPatterns) {
 				fileContent = base64.StdEncoding.EncodeToString(fileBytes)
 			} else {
-				fileContent = ""
+				fileContent = utils.EmptyString
 			}
 		}
 
