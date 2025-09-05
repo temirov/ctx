@@ -161,6 +161,22 @@ ctx content . --format json
 ]
 ```
 
+## Releasing
+
+To publish a new version:
+
+1. Update `CHANGELOG.md` with a new section describing the release.
+2. Commit the change.
+3. Tag the commit and push both the branch and tag:
+
+   ```bash
+   git tag vX.Y.Z
+   git push origin main
+   git push origin vX.Y.Z
+   ```
+
+Tags that begin with `v` trigger the release workflow, which builds binaries and uses the matching changelog section as release notes.
+
 ## License
 
 ctx is released under the [MIT License](MIT-LICENSE).
