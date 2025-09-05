@@ -74,7 +74,7 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
 
 ### Binary Content Handling
 
-- When the `content` command encounters a binary file, it records the MIME type and omits the content. This occurs when `.ignore` contains no `[binary]` section and no legacy directives:
+- When the `content` command encounters a binary file, it omits the content in raw output. JSON and XML outputs include a `mimeType` field for every file. This occurs when `.ignore` contains no `[binary]` section and no legacy directives:
 
   ```
   # .ignore
@@ -83,7 +83,6 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
   ```bash
   ctx content image.png --format raw
   File: image.png
-  Mime Type: image/png
   (binary content omitted)
   End of file: image.png
   ```
