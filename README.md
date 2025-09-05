@@ -44,7 +44,7 @@ and **optional embedded documentation** for referenced packages and symbols.
     - Reads patterns from a `.gitignore` file located at the root of each processed directory by default (can be
       disabled with `--no-gitignore`).
     - Skips the `.git` directory unless the `--git` flag is provided.
-    - `.ignore` lines prefixed with `show-binary-content:` designate paths whose binary contents are base64-encoded and included in output.
+    - The `[binary]` section in `.ignore` lists patterns whose binary contents are base64-encoded and included in output.
     - A global exclusion flag (`-e` or `--e`) excludes a designated folder if it appears as a direct child in any
       specified directory.
 - **Command Abbreviations:**
@@ -128,11 +128,10 @@ Exclusion patterns are loaded **only** during directory traversal; explicitly li
 
 ## Binary File Handling
 
-When a binary file is encountered, `ctx` reports its MIME type and omits the content. This is the default behavior when `.ignore` contains no directives:
+When a binary file is encountered, `ctx` reports its MIME type and omits the content. This is the default behavior when `.ignore` contains no `[binary]` section and no legacy directives:
 
 ```
 # .ignore
-# (no show-binary-content directives)
 ```
 
 ```bash
@@ -143,11 +142,11 @@ Mime Type: image/png
 End of file: image.png
 ```
 
-To include binary data, add a `show-binary-content:` directive to `.ignore`. Matched files are emitted as base64-encoded strings:
+To include binary data, add a `[binary]` section to `.ignore` and list matching patterns. Matched files are emitted as base64-encoded strings:
 
 ```
-# .ignore
-show-binary-content: image.png
+[binary]
+image.png
 ```
 
 ```bash

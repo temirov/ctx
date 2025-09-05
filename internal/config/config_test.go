@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	gitDirectoryPattern        = utils.GitDirectoryName + "/"
-	showBinaryContentDirective = "show-binary-content:"
+	gitDirectoryPattern = utils.GitDirectoryName + "/"
+	binarySectionHeader = "[binary]"
 )
 
 // writeTestFile creates a file with the specified content, failing the test on error.
@@ -29,7 +29,7 @@ func TestLoadRecursiveIgnorePatterns(testingHandle *testing.T) {
 	const (
 		nestedIgnoreSubtestName    = "nested ignore files"
 		nestedGitignoreSubtestName = "nested gitignore files"
-		binaryContentSubtestName   = "binary content patterns"
+		binarySectionSubtestName   = "binary section patterns"
 
 		rootIgnorePatternName   = "root.txt"
 		nestedIgnorePatternName = "nested.txt"
@@ -80,15 +80,15 @@ func TestLoadRecursiveIgnorePatterns(testingHandle *testing.T) {
 			expectedBinaryPatterns: []string{},
 		},
 		{
-			name:          binaryContentSubtestName,
+			name:          binarySectionSubtestName,
 			useIgnoreFile: true,
 			createTestFiles: func(testingHandle *testing.T, rootDirectory string) {
-				writeTestFile(testingHandle, filepath.Join(rootDirectory, utils.IgnoreFileName), showBinaryContentDirective+binaryPatternName+"\n")
+				writeTestFile(testingHandle, filepath.Join(rootDirectory, utils.IgnoreFileName), binarySectionHeader+"\n"+binaryPatternName+"\n")
 				nestedDirectoryPath := filepath.Join(rootDirectory, nestedBinaryDirName)
 				if makeDirError := os.MkdirAll(nestedDirectoryPath, 0o755); makeDirError != nil {
 					testingHandle.Fatalf("failed to create nested directory: %v", makeDirError)
 				}
-				writeTestFile(testingHandle, filepath.Join(nestedDirectoryPath, utils.IgnoreFileName), showBinaryContentDirective+binaryPatternName+"\n")
+				writeTestFile(testingHandle, filepath.Join(nestedDirectoryPath, utils.IgnoreFileName), binarySectionHeader+"\n"+binaryPatternName+"\n")
 			},
 			expectedPatterns:       []string{gitDirectoryPattern},
 			expectedBinaryPatterns: []string{binaryPatternName, nestedBinaryDirName + "/" + binaryPatternName},

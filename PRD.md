@@ -74,11 +74,10 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
 
 ### Binary Content Handling
 
-- When the `content` command encounters a binary file, it records the MIME type and omits the content. This occurs when `.ignore` contains no directives:
+- When the `content` command encounters a binary file, it records the MIME type and omits the content. This occurs when `.ignore` contains no `[binary]` section and no legacy directives:
 
   ```
   # .ignore
-  # (no show-binary-content directives)
   ```
 
   ```bash
@@ -89,10 +88,11 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
   End of file: image.png
   ```
 
-- Lines in `.ignore` prefixed with `show-binary-content:` list paths whose binary contents are base64-encoded and included in output:
+- The `[binary]` section in `.ignore` lists patterns whose binary contents are base64-encoded and included in output:
 
   ```
-  show-binary-content: image.png
+  [binary]
+  image.png
   ```
 
   ```bash

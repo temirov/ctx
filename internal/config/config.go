@@ -12,11 +12,14 @@ import (
 	"github.com/temirov/ctx/internal/utils"
 )
 
-// gitDirectoryPattern represents the pattern that matches the Git directory.
-const gitDirectoryPattern = utils.GitDirectoryName + "/"
-
-// showBinaryContentDirective marks patterns whose binary content should be displayed.
-const showBinaryContentDirective = "show-binary-content:"
+const (
+	// gitDirectoryPattern represents the pattern that matches the Git directory.
+	gitDirectoryPattern = utils.GitDirectoryName + "/"
+	// binarySectionHeader identifies the section listing binary content patterns.
+	binarySectionHeader = "[binary]"
+	// ignoreSectionHeader identifies the section listing ignore patterns.
+	ignoreSectionHeader = "[ignore]"
+)
 
 // LoadIgnoreFilePatterns reads a specified ignore file and returns ignore patterns and binary content patterns.
 //
@@ -38,17 +41,23 @@ func LoadIgnoreFilePatterns(ignoreFilePath string) ([]string, []string, error) {
 
 	var ignorePatterns []string
 	var binaryContentPatterns []string
+	currentSectionHeader := ignoreSectionHeader
 	scanner := bufio.NewScanner(fileHandle)
 	for scanner.Scan() {
 		trimmedLine := strings.TrimSpace(scanner.Text())
 		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
 			continue
 		}
-		if strings.HasPrefix(trimmedLine, showBinaryContentDirective) {
-			pattern := strings.TrimSpace(strings.TrimPrefix(trimmedLine, showBinaryContentDirective))
-			if pattern != "" {
-				binaryContentPatterns = append(binaryContentPatterns, pattern)
-			}
+		if strings.EqualFold(trimmedLine, binarySectionHeader) {
+			currentSectionHeader = binarySectionHeader
+			continue
+		}
+		if strings.EqualFold(trimmedLine, ignoreSectionHeader) {
+			currentSectionHeader = ignoreSectionHeader
+			continue
+		}
+		if currentSectionHeader == binarySectionHeader {
+			binaryContentPatterns = append(binaryContentPatterns, trimmedLine)
 			continue
 		}
 		ignorePatterns = append(ignorePatterns, trimmedLine)
