@@ -12,26 +12,26 @@ and **optional embedded documentation** for referenced packages and symbols.
 - **Call Chain Analysis:** Analyzes the call graph for a specified function using the `callchain` command. Provide the
   fully qualified (or suffix) function name as the sole argument. The traversal depth is configurable with `--depth`.
 - **Embedded Documentation (`--doc`):** When the `--doc` flag is used with the `content` or `callchain` command,
-  ctx embeds documentation for imported third-party packages and referenced functions in the output (both *raw* and
-  *json* formats).
-- **Output Formats:** Supports **raw** text output (default), **json**, and **xml** output using the `--format` flag for all
+  ctx embeds documentation for imported third-party packages and referenced functions in the output (both *json* and
+  *raw* formats).
+- **Output Formats:** Supports **json** output (default), **raw** text, and **xml** output using the `--format` flag for all
   commands.
 - **Tree Command (`tree`, `t`):**
-    - *Raw format:* Recursively displays the directory structure for each specified directory in a tree-like format,
-      listing explicitly provided file paths with `[File]`.
     - *JSON format:* Outputs a JSON array where each element represents an input path. Directories include a nested
       `children` array.
+    - *Raw format:* Recursively displays the directory structure for each specified directory in a tree-like format,
+      listing explicitly provided file paths with `[File]`.
 - **Content Command (`content`, `c`):**
+    - *JSON format:* Outputs a JSON array of objects, each containing the `path`, `type`, and `content` of successfully
+      read files. Documentation (when `--doc` is used) is included in a `documentation` field.
     - *Raw format:* Outputs the content of explicitly provided files and concatenates contents of files within
       directories, separated by headers. When `--doc` is used, documentation for imported packages and symbols is
       appended after each file block.
-    - *JSON format:* Outputs a JSON array of objects, each containing the `path`, `type`, and `content` of successfully
-      read files. Documentation (when `--doc` is used) is included in a `documentation` field.
 - **Call Chain Command (`callchain`, `cc`):**
-    - *Raw format:* Displays the target function, its callers, and callees, followed by the source code of these
-      functions. When `--doc` is used, documentation for referenced external packages/functions is appended.
     - *JSON format:* Outputs a JSON object with `targetFunction`, `callers`, `callees`, a `functions` map (name →
       source), and (when `--doc`) a `documentation` array.
+    - *Raw format:* Displays the target function, its callers, and callees, followed by the source code of these
+      functions. When `--doc` is used, documentation for referenced external packages/functions is appended.
     - *Depth control (`--depth`):* Limits traversal of callers and callees. The default depth is `1`, which yields only
       direct callers and callees. For example:
 
@@ -88,7 +88,7 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--no-gitignore`      | tree, content      | Disable loading of `.gitignore` files. |
 | `--no-ignore`         | tree, content      | Disable loading of `.ignore` files. |
 | `--git`               | tree, content      | Include the `.git` directory during traversal. |
-| `--format <raw|json|xml>` | all commands       | Select output format (default `raw`). |
+| `--format <raw|json|xml>` | all commands       | Select output format (default `json`). |
 | `--doc`               | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
 | `--depth <number>`    | callchain          | Limit call graph traversal depth (default `1`). |
 | `--version`           | all commands       | Print ctx version and exit. |
@@ -98,13 +98,13 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 Display a raw tree view excluding `dist` folders:
 
 ```bash
-ctx tree projectA projectB -e dist
+ctx tree projectA projectB -e dist --format raw
 ```
 
-Output file contents in JSON with embedded docs:
+Output file contents with embedded docs (JSON by default):
 
 ```bash
-ctx content main.go pkg --doc --format json
+ctx content main.go pkg --doc
 ```
 
 Analyze the call chain for a function including docs:
@@ -150,7 +150,7 @@ image.png
 ```
 
 ```bash
-ctx content . --format json
+ctx content .
 [
   {
     "path": "image.png",
