@@ -18,21 +18,20 @@ import (
 )
 
 const (
-	exclusionFlagName          = "e"
-	noGitignoreFlagName        = "no-gitignore"
-	noIgnoreFlagName           = "no-ignore"
-	includeGitFlagName         = "git"
-	formatFlagName             = "format"
-	documentationFlagName      = "doc"
-	versionFlagName            = "version"
-	versionTemplate            = "ctx version: %s\n"
-	documentationIgnoredNotice = "--doc ignored for tree"
-	defaultPath                = "."
-	rootUse                    = "ctx"
-	rootShortDescription       = "ctx command line interface"
-	rootLongDescription        = `ctx inspects project structure and source code.
+	exclusionFlagName     = "e"
+	noGitignoreFlagName   = "no-gitignore"
+	noIgnoreFlagName      = "no-ignore"
+	includeGitFlagName    = "git"
+	formatFlagName        = "format"
+	documentationFlagName = "doc"
+	versionFlagName       = "version"
+	versionTemplate       = "ctx version: %s\n"
+	defaultPath           = "."
+	rootUse               = "ctx"
+	rootShortDescription  = "ctx command line interface"
+	rootLongDescription   = `ctx inspects project structure and source code.
 It renders directory trees, shows file content, and analyzes call chains.
-Use --format to select raw, json, or xml output, --doc to include documentation, and --version to print the application version.`
+Use --format to select raw, json, or xml output. Use --doc to include documentation for supported commands, and --version to print the application version.`
 	versionFlagDescription    = "display application version"
 	treeUse                   = "tree [paths...]"
 	contentUse                = "content [paths...]"
@@ -46,7 +45,7 @@ Use --format to select raw, json, or xml output, --doc to include documentation,
 
 	// treeLongDescription provides detailed help for the tree command.
 	treeLongDescription = `List directories and files for one or more paths.
-Use --format to select raw, json, or xml output. The --doc flag is accepted for consistency but ignored.`
+Use --format to select raw, json, or xml output.`
 	// treeUsageExample demonstrates tree command usage.
 	treeUsageExample = `  # Render the tree in XML format
   ctx tree --format xml ./cmd
@@ -83,7 +82,7 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	disableIgnoreFlagDescription    = "do not use .ignore"
 	includeGitFlagDescription       = "include git directory"
 	formatFlagDescription           = "output format"
-	documentationFlagDescription    = "include documentation; tree command does not support documentation"
+	documentationFlagDescription    = "include documentation"
 	invalidFormatMessage            = "Invalid format value '%s'"
 	warningSkipPathFormat           = "Warning: skipping %s: %v\n"
 )
@@ -154,7 +153,6 @@ func addPathFlags(command *cobra.Command, options *pathOptions) {
 func createTreeCommand() *cobra.Command {
 	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
-	var documentationEnabled bool
 
 	treeCommand := &cobra.Command{
 		Use:     treeUse,
@@ -166,10 +164,6 @@ func createTreeCommand() *cobra.Command {
 		RunE: func(command *cobra.Command, arguments []string) error {
 			if len(arguments) == 0 {
 				arguments = []string{defaultPath}
-			}
-			if documentationEnabled {
-				fmt.Fprintln(os.Stderr, documentationIgnoredNotice)
-				documentationEnabled = false
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
 			if !isSupportedFormat(outputFormatLower) {
@@ -184,14 +178,13 @@ func createTreeCommand() *cobra.Command {
 				pathConfiguration.includeGit,
 				defaultCallChainDepth,
 				outputFormatLower,
-				documentationEnabled,
+				false,
 			)
 		},
 	}
 
 	addPathFlags(treeCommand, &pathConfiguration)
 	treeCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
-	treeCommand.Flags().BoolVar(&documentationEnabled, documentationFlagName, false, documentationFlagDescription)
 	return treeCommand
 }
 
