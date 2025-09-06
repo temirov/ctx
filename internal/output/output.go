@@ -84,8 +84,8 @@ func RenderCallChainRaw(data *types.CallChainOutput) string {
 // RenderCallChainJSON marshals the call‑chain output as a JSON array.
 func RenderCallChainJSON(data *types.CallChainOutput) (string, error) {
 	array := []types.CallChainOutput{*data}
-	encoded, err := json.MarshalIndent(array, indentPrefix, indentSpacer)
-	return string(encoded), err
+	encoded, jsonEncodeError := json.MarshalIndent(array, indentPrefix, indentSpacer)
+	return string(encoded), jsonEncodeError
 }
 
 // RenderCallChainXML marshals the call-chain output as an XML document.
@@ -129,9 +129,9 @@ func RenderCallChainXML(data *types.CallChainOutput) (string, error) {
 			},
 		},
 	}
-	encoded, err := xml.MarshalIndent(wrapper, indentPrefix, indentSpacer)
-	if err != nil {
-		return "", err
+	encoded, xmlMarshalError := xml.MarshalIndent(wrapper, indentPrefix, indentSpacer)
+	if xmlMarshalError != nil {
+		return "", xmlMarshalError
 	}
 	return xmlHeader + string(encoded), nil
 }
@@ -145,8 +145,8 @@ func RenderJSON(documentationEntries []types.DocumentationEntry, collected []int
 		if len(dedupedItems) == 0 {
 			return "[]", nil
 		}
-		encoded, err := json.MarshalIndent(dedupedItems, indentPrefix, indentSpacer)
-		return string(encoded), err
+		encoded, jsonEncodeError := json.MarshalIndent(dedupedItems, indentPrefix, indentSpacer)
+		return string(encoded), jsonEncodeError
 	}
 
 	bundle := struct {
@@ -156,8 +156,8 @@ func RenderJSON(documentationEntries []types.DocumentationEntry, collected []int
 		Documentation: dedupedDocs,
 		Code:          dedupedItems,
 	}
-	encoded, err := json.MarshalIndent(bundle, indentPrefix, indentSpacer)
-	return string(encoded), err
+	encoded, jsonEncodeError := json.MarshalIndent(bundle, indentPrefix, indentSpacer)
+	return string(encoded), jsonEncodeError
 }
 
 // RenderXML deduplicates and marshals documentation and results to XML.
@@ -173,9 +173,9 @@ func RenderXML(documentationEntries []types.DocumentationEntry, collected []inte
 		Documentation: dedupedDocs,
 		Code:          dedupedItems,
 	}
-	encoded, err := xml.MarshalIndent(bundle, indentPrefix, indentSpacer)
-	if err != nil {
-		return "", err
+	encoded, xmlMarshalError := xml.MarshalIndent(bundle, indentPrefix, indentSpacer)
+	if xmlMarshalError != nil {
+		return "", xmlMarshalError
 	}
 	return xmlHeader + string(encoded), nil
 }
