@@ -71,13 +71,16 @@ const jsonExpected = "{\n" +
 	"  ]\n" +
 	"}"
 
+// renderJSONErrorMessage defines the error message for JSON rendering failures.
+const renderJSONErrorMessage = "render json error"
+
 // TestRenderJSON verifies RenderJSON output and deduplication.
 func TestRenderJSON(testingInstance *testing.T) {
 	docs := []types.DocumentationEntry{{Kind: "kind", Name: "name", Doc: "doc"}, {Kind: "kind", Name: "name", Doc: "doc"}}
 	items := []interface{}{&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}, &types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}}
-	actual, err := output.RenderJSON(docs, items)
-	if err != nil {
-		testingInstance.Fatalf("render json error: %v", err)
+	actual, renderJSONError := output.RenderJSON(docs, items)
+	if renderJSONError != nil {
+		testingInstance.Fatalf("%s: %v", renderJSONErrorMessage, renderJSONError)
 	}
 	if actual != jsonExpected {
 		testingInstance.Errorf("unexpected output: %q", actual)
@@ -105,13 +108,16 @@ const xmlExpected = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
 	"  </code>\n" +
 	"</result>"
 
+// renderXMLErrorMessage defines the error message for XML rendering failures.
+const renderXMLErrorMessage = "render xml error"
+
 // TestRenderXML verifies RenderXML output and deduplication.
 func TestRenderXML(testingInstance *testing.T) {
 	docs := []types.DocumentationEntry{{Kind: "kind", Name: "name", Doc: "doc"}, {Kind: "kind", Name: "name", Doc: "doc"}}
 	items := []interface{}{&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}, &types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}}
-	actual, err := output.RenderXML(docs, items)
-	if err != nil {
-		testingInstance.Fatalf("render xml error: %v", err)
+	actual, renderXMLError := output.RenderXML(docs, items)
+	if renderXMLError != nil {
+		testingInstance.Fatalf("%s: %v", renderXMLErrorMessage, renderXMLError)
 	}
 	if actual != xmlExpected {
 		testingInstance.Errorf("unexpected output: %q", actual)
@@ -127,26 +133,35 @@ const rawExpected = "--- Documentation ---\n" +
 	"End of file: file.txt\n" +
 	"----------------------------------------\n"
 
+// pipeCreationErrorMessage defines the error message for pipe creation failures.
+const pipeCreationErrorMessage = "pipe creation error"
+
+// renderRawErrorMessage defines the error message for raw rendering failures.
+const renderRawErrorMessage = "render raw error"
+
+// bufferReadErrorMessage defines the error message for buffer read failures.
+const bufferReadErrorMessage = "buffer read error"
+
 // TestRenderRaw verifies RenderRaw printing.
 func TestRenderRaw(testingInstance *testing.T) {
 	docs := []types.DocumentationEntry{{Kind: "kind", Name: "name", Doc: "doc"}}
 	items := []interface{}{&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}}
-	reader, writer, pipeError := os.Pipe()
-	if pipeError != nil {
-		testingInstance.Fatalf("pipe error: %v", pipeError)
+	reader, writer, pipeCreationError := os.Pipe()
+	if pipeCreationError != nil {
+		testingInstance.Fatalf("%s: %v", pipeCreationErrorMessage, pipeCreationError)
 	}
 	originalStdout := os.Stdout
 	os.Stdout = writer
-	err := output.RenderRaw(types.CommandContent, docs, items)
+	renderRawError := output.RenderRaw(types.CommandContent, docs, items)
 	writer.Close()
 	os.Stdout = originalStdout
-	if err != nil {
-		testingInstance.Fatalf("render raw error: %v", err)
+	if renderRawError != nil {
+		testingInstance.Fatalf("%s: %v", renderRawErrorMessage, renderRawError)
 	}
 	var buffer bytes.Buffer
-	_, readError := buffer.ReadFrom(reader)
-	if readError != nil {
-		testingInstance.Fatalf("read error: %v", readError)
+	_, bufferReadError := buffer.ReadFrom(reader)
+	if bufferReadError != nil {
+		testingInstance.Fatalf("%s: %v", bufferReadErrorMessage, bufferReadError)
 	}
 	actual := buffer.String()
 	if actual != rawExpected {
