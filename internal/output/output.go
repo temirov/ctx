@@ -197,37 +197,37 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 	}
 
 	for _, item := range dedupedItems {
-		switch v := item.(type) {
+		switch outputItem := item.(type) {
 		case *types.FileOutput:
 			if commandName == types.CommandContent {
-				fmt.Printf("File: %s\n", v.Path)
-				if v.Type == types.NodeTypeBinary {
-					fmt.Printf("%s%s\n", mimeTypeLabel, v.MimeType)
-					if v.Content == "" {
+				fmt.Printf("File: %s\n", outputItem.Path)
+				if outputItem.Type == types.NodeTypeBinary {
+					fmt.Printf("%s%s\n", mimeTypeLabel, outputItem.MimeType)
+					if outputItem.Content == "" {
 						fmt.Println(binaryContentOmitted)
 					} else {
-						fmt.Println(v.Content)
+						fmt.Println(outputItem.Content)
 					}
 				} else {
-					fmt.Println(v.Content)
+					fmt.Println(outputItem.Content)
 				}
-				fmt.Printf("End of file: %s\n", v.Path)
+				fmt.Printf("End of file: %s\n", outputItem.Path)
 				fmt.Println(separatorLine)
 			}
 		case *types.TreeOutputNode:
 			if commandName == types.CommandTree {
-				if v.Type == types.NodeTypeFile {
-					fmt.Printf("[File] %s\n", v.Path)
-				} else if v.Type == types.NodeTypeBinary {
-					fmt.Printf(binaryNodeFormat, v.Path, mimeTypeLabel, v.MimeType)
+				if outputItem.Type == types.NodeTypeFile {
+					fmt.Printf("[File] %s\n", outputItem.Path)
+				} else if outputItem.Type == types.NodeTypeBinary {
+					fmt.Printf(binaryNodeFormat, outputItem.Path, mimeTypeLabel, outputItem.MimeType)
 				} else {
-					fmt.Printf("\n--- Directory Tree: %s ---\n", v.Path)
-					printTree(v, "")
+					fmt.Printf("\n--- Directory Tree: %s ---\n", outputItem.Path)
+					printTree(outputItem, "")
 				}
 			}
 		case *types.CallChainOutput:
 			if commandName == types.CommandCallChain {
-				fmt.Print(RenderCallChainRaw(v))
+				fmt.Print(RenderCallChainRaw(outputItem))
 			}
 		}
 	}
@@ -255,13 +255,13 @@ func dedupeCollectedItems(items []interface{}) []interface{} {
 	var out []interface{}
 	for _, item := range items {
 		var key string
-		switch v := item.(type) {
+		switch outputItem := item.(type) {
 		case *types.FileOutput:
-			key = filePrefix + v.Path
+			key = filePrefix + outputItem.Path
 		case *types.TreeOutputNode:
-			key = nodePrefix + v.Path
+			key = nodePrefix + outputItem.Path
 		case *types.CallChainOutput:
-			key = callChainPrefix + v.TargetFunction
+			key = callChainPrefix + outputItem.TargetFunction
 		default:
 			continue
 		}
