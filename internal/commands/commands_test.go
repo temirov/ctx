@@ -87,8 +87,12 @@ func TestGetContentData(testingInstance *testing.T) {
 			testingInstance.Errorf("case %d (%s): expected %d items, got %d", index, testCase.testName, len(testCase.expectedOutputs), len(actualOutputs))
 			continue
 		}
-		sort.Slice(actualOutputs, func(i, j int) bool { return actualOutputs[i].Path < actualOutputs[j].Path })
-		sort.Slice(testCase.expectedOutputs, func(i, j int) bool { return testCase.expectedOutputs[i].Path < testCase.expectedOutputs[j].Path })
+		sort.Slice(actualOutputs, func(firstIndex, secondIndex int) bool {
+			return actualOutputs[firstIndex].Path < actualOutputs[secondIndex].Path
+		})
+		sort.Slice(testCase.expectedOutputs, func(firstIndex, secondIndex int) bool {
+			return testCase.expectedOutputs[firstIndex].Path < testCase.expectedOutputs[secondIndex].Path
+		})
 		for position := range actualOutputs {
 			actual := actualOutputs[position]
 			expected := testCase.expectedOutputs[position]
@@ -148,8 +152,12 @@ func TestGetTreeData(testingInstance *testing.T) {
 			testingInstance.Errorf("case %d (%s): expected %d children, got %d", index, testCase.testName, len(testCase.expectedChildren), len(actualChildren))
 			continue
 		}
-		sort.Slice(actualChildren, func(i, j int) bool { return actualChildren[i].Path < actualChildren[j].Path })
-		sort.Slice(testCase.expectedChildren, func(i, j int) bool { return testCase.expectedChildren[i].Path < testCase.expectedChildren[j].Path })
+		sort.Slice(actualChildren, func(firstIndex, secondIndex int) bool {
+			return actualChildren[firstIndex].Path < actualChildren[secondIndex].Path
+		})
+		sort.Slice(testCase.expectedChildren, func(firstIndex, secondIndex int) bool {
+			return testCase.expectedChildren[firstIndex].Path < testCase.expectedChildren[secondIndex].Path
+		})
 		for position := range actualChildren {
 			actual := actualChildren[position]
 			expected := testCase.expectedChildren[position]
