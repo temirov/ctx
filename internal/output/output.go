@@ -29,6 +29,13 @@ const (
 	mimeTypeLabel        = "Mime Type: "
 	binaryNodeFormat     = "[Binary] %s (%s%s)\n"
 	binaryTreeFormat     = "%s[Binary] %s (%s%s)\n"
+
+	// filePrefix is the key prefix used when deduplicating file outputs.
+	filePrefix = "file:"
+	// nodePrefix is the key prefix used when deduplicating tree nodes.
+	nodePrefix = "node:"
+	// callChainPrefix is the key prefix used when deduplicating call chain outputs.
+	callChainPrefix = "callchain:"
 )
 
 // RenderCallChainRaw returns the call‑chain output in raw text format.
@@ -251,11 +258,11 @@ func dedupeCollectedItems(items []interface{}) []interface{} {
 		var key string
 		switch v := item.(type) {
 		case *types.FileOutput:
-			key = "file:" + v.Path
+			key = filePrefix + v.Path
 		case *types.TreeOutputNode:
-			key = "node:" + v.Path
+			key = nodePrefix + v.Path
 		case *types.CallChainOutput:
-			key = "callchain:" + v.TargetFunction
+			key = callChainPrefix + v.TargetFunction
 		default:
 			continue
 		}
