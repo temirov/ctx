@@ -61,7 +61,7 @@ Use --format to select raw, json, or xml output and --doc to include collected d
   ctx content --doc .
 
   # Display a file in raw format
-  ctx content --format raw main.go`
+  ctx content --format raw cmd/ctx/main.go`
 
 	// callchainLongDescription provides detailed help for the callchain command.
 	callchainLongDescription = `Analyze the call chain of a function.

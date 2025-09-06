@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Improvements ⚙️
+
+* Restore root entry point so `go install github.com/temirov/ctx@latest` works while retaining `cmd/ctx/main.go` for builds.
+
 ## [v0.0.13] - 2025-09-05
 
 ### Highlights

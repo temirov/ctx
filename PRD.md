@@ -121,7 +121,9 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
 
 ### Project Structure
 
-- `main.go`: Entry point, argument parsing, path validation, orchestration, output rendering.
+- `main.go`: Entry point for `go install`, delegates to the CLI.
+- `cmd/ctx/main.go`: Entry point for building with `go build ./cmd/ctx`; handles argument parsing, path validation,
+  orchestration, and output rendering.
 - `types/types.go`: Defines shared data structures (`ValidatedPath`, `FileOutput`, `TreeOutputNode`,
   `CallChainOutput`).
 - `config.go`: Loader for ignore files.
@@ -132,7 +134,7 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
 - `output/output.go`: Handles rendering data to JSON or Raw text.
 - `utils/utils.go`: Helper functions (ignore matching, path utils, versioning).
 
-### Step 1: Argument Parsing (`main.go`)
+### Step 1: Argument Parsing (`cmd/ctx/main.go`)
 
 - Update `parseArgsOrExit` to handle `callchain` command and its single argument. Validate argument counts per command.
 - Update `printUsage` to reflect all commands and arguments accurately.
@@ -141,7 +143,7 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
 
 - Define `CallChainOutput` struct with necessary fields and JSON tags.
 
-### Step 3: Path Validation (`main.go`)
+### Step 3: Path Validation (`cmd/ctx/main.go`)
 
 - Keep `resolveAndValidatePaths` for `tree`/`content`. No path validation needed for `callchain` argument itself
   (handled during analysis).
@@ -157,7 +159,7 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
     - Extract source code for relevant functions using `go/ast` and `go/printer`.
     - Return `*types.CallChainOutput` or error.
 
-### Step 5: Orchestration & Data Aggregation (`main.go`)
+### Step 5: Orchestration & Data Aggregation (`cmd/ctx/main.go`)
 
 - **Modify `runTool`** to branch on `types.CommandCallChain`.
     - Call `commands.GetCallChainData`.

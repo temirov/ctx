@@ -15,6 +15,12 @@ Install and try ctx's core features: directory trees, file contents with optiona
    go install github.com/temirov/ctx@latest
    ```
 
+   Alternatively, build from source in the repository root:
+
+   ```bash
+   go build ./cmd/ctx
+   ```
+
 2. Show a directory tree:
 
    ```bash
@@ -24,7 +30,7 @@ Install and try ctx's core features: directory trees, file contents with optiona
 3. View file content with docs:
 
    ```bash
-   ctx content main.go --doc
+   ctx content cmd/ctx/main.go --doc
    ```
 
 4. Analyze a call chain:
@@ -100,6 +106,12 @@ Pre-built binaries are available on the
    go install github.com/temirov/ctx@latest
    ```
 
+   Alternatively, to build from source in this repository:
+
+   ```bash
+   go build ./cmd/ctx
+   ```
+
 4. Verify:
 
    ```bash
@@ -136,7 +148,7 @@ ctx tree projectA projectB -e dist --format raw
 Output file contents with embedded docs (JSON by default):
 
 ```bash
-ctx content main.go pkg --doc
+ctx content cmd/ctx/main.go pkg --doc
 ```
 
 Analyze the call chain for a function in XML including docs:

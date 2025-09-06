@@ -7,9 +7,9 @@ import (
 	"github.com/temirov/ctx/internal/utils"
 )
 
-// main is the entry point for the ctx application.
+// main is the entry point for installing the ctx command at the module root.
 func main() {
-	if err := cli.Execute(); err != nil {
-		log.Fatalf(utils.ErrorLogFormat, err)
+	if executionError := cli.Execute(); executionError != nil {
+		log.Fatalf(utils.ErrorLogFormat, executionError)
 	}
 }
