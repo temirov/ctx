@@ -86,6 +86,15 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	invalidFormatMessage            = "Invalid format value '%s'"
 	warningSkipPathFormat           = "Warning: skipping %s: %v\n"
 	workingDirectoryErrorFormat     = "unable to determine working directory: %w"
+
+	// errorAbsolutePathFormat reports failure to resolve an absolute path.
+	errorAbsolutePathFormat = "abs failed for '%s': %w"
+	// errorPathMissingFormat reports a missing path.
+	errorPathMissingFormat = "path '%s' does not exist"
+	// errorStatFormat reports failure to retrieve file statistics.
+	errorStatFormat = "stat failed for '%s': %w"
+	// errorNoValidPaths indicates that all paths are invalid.
+	errorNoValidPaths = "no valid paths"
 )
 
 // isSupportedFormat reports whether the provided format is recognized.
@@ -452,7 +461,7 @@ func resolveAndValidatePaths(inputs []string) ([]types.ValidatedPath, error) {
 	for _, inputPath := range inputs {
 		absolutePath, err := filepath.Abs(inputPath)
 		if err != nil {
-			return nil, fmt.Errorf("abs failed for '%s': %w", inputPath, err)
+			return nil, fmt.Errorf(errorAbsolutePathFormat, inputPath, err)
 		}
 		cleanPath := filepath.Clean(absolutePath)
 		if _, ok := seen[cleanPath]; ok {
@@ -461,15 +470,15 @@ func resolveAndValidatePaths(inputs []string) ([]types.ValidatedPath, error) {
 		info, err := os.Stat(cleanPath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return nil, fmt.Errorf("path '%s' does not exist", inputPath)
+				return nil, fmt.Errorf(errorPathMissingFormat, inputPath)
 			}
-			return nil, fmt.Errorf("stat failed for '%s': %w", inputPath, err)
+			return nil, fmt.Errorf(errorStatFormat, inputPath, err)
 		}
 		seen[cleanPath] = struct{}{}
 		result = append(result, types.ValidatedPath{AbsolutePath: cleanPath, IsDir: info.IsDir()})
 	}
 	if len(result) == 0 {
-		return nil, fmt.Errorf("no valid paths")
+		return nil, fmt.Errorf(errorNoValidPaths)
 	}
 	return result, nil
 }
