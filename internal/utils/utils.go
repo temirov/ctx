@@ -61,8 +61,8 @@ func ContainsString(stringSlice []string, targetString string) bool {
 // Returns "." if fullPath and root resolve to the same directory.
 func RelativePathOrSelf(fullPath, root string) string {
 	cleanPath := filepath.Clean(fullPath)
-	absoluteRoot, err := filepath.Abs(root)
-	if err != nil {
+	absoluteRoot, absoluteRootError := filepath.Abs(root)
+	if absoluteRootError != nil {
 		return cleanPath
 	}
 	cleanAbsoluteRoot := filepath.Clean(absoluteRoot)
@@ -71,8 +71,8 @@ func RelativePathOrSelf(fullPath, root string) string {
 		return "."
 	}
 
-	relativePath, relErr := filepath.Rel(cleanAbsoluteRoot, cleanPath)
-	if relErr != nil {
+	relativePath, relativePathError := filepath.Rel(cleanAbsoluteRoot, cleanPath)
+	if relativePathError != nil {
 		return cleanPath
 	}
 	return filepath.ToSlash(relativePath)
