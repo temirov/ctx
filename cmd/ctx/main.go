@@ -4,13 +4,12 @@ import (
 	"log"
 
 	"github.com/temirov/ctx/internal/cli"
+	"github.com/temirov/ctx/internal/utils"
 )
-
-const errorLogFormat = "Error: %v"
 
 // main is the entry point for the ctx command.
 func main() {
 	if err := cli.Execute(); err != nil {
-		log.Fatalf(errorLogFormat, err)
+		log.Fatalf(utils.ErrorLogFormat, err)
 	}
 }
