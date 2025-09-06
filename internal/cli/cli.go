@@ -321,24 +321,24 @@ func runCallChain(
 	collector *docs.Collector,
 	moduleRoot string,
 ) error {
-	data, err := commands.GetCallChainData(target, callChainDepth, withDocumentation, collector, moduleRoot)
-	if err != nil {
-		return err
+	callChainData, callChainDataError := commands.GetCallChainData(target, callChainDepth, withDocumentation, collector, moduleRoot)
+	if callChainDataError != nil {
+		return callChainDataError
 	}
 	if format == types.FormatJSON {
-		out, err := output.RenderCallChainJSON(data)
-		if err != nil {
-			return err
+		renderedCallChainJSONOutput, renderCallChainJSONError := output.RenderCallChainJSON(callChainData)
+		if renderCallChainJSONError != nil {
+			return renderCallChainJSONError
 		}
-		fmt.Println(out)
+		fmt.Println(renderedCallChainJSONOutput)
 	} else if format == types.FormatXML {
-		out, err := output.RenderCallChainXML(data)
-		if err != nil {
-			return err
+		renderedCallChainXMLOutput, renderCallChainXMLError := output.RenderCallChainXML(callChainData)
+		if renderCallChainXMLError != nil {
+			return renderCallChainXMLError
 		}
-		fmt.Println(out)
+		fmt.Println(renderedCallChainXMLOutput)
 	} else {
-		fmt.Println(output.RenderCallChainRaw(data))
+		fmt.Println(output.RenderCallChainRaw(callChainData))
 	}
 	return nil
 }
@@ -355,9 +355,9 @@ func runTreeOrContentCommand(
 	withDocumentation bool,
 	collector *docs.Collector,
 ) error {
-	validatedPaths, err := resolveAndValidatePaths(paths)
-	if err != nil {
-		return err
+	validatedPaths, pathValidationError := resolveAndValidatePaths(paths)
+	if pathValidationError != nil {
+		return pathValidationError
 	}
 
 	var collected []interface{}
@@ -436,18 +436,18 @@ func runTreeOrContentCommand(
 	}
 
 	if format == types.FormatJSON {
-		out, err := output.RenderJSON(documentationEntries, collected)
-		if err != nil {
-			return err
+		renderedJSONOutput, renderJSONError := output.RenderJSON(documentationEntries, collected)
+		if renderJSONError != nil {
+			return renderJSONError
 		}
-		fmt.Println(out)
+		fmt.Println(renderedJSONOutput)
 		return nil
 	} else if format == types.FormatXML {
-		out, err := output.RenderXML(documentationEntries, collected)
-		if err != nil {
-			return err
+		renderedXMLOutput, renderXMLError := output.RenderXML(documentationEntries, collected)
+		if renderXMLError != nil {
+			return renderXMLError
 		}
-		fmt.Println(out)
+		fmt.Println(renderedXMLOutput)
 		return nil
 	}
 
@@ -459,20 +459,20 @@ func resolveAndValidatePaths(inputs []string) ([]types.ValidatedPath, error) {
 	seen := make(map[string]struct{})
 	var result []types.ValidatedPath
 	for _, inputPath := range inputs {
-		absolutePath, err := filepath.Abs(inputPath)
-		if err != nil {
-			return nil, fmt.Errorf(errorAbsolutePathFormat, inputPath, err)
+		absolutePath, absolutePathError := filepath.Abs(inputPath)
+		if absolutePathError != nil {
+			return nil, fmt.Errorf(errorAbsolutePathFormat, inputPath, absolutePathError)
 		}
 		cleanPath := filepath.Clean(absolutePath)
 		if _, ok := seen[cleanPath]; ok {
 			continue
 		}
-		info, err := os.Stat(cleanPath)
-		if err != nil {
-			if os.IsNotExist(err) {
+		info, fileStatusError := os.Stat(cleanPath)
+		if fileStatusError != nil {
+			if os.IsNotExist(fileStatusError) {
 				return nil, fmt.Errorf(errorPathMissingFormat, inputPath)
 			}
-			return nil, fmt.Errorf(errorStatFormat, inputPath, err)
+			return nil, fmt.Errorf(errorStatFormat, inputPath, fileStatusError)
 		}
 		seen[cleanPath] = struct{}{}
 		result = append(result, types.ValidatedPath{AbsolutePath: cleanPath, IsDir: info.IsDir()})
