@@ -138,7 +138,8 @@ func TestGetTreeData(testingInstance *testing.T) {
 		},
 	}
 	for index, testCase := range testCases {
-		nodes, err := commands.GetTreeData(temporaryRoot, testCase.ignorePatterns)
+		treeBuilder := commands.TreeBuilder{IgnorePatterns: testCase.ignorePatterns}
+		nodes, err := treeBuilder.GetTreeData(temporaryRoot)
 		if err != nil {
 			testingInstance.Fatalf("case %d (%s): %v", index, testCase.testName, err)
 		}

@@ -360,7 +360,8 @@ func runTreeOrContentCommand(
 				continue
 			}
 			if commandName == types.CommandTree {
-				nodes, dataError := commands.GetTreeData(info.AbsolutePath, ignorePatternList)
+				treeBuilder := commands.TreeBuilder{IgnorePatterns: ignorePatternList}
+				nodes, dataError := treeBuilder.GetTreeData(info.AbsolutePath)
 				if dataError == nil && len(nodes) > 0 {
 					collected = append(collected, nodes[0])
 				}
