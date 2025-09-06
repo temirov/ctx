@@ -85,6 +85,7 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	documentationFlagDescription    = "include documentation"
 	invalidFormatMessage            = "Invalid format value '%s'"
 	warningSkipPathFormat           = "Warning: skipping %s: %v\n"
+	workingDirectoryErrorFormat     = "unable to determine working directory: %w"
 )
 
 // isSupportedFormat reports whether the provided format is recognized.
@@ -279,12 +280,15 @@ func runTool(
 	format string,
 	documentationEnabled bool,
 ) error {
-	workingDirectory, _ := os.Getwd()
+	workingDirectory, workingDirectoryError := os.Getwd()
+	if workingDirectoryError != nil {
+		return fmt.Errorf(workingDirectoryErrorFormat, workingDirectoryError)
+	}
 	var collector *docs.Collector
 	if documentationEnabled {
-		createdCollector, err := docs.NewCollector(workingDirectory)
-		if err != nil {
-			return err
+		createdCollector, collectorCreationError := docs.NewCollector(workingDirectory)
+		if collectorCreationError != nil {
+			return collectorCreationError
 		}
 		collector = createdCollector
 	}
