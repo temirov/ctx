@@ -15,7 +15,7 @@ func main() {
 		panic(fmt.Errorf(utils.LoggerInitializationFailedMessageFormat, loggerInitializationError))
 	}
 	defer loggerInstance.Sync()
-	if applicationExecutionError := cli.Execute(); applicationExecutionError != nil {
-		loggerInstance.Fatal(utils.ApplicationExecutionFailedMessage, zap.Error(applicationExecutionError))
+	if executeError := cli.Execute(); executeError != nil {
+		loggerInstance.Fatal(utils.ApplicationExecutionFailedMessage, zap.Error(executeError))
 	}
 }
