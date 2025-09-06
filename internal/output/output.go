@@ -23,7 +23,6 @@ const (
 	xmlHeader         = xml.Header
 	xmlRootElement    = "result"
 	xmlCallchainsName = "callchains"
-	xmlCallchainName  = "callchain"
 
 	binaryContentOmitted = "(binary content omitted)"
 	mimeTypeLabel        = "Mime Type: "
