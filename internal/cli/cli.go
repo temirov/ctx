@@ -418,11 +418,11 @@ func runTreeOrContentCommand(
 				documentationEntries = append(documentationEntries, entries...)
 			}
 		}
-		sort.Slice(documentationEntries, func(firstIndex, secondIndex int) bool {
-			if documentationEntries[firstIndex].Kind != documentationEntries[secondIndex].Kind {
-				return documentationEntries[firstIndex].Kind < documentationEntries[secondIndex].Kind
+		sort.Slice(documentationEntries, func(firstEntryIndex, secondEntryIndex int) bool {
+			if documentationEntries[firstEntryIndex].Kind != documentationEntries[secondEntryIndex].Kind {
+				return documentationEntries[firstEntryIndex].Kind < documentationEntries[secondEntryIndex].Kind
 			}
-			return documentationEntries[firstIndex].Name < documentationEntries[secondIndex].Name
+			return documentationEntries[firstEntryIndex].Name < documentationEntries[secondEntryIndex].Name
 		})
 	}
 
