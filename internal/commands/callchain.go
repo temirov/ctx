@@ -19,14 +19,13 @@ import (
 	"golang.org/x/tools/go/ssa/ssautil"
 )
 
-
 const (
-  // Error message templates used when retrieving call chain information.
+	// Error message templates used when retrieving call chain information.
 	errorFailedToLoadPackagesFormat      = "failed to load packages: %w"
 	errorEncounteredWhileLoadingPackages = "errors encountered while loading packages"
 	errorFunctionNotFoundFormat          = "target function %q not found in call graph"
-  // qualifiedNameSeparator separates elements in a fully qualified name.
-  qualifiedNameSeparator = "."
+	// qualifiedNameSeparator separates elements in a fully qualified name.
+	qualifiedNameSeparator = "."
 )
 
 // GetCallChainData returns call chain information up to the specified depth.
@@ -154,8 +153,8 @@ func GetCallChainData(
 			if filePath != repositoryRootDirectory && !strings.HasPrefix(filePath, repoPrefix) {
 				continue
 			}
-			entries, err := documentationCollector.CollectFromFile(filePath)
-			if err == nil && len(entries) > 0 {
+			entries, documentationCollectionError := documentationCollector.CollectFromFile(filePath)
+			if documentationCollectionError == nil && len(entries) > 0 {
 				output.Documentation = append(output.Documentation, entries...)
 			}
 		}
