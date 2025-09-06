@@ -12,7 +12,7 @@ const (
 )
 
 // DetectMimeType determines the MIME type of the file at the provided path by
-// reading up to sniffLen bytes and passing them to http.DetectContentType. It
+// reading up to sniffLength bytes and passing them to http.DetectContentType. It
 // returns UnknownMimeType if the file cannot be read.
 func DetectMimeType(filePath string) string {
 	openedFile, openError := os.Open(filePath)
@@ -21,7 +21,7 @@ func DetectMimeType(filePath string) string {
 	}
 	defer openedFile.Close()
 
-	buffer := make([]byte, sniffLen)
+	buffer := make([]byte, sniffLength)
 	bytesRead, readError := openedFile.Read(buffer)
 	if readError != nil && readError != io.EOF {
 		return UnknownMimeType
