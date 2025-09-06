@@ -12,7 +12,6 @@ import (
 
 const (
 	unknownVersion = "unknown"
-	gitDirName     = ".git"
 )
 
 // GetApplicationVersion attempts to determine the application version using various methods.
@@ -56,7 +55,7 @@ func findGitDirectory(startDirectory string) (string, error) {
 
 	currentDirectory := absoluteStartDirectory
 	for {
-		gitPath := filepath.Join(currentDirectory, gitDirName)
+		gitPath := filepath.Join(currentDirectory, GitDirectoryName)
 		fileInformation, errorStat := os.Stat(gitPath)
 		if errorStat == nil && fileInformation.IsDir() {
 			return currentDirectory, nil
