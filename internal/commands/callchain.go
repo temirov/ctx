@@ -178,8 +178,8 @@ func composeQualifiedName(packageData *packages.Package, functionDeclaration *as
 // selectFunctionNode finds the graph node matching the candidate function name.
 func selectFunctionNode(graph *callgraph.Graph, candidate string) *callgraph.Node {
 	short := candidate
-	if i := strings.LastIndex(candidate, "."); i >= 0 && i < len(candidate)-1 {
-		short = candidate[i+1:]
+	if lastDotIndex := strings.LastIndex(candidate, "."); lastDotIndex >= 0 && lastDotIndex < len(candidate)-1 {
+		short = candidate[lastDotIndex+1:]
 	}
 	var best *callgraph.Node
 	for _, node := range graph.Nodes {
