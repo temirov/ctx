@@ -18,6 +18,13 @@ import (
 	"github.com/temirov/ctx/internal/types"
 )
 
+const (
+	// packagePrefix marks entries that describe packages.
+	packagePrefix = "pkg:"
+	// symbolPrefix marks entries that describe symbols.
+	symbolPrefix = "sym:"
+)
+
 type Collector struct {
 	currentModulePath string
 	packageCache      map[string]*doc.Package
@@ -67,7 +74,7 @@ func (collector *Collector) CollectFromFile(filePath string) ([]types.Documentat
 		if strings.HasPrefix(importPath, collector.currentModulePath) {
 			return
 		}
-		if _, exists := seenEntries["pkg:"+importPath]; exists {
+		if _, exists := seenEntries[packagePrefix+importPath]; exists {
 			return
 		}
 		if _, cached := collector.packageCache[importPath]; !cached {
@@ -80,26 +87,26 @@ func (collector *Collector) CollectFromFile(filePath string) ([]types.Documentat
 				Doc:  strings.TrimSpace(packageDoc.Doc),
 			})
 		}
-		seenEntries["pkg:"+importPath] = struct{}{}
+		seenEntries[packagePrefix+importPath] = struct{}{}
 	}
 
 	addSymbolEntry := func(importPath, symbol string) {
 		if strings.HasPrefix(importPath, collector.currentModulePath) {
 			return
 		}
-		key := importPath + "." + symbol
-		if _, exists := seenEntries["sym:"+key]; exists {
+		symbolIdentifier := importPath + "." + symbol
+		if _, exists := seenEntries[symbolPrefix+symbolIdentifier]; exists {
 			return
 		}
-		if text, cached := collector.textCache[key]; cached {
+		if text, cached := collector.textCache[symbolIdentifier]; cached {
 			if text != "" {
 				documentationEntries = append(documentationEntries, types.DocumentationEntry{
 					Kind: "function",
-					Name: key,
+					Name: symbolIdentifier,
 					Doc:  text,
 				})
 			}
-			seenEntries["sym:"+key] = struct{}{}
+			seenEntries[symbolPrefix+symbolIdentifier] = struct{}{}
 			return
 		}
 		packageDoc := collector.packageCache[importPath]
@@ -111,15 +118,15 @@ func (collector *Collector) CollectFromFile(filePath string) ([]types.Documentat
 		if packageDoc != nil {
 			text = strings.TrimSpace(findSymbolDoc(packageDoc, symbol))
 		}
-		collector.textCache[key] = text
+		collector.textCache[symbolIdentifier] = text
 		if text != "" {
 			documentationEntries = append(documentationEntries, types.DocumentationEntry{
 				Kind: "function",
-				Name: key,
+				Name: symbolIdentifier,
 				Doc:  text,
 			})
 		}
-		seenEntries["sym:"+key] = struct{}{}
+		seenEntries[symbolPrefix+symbolIdentifier] = struct{}{}
 	}
 
 	for _, importPath := range aliasToImport {
