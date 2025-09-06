@@ -6,7 +6,8 @@ import (
 	"unicode/utf8"
 )
 
-const sniffLen = 8000
+// sniffLength defines the maximum number of bytes read when detecting binary content.
+const sniffLength = 8000
 
 // IsBinary reports whether the provided byte slice appears to contain binary data.
 func IsBinary(data []byte) bool {
@@ -24,18 +25,18 @@ func IsBinary(data []byte) bool {
 	return false
 }
 
-// IsFileBinary reads up to sniffLen bytes from the file at path and determines
+// IsFileBinary reads up to sniffLength bytes from the file at path and determines
 // if the content appears to be binary.
 func IsFileBinary(path string) bool {
-	fileHandle, err := os.Open(path)
-	if err != nil {
+	fileHandle, openError := os.Open(path)
+	if openError != nil {
 		return false
 	}
 	defer fileHandle.Close()
 
-	buffer := make([]byte, sniffLen)
-	bytesRead, err := fileHandle.Read(buffer)
-	if err != nil && err != io.EOF {
+	buffer := make([]byte, sniffLength)
+	bytesRead, readError := fileHandle.Read(buffer)
+	if readError != nil && readError != io.EOF {
 		return false
 	}
 	return IsBinary(buffer[:bytesRead])
