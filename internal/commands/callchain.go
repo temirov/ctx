@@ -19,6 +19,9 @@ import (
 	"golang.org/x/tools/go/ssa/ssautil"
 )
 
+// qualifiedNameSeparator separates elements in a fully qualified name.
+const qualifiedNameSeparator = "."
+
 // GetCallChainData returns call chain information up to the specified depth.
 func GetCallChainData(
 	targetFunctionQualifiedName string,
@@ -155,14 +158,14 @@ func GetCallChainData(
 }
 
 // composeQualifiedName returns the fully qualified name for a function declaration.
-func composeQualifiedName(pkg *packages.Package, decl *ast.FuncDecl) string {
-	name := decl.Name.Name
-	if decl.Recv != nil && len(decl.Recv.List) > 0 {
-		var buf bytes.Buffer
-		printer.Fprint(&buf, pkg.Fset, decl.Recv.List[0].Type)
-		return pkg.PkgPath + "." + strings.TrimSpace(buf.String()) + "." + name
+func composeQualifiedName(packageData *packages.Package, functionDeclaration *ast.FuncDecl) string {
+	name := functionDeclaration.Name.Name
+	if functionDeclaration.Recv != nil && len(functionDeclaration.Recv.List) > 0 {
+		var buffer bytes.Buffer
+		printer.Fprint(&buffer, packageData.Fset, functionDeclaration.Recv.List[0].Type)
+		return packageData.PkgPath + qualifiedNameSeparator + strings.TrimSpace(buffer.String()) + qualifiedNameSeparator + name
 	}
-	return pkg.PkgPath + "." + name
+	return packageData.PkgPath + qualifiedNameSeparator + name
 }
 
 // selectFunctionNode finds the graph node matching the candidate function name.
