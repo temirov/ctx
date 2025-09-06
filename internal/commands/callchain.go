@@ -19,6 +19,13 @@ import (
 	"golang.org/x/tools/go/ssa/ssautil"
 )
 
+// Error message templates used when retrieving call chain information.
+const (
+	errorFailedToLoadPackagesFormat      = "failed to load packages: %w"
+	errorEncounteredWhileLoadingPackages = "errors encountered while loading packages"
+	errorFunctionNotFoundFormat          = "target function %q not found in call graph"
+)
+
 // GetCallChainData returns call chain information up to the specified depth.
 func GetCallChainData(
 	targetFunctionQualifiedName string,
@@ -34,10 +41,10 @@ func GetCallChainData(
 	}
 	loadedPackages, loadError := packages.Load(packageLoadConfiguration, "./...")
 	if loadError != nil {
-		return nil, fmt.Errorf("failed to load packages: %w", loadError)
+		return nil, fmt.Errorf(errorFailedToLoadPackagesFormat, loadError)
 	}
 	if packages.PrintErrors(loadedPackages) > 0 {
-		return nil, fmt.Errorf("errors encountered while loading packages")
+		return nil, fmt.Errorf(errorEncounteredWhileLoadingPackages)
 	}
 
 	ssaProgram, _ := ssautil.Packages(loadedPackages, ssa.BuilderMode(0))
@@ -48,7 +55,7 @@ func GetCallChainData(
 
 	targetNode := selectFunctionNode(callGraphRoot, targetFunctionQualifiedName)
 	if targetNode == nil {
-		return nil, fmt.Errorf("target function %q not found in call graph", targetFunctionQualifiedName)
+		return nil, fmt.Errorf(errorFunctionNotFoundFormat, targetFunctionQualifiedName)
 	}
 
 	visitedCallers := map[*callgraph.Node]struct{}{targetNode: {}}
