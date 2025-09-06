@@ -1,5 +1,48 @@
 # Changelog
 
+## [v0.0.14] - 2025-09-06
+
+### Highlights
+
+* **Consistent logging with Zap.** Integrated `zap` structured logging across the codebase for clearer and more reliable
+  log output. (#86 b5ac3d5, #88 ddeb310, #89 7579eef)
+* **Error and constant refactoring.** Centralized error messages and shared constants for better maintainability and
+  consistency. (#76 2684689, #79 80cdb67, #81 dd4e06a, #87 2188b4d)
+* **Tree builder improvements.** Introduced a `TreeBuilder` struct, removed duplication, and optimized MIME type
+  detection. (#74 9b48d0c, #84 e77abaa, aec289e, 588d81a)
+
+### Features ✨
+
+* Added `zap` logging integration with structured fields and standardized log output. (#86 b5ac3d5, #88 ddeb310, #89
+  7579eef)
+
+### Improvements ⚙️
+
+* Centralized and reused error message constants across multiple packages. (#76 2684689, #81 dd4e06a, #87 2188b4d,
+  fec2804)
+* Introduced `TreeBuilder` abstraction and improved binary/MIME type detection logic. (#74 9b48d0c, #84 e77abaa,
+  aec289e, 588d81a, b551cee)
+* Refactored variable and parameter names for clarity (e.g., `lastDotIndex`, descriptive sort params, call chain
+  vars). (#78 a01f6cb, #79 80cdb67, #83 b4e47fa)
+* Shared constants for documentation entry prefixes and error log formatting. (#68 d4caa16, #70 8bdd50b, #71 991ec54,
+  c2247ba, 790c401)
+* Improved output helpers and sorting of documentation entries. (44861a7, afc08e3, 5bd553f)
+* More robust error handling for working directory resolution in CLI. (#69 a547738, dd1128a)
+
+### Docs 📚
+
+* Expanded CLI help text and clarified `--doc` flag behavior. (#64 aaf807b, #65 23929a1, 391b01a, 0a73f97)
+* Added Quick Start guide and documented default JSON output format. (#66 ca4831d, #67 124f2af, 159e62c, 81ebfe2)
+* Documented XML output format. (44da621)
+
+### Maintenance 🛠️
+
+* Removed unused constants (e.g., `xmlCallchainName`, `gitDirName`). (#72 50ce9ae, #87 2188b4d)
+* Fixed branch naming inconsistency (`master` as default). (914a72b)
+
+**Upgrade notes:** No breaking changes. Logging is now structured with Zap; existing CLI flags and outputs remain
+compatible.
+
 ## [v0.0.13] - 2025-09-05
 
 ### Highlights
