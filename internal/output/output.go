@@ -196,38 +196,41 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 		}
 	}
 
-	for _, item := range dedupedItems {
-		switch v := item.(type) {
+	for _, collectedItem := range dedupedItems {
+		switch typedItem := collectedItem.(type) {
 		case *types.FileOutput:
+			fileOutput := typedItem
 			if commandName == types.CommandContent {
-				fmt.Printf("File: %s\n", v.Path)
-				if v.Type == types.NodeTypeBinary {
-					fmt.Printf("%s%s\n", mimeTypeLabel, v.MimeType)
-					if v.Content == "" {
+				fmt.Printf("File: %s\n", fileOutput.Path)
+				if fileOutput.Type == types.NodeTypeBinary {
+					fmt.Printf("%s%s\n", mimeTypeLabel, fileOutput.MimeType)
+					if fileOutput.Content == "" {
 						fmt.Println(binaryContentOmitted)
 					} else {
-						fmt.Println(v.Content)
+						fmt.Println(fileOutput.Content)
 					}
 				} else {
-					fmt.Println(v.Content)
+					fmt.Println(fileOutput.Content)
 				}
-				fmt.Printf("End of file: %s\n", v.Path)
+				fmt.Printf("End of file: %s\n", fileOutput.Path)
 				fmt.Println(separatorLine)
 			}
 		case *types.TreeOutputNode:
+			treeNode := typedItem
 			if commandName == types.CommandTree {
-				if v.Type == types.NodeTypeFile {
-					fmt.Printf("[File] %s\n", v.Path)
-				} else if v.Type == types.NodeTypeBinary {
-					fmt.Printf(binaryNodeFormat, v.Path, mimeTypeLabel, v.MimeType)
+				if treeNode.Type == types.NodeTypeFile {
+					fmt.Printf("[File] %s\n", treeNode.Path)
+				} else if treeNode.Type == types.NodeTypeBinary {
+					fmt.Printf(binaryNodeFormat, treeNode.Path, mimeTypeLabel, treeNode.MimeType)
 				} else {
-					fmt.Printf("\n--- Directory Tree: %s ---\n", v.Path)
-					printTree(v, "")
+					fmt.Printf("\n--- Directory Tree: %s ---\n", treeNode.Path)
+					printTree(treeNode, "")
 				}
 			}
 		case *types.CallChainOutput:
+			callChainOutput := typedItem
 			if commandName == types.CommandCallChain {
-				fmt.Print(RenderCallChainRaw(v))
+				fmt.Print(RenderCallChainRaw(callChainOutput))
 			}
 		}
 	}
@@ -250,27 +253,27 @@ func dedupeDocumentationEntries(entries []types.DocumentationEntry) []types.Docu
 }
 
 // dedupeCollectedItems returns a slice with duplicate collected items removed.
-func dedupeCollectedItems(items []interface{}) []interface{} {
-	seen := make(map[string]struct{}, len(items))
-	var out []interface{}
-	for _, item := range items {
+func dedupeCollectedItems(collectedItems []interface{}) []interface{} {
+	seen := make(map[string]struct{}, len(collectedItems))
+	var uniqueItems []interface{}
+	for _, collectedItem := range collectedItems {
 		var key string
-		switch v := item.(type) {
+		switch itemValue := collectedItem.(type) {
 		case *types.FileOutput:
-			key = filePrefix + v.Path
+			key = filePrefix + itemValue.Path
 		case *types.TreeOutputNode:
-			key = nodePrefix + v.Path
+			key = nodePrefix + itemValue.Path
 		case *types.CallChainOutput:
-			key = callChainPrefix + v.TargetFunction
+			key = callChainPrefix + itemValue.TargetFunction
 		default:
 			continue
 		}
 		if _, exists := seen[key]; !exists {
 			seen[key] = struct{}{}
-			out = append(out, item)
+			uniqueItems = append(uniqueItems, collectedItem)
 		}
 	}
-	return out
+	return uniqueItems
 }
 
 // printTree recursively prints a directory tree to stdout.
