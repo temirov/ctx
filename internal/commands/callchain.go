@@ -19,7 +19,13 @@ import (
 	"golang.org/x/tools/go/ssa/ssautil"
 )
 
-// GetCallChainData returns call chain information up to the specified depth.
+const (
+	packagesSearchPattern     = "./..."
+	packagesLoadErrorFormat   = "failed to load packages: %w"
+	packagesLoadErrorsMessage = "errors encountered while loading packages"
+)
+
+// GetCallChainData returns call chain information up to the specified depth using repositoryRootDirectory.
 func GetCallChainData(
 	targetFunctionQualifiedName string,
 	callChainDepth int,
@@ -29,15 +35,15 @@ func GetCallChainData(
 ) (*apptypes.CallChainOutput, error) {
 	packageLoadConfiguration := &packages.Config{
 		Mode: packages.LoadAllSyntax,
-		Dir:  ".",
+		Dir:  repositoryRootDirectory,
 		Fset: token.NewFileSet(),
 	}
-	loadedPackages, loadError := packages.Load(packageLoadConfiguration, "./...")
+	loadedPackages, loadError := packages.Load(packageLoadConfiguration, packagesSearchPattern)
 	if loadError != nil {
-		return nil, fmt.Errorf("failed to load packages: %w", loadError)
+		return nil, fmt.Errorf(packagesLoadErrorFormat, loadError)
 	}
 	if packages.PrintErrors(loadedPackages) > 0 {
-		return nil, fmt.Errorf("errors encountered while loading packages")
+		return nil, fmt.Errorf(packagesLoadErrorsMessage)
 	}
 
 	ssaProgram, _ := ssautil.Packages(loadedPackages, ssa.BuilderMode(0))

@@ -303,16 +303,16 @@ func runTool(
 	}
 }
 
-// runCallChain processes the callchain command for the specified target and depth.
+// runCallChain processes the callchain command for the specified target and depth using repositoryRootDirectory.
 func runCallChain(
 	target string,
 	format string,
 	callChainDepth int,
 	withDocumentation bool,
 	collector *docs.Collector,
-	moduleRoot string,
+	repositoryRootDirectory string,
 ) error {
-	data, err := commands.GetCallChainData(target, callChainDepth, withDocumentation, collector, moduleRoot)
+	data, err := commands.GetCallChainData(target, callChainDepth, withDocumentation, collector, repositoryRootDirectory)
 	if err != nil {
 		return err
 	}
