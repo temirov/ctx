@@ -39,46 +39,46 @@ const (
 
 // RenderCallChainRaw returns the call‑chain output in raw text format.
 func RenderCallChainRaw(data *types.CallChainOutput) string {
-	var buf bytes.Buffer
+	var buffer bytes.Buffer
 
-	buf.WriteString(callchainMetaHeader + "\n")
-	buf.WriteString("Target Function: " + data.TargetFunction + "\n")
-	buf.WriteString("Callers:\n")
+	buffer.WriteString(callchainMetaHeader + "\n")
+	buffer.WriteString("Target Function: " + data.TargetFunction + "\n")
+	buffer.WriteString("Callers:\n")
 	if len(data.Callers) == 0 {
-		buf.WriteString("  (none)\n")
+		buffer.WriteString("  (none)\n")
 	} else {
 		for _, callerName := range data.Callers {
-			buf.WriteString(" " + callerName + "\n")
+			buffer.WriteString(" " + callerName + "\n")
 		}
 	}
-	buf.WriteString("Callees:\n")
+	buffer.WriteString("Callees:\n")
 	if data.Callees == nil || len(*data.Callees) == 0 {
-		buf.WriteString("  (none)\n")
+		buffer.WriteString("  (none)\n")
 	} else {
 		for _, calleeName := range *data.Callees {
-			buf.WriteString(" " + calleeName + "\n")
+			buffer.WriteString(" " + calleeName + "\n")
 		}
 	}
-	buf.WriteString("\n")
-	buf.WriteString(callchainFunctionsHdr + "\n")
+	buffer.WriteString("\n")
+	buffer.WriteString(callchainFunctionsHdr + "\n")
 	for _, name := range orderedFunctionNames(data) {
-		buf.WriteString("Function: " + name + "\n")
-		buf.WriteString(separatorLine + "\n")
-		buf.WriteString(data.Functions[name] + "\n")
-		buf.WriteString(separatorLine + "\n\n")
+		buffer.WriteString("Function: " + name + "\n")
+		buffer.WriteString(separatorLine + "\n")
+		buffer.WriteString(data.Functions[name] + "\n")
+		buffer.WriteString(separatorLine + "\n\n")
 	}
 	if len(data.Documentation) > 0 {
-		buf.WriteString(callchainDocsHeader + "\n")
+		buffer.WriteString(callchainDocsHeader + "\n")
 		for _, documentationEntry := range data.Documentation {
-			buf.WriteString(documentationEntry.Kind + " " + documentationEntry.Name + "\n")
+			buffer.WriteString(documentationEntry.Kind + " " + documentationEntry.Name + "\n")
 			if documentationEntry.Doc != "" {
-				buf.WriteString(documentationEntry.Doc + "\n")
+				buffer.WriteString(documentationEntry.Doc + "\n")
 			}
-			buf.WriteString("\n")
+			buffer.WriteString("\n")
 		}
 	}
 
-	return buf.String()
+	return buffer.String()
 }
 
 // RenderCallChainJSON marshals the call‑chain output as a JSON array.
@@ -138,8 +138,8 @@ func RenderCallChainXML(data *types.CallChainOutput) (string, error) {
 
 // RenderJSON deduplicates and marshals documentation and results to JSON.
 func RenderJSON(documentationEntries []types.DocumentationEntry, collected []interface{}) (string, error) {
-	dedupedDocs := dedupeDocumentationEntries(documentationEntries)
-	dedupedItems := dedupeCollectedItems(collected)
+	dedupedDocs := removeDuplicateDocumentationEntries(documentationEntries)
+	dedupedItems := removeDuplicateCollectedItems(collected)
 
 	if len(dedupedDocs) == 0 {
 		if len(dedupedItems) == 0 {
@@ -162,8 +162,8 @@ func RenderJSON(documentationEntries []types.DocumentationEntry, collected []int
 
 // RenderXML deduplicates and marshals documentation and results to XML.
 func RenderXML(documentationEntries []types.DocumentationEntry, collected []interface{}) (string, error) {
-	dedupedDocs := dedupeDocumentationEntries(documentationEntries)
-	dedupedItems := dedupeCollectedItems(collected)
+	dedupedDocs := removeDuplicateDocumentationEntries(documentationEntries)
+	dedupedItems := removeDuplicateCollectedItems(collected)
 	bundle := struct {
 		XMLName       xml.Name                   `xml:""`
 		Documentation []types.DocumentationEntry `xml:"documentation>entry,omitempty"`
@@ -182,8 +182,8 @@ func RenderXML(documentationEntries []types.DocumentationEntry, collected []inte
 
 // RenderRaw deduplicates and prints documentation and results in raw text format.
 func RenderRaw(commandName string, documentationEntries []types.DocumentationEntry, collected []interface{}) error {
-	dedupedDocs := dedupeDocumentationEntries(documentationEntries)
-	dedupedItems := dedupeCollectedItems(collected)
+	dedupedDocs := removeDuplicateDocumentationEntries(documentationEntries)
+	dedupedItems := removeDuplicateCollectedItems(collected)
 
 	if len(dedupedDocs) > 0 {
 		fmt.Println(documentationHeader)
@@ -235,8 +235,8 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 	return nil
 }
 
-// dedupeDocumentationEntries returns a slice with duplicate documentation entries removed.
-func dedupeDocumentationEntries(entries []types.DocumentationEntry) []types.DocumentationEntry {
+// removeDuplicateDocumentationEntries returns a slice with duplicate documentation entries removed.
+func removeDuplicateDocumentationEntries(entries []types.DocumentationEntry) []types.DocumentationEntry {
 	seen := make(map[string]struct{}, len(entries))
 	var out []types.DocumentationEntry
 	for _, documentationEntry := range entries {
@@ -249,8 +249,8 @@ func dedupeDocumentationEntries(entries []types.DocumentationEntry) []types.Docu
 	return out
 }
 
-// dedupeCollectedItems returns a slice with duplicate collected items removed.
-func dedupeCollectedItems(items []interface{}) []interface{} {
+// removeDuplicateCollectedItems returns a slice with duplicate collected items removed.
+func removeDuplicateCollectedItems(items []interface{}) []interface{} {
 	seen := make(map[string]struct{}, len(items))
 	var out []interface{}
 	for _, item := range items {
