@@ -407,17 +407,17 @@ func runTreeOrContentCommand(
 	var documentationEntries []types.DocumentationEntry
 	if withDocumentation && collector != nil {
 		for _, item := range collected {
-			fileOutput, ok := item.(*types.FileOutput)
-			if ok {
+			fileOutput, isFileOutput := item.(*types.FileOutput)
+			if isFileOutput {
 				entries, _ := collector.CollectFromFile(fileOutput.Path)
 				documentationEntries = append(documentationEntries, entries...)
 			}
 		}
-		sort.Slice(documentationEntries, func(i, j int) bool {
-			if documentationEntries[i].Kind != documentationEntries[j].Kind {
-				return documentationEntries[i].Kind < documentationEntries[j].Kind
+		sort.Slice(documentationEntries, func(firstIndex, secondIndex int) bool {
+			if documentationEntries[firstIndex].Kind != documentationEntries[secondIndex].Kind {
+				return documentationEntries[firstIndex].Kind < documentationEntries[secondIndex].Kind
 			}
-			return documentationEntries[i].Name < documentationEntries[j].Name
+			return documentationEntries[firstIndex].Name < documentationEntries[secondIndex].Name
 		})
 	}
 
