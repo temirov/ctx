@@ -104,21 +104,21 @@ func GetCallChainData(
 	functionSources := make(map[string]string)
 	extractedFilePaths := make(map[string]struct{})
 
-	for _, pkg := range loadedPackages {
-		for _, file := range pkg.Syntax {
+	for _, loadedPackage := range loadedPackages {
+		for _, file := range loadedPackage.Syntax {
 			ast.Inspect(file, func(node ast.Node) bool {
 				funcDecl, ok := node.(*ast.FuncDecl)
 				if !ok || funcDecl.Name == nil {
 					return true
 				}
-				qualifiedName := composeQualifiedName(pkg, funcDecl)
+				qualifiedName := composeQualifiedName(loadedPackage, funcDecl)
 				if _, needed := relevantFunctionNames[qualifiedName]; !needed {
 					return true
 				}
-				var buf bytes.Buffer
+				var functionBuffer bytes.Buffer
 				(&printer.Config{Mode: printer.UseSpaces | printer.TabIndent, Tabwidth: 4}).
-					Fprint(&buf, packageLoadConfiguration.Fset, funcDecl)
-				functionSources[qualifiedName] = buf.String()
+					Fprint(&functionBuffer, packageLoadConfiguration.Fset, funcDecl)
+				functionSources[qualifiedName] = functionBuffer.String()
 				if includeDocumentation {
 					if pos := packageLoadConfiguration.Fset.File(funcDecl.Pos()); pos != nil {
 						extractedFilePaths[pos.Name()] = struct{}{}
