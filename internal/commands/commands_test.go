@@ -32,6 +32,9 @@ const binaryBase64Content = "AAE="
 // binaryMimeTypeExpected is the expected MIME type for the binary file.
 const binaryMimeTypeExpected = "application/octet-stream"
 
+// testCaseFailureMessage defines the format for subtest failure descriptions.
+const testCaseFailureMessage = "case %d (%s): %v"
+
 // TestGetContentData verifies content collection behavior.
 func TestGetContentData(testingInstance *testing.T) {
 	temporaryRoot := testingInstance.TempDir()
@@ -79,9 +82,9 @@ func TestGetContentData(testingInstance *testing.T) {
 		},
 	}
 	for index, testCase := range testCases {
-		actualOutputs, err := commands.GetContentData(temporaryRoot, testCase.ignorePatterns, testCase.binaryContentPattern)
-		if err != nil {
-			testingInstance.Fatalf("case %d (%s): %v", index, testCase.testName, err)
+		actualOutputs, contentRetrievalError := commands.GetContentData(temporaryRoot, testCase.ignorePatterns, testCase.binaryContentPattern)
+		if contentRetrievalError != nil {
+			testingInstance.Fatalf(testCaseFailureMessage, index, testCase.testName, contentRetrievalError)
 		}
 		if len(actualOutputs) != len(testCase.expectedOutputs) {
 			testingInstance.Errorf("case %d (%s): expected %d items, got %d", index, testCase.testName, len(testCase.expectedOutputs), len(actualOutputs))
@@ -139,9 +142,9 @@ func TestGetTreeData(testingInstance *testing.T) {
 	}
 	for index, testCase := range testCases {
 		treeBuilder := commands.TreeBuilder{IgnorePatterns: testCase.ignorePatterns}
-		nodes, err := treeBuilder.GetTreeData(temporaryRoot)
-		if err != nil {
-			testingInstance.Fatalf("case %d (%s): %v", index, testCase.testName, err)
+		nodes, treeConstructionError := treeBuilder.GetTreeData(temporaryRoot)
+		if treeConstructionError != nil {
+			testingInstance.Fatalf(testCaseFailureMessage, index, testCase.testName, treeConstructionError)
 		}
 		if len(nodes) != 1 {
 			testingInstance.Errorf("case %d (%s): expected one root node, got %d", index, testCase.testName, len(nodes))
