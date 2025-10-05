@@ -13,6 +13,8 @@ import (
 const (
 	// warningSkipSubdirFormat is used when a subdirectory cannot be processed.
 	warningSkipSubdirFormat = "Warning: Skipping subdirectory %s due to error: %v\n"
+	// warningStatPathFormat is used when file information cannot be retrieved.
+	warningStatPathFormat = "Warning: unable to stat %s: %v\n"
 
 	// errorAbsolutePathFormat is used when the absolute path cannot be determined.
 	errorAbsolutePathFormat = "getting absolute path for %s: %w"
@@ -37,6 +39,10 @@ func (treeBuilder *TreeBuilder) GetTreeData(rootDirectoryPath string) ([]*types.
 		Path: absoluteRootDirPath,
 		Name: filepath.Base(absoluteRootDirPath),
 		Type: types.NodeTypeDirectory,
+	}
+	rootInfo, rootStatError := os.Stat(absoluteRootDirPath)
+	if rootStatError == nil {
+		rootNode.LastModified = utils.FormatTimestamp(rootInfo.ModTime())
 	}
 
 	children, buildError := treeBuilder.buildTreeNodes(absoluteRootDirPath, absoluteRootDirPath)
@@ -69,6 +75,13 @@ func (treeBuilder *TreeBuilder) buildTreeNodes(currentDirectoryPath string, root
 			Name: directoryEntry.Name(),
 		}
 
+		entryInfo, infoError := directoryEntry.Info()
+		if infoError != nil {
+			fmt.Fprintf(os.Stderr, warningStatPathFormat, childPath, infoError)
+		} else {
+			node.LastModified = utils.FormatTimestamp(entryInfo.ModTime())
+		}
+
 		if directoryEntry.IsDir() {
 			node.Type = types.NodeTypeDirectory
 			childNodes, buildError := treeBuilder.buildTreeNodes(childPath, rootDirectoryPath)
@@ -87,6 +100,9 @@ func (treeBuilder *TreeBuilder) buildTreeNodes(currentDirectoryPath string, root
 				node.Type = types.NodeTypeFile
 			}
 			node.MimeType = childMimeType
+			if infoError == nil {
+				node.Size = utils.FormatFileSize(entryInfo.Size())
+			}
 		}
 		nodes = append(nodes, node)
 	}

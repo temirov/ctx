@@ -50,6 +50,12 @@ func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatte
 			return nil
 		}
 
+		fileInfo, infoError := directoryEntry.Info()
+		if infoError != nil {
+			fmt.Fprintf(os.Stderr, WarningAccessPathFormat, walkedPath, infoError)
+			return nil
+		}
+
 		fileBytes, fileReadError := os.ReadFile(walkedPath)
 		if fileReadError != nil {
 			fmt.Fprintf(os.Stderr, WarningFileReadFormat, walkedPath, fileReadError)
@@ -69,10 +75,12 @@ func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatte
 		}
 
 		fileOutputs = append(fileOutputs, types.FileOutput{
-			Path:     walkedPath,
-			Type:     fileType,
-			Content:  fileContent,
-			MimeType: mimeType,
+			Path:         walkedPath,
+			Type:         fileType,
+			Content:      fileContent,
+			Size:         utils.FormatFileSize(fileInfo.Size()),
+			LastModified: utils.FormatTimestamp(fileInfo.ModTime()),
+			MimeType:     mimeType,
 		})
 		return nil
 	})

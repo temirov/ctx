@@ -102,6 +102,18 @@ func TestGetContentData(testingInstance *testing.T) {
 			if actual.Path != expected.Path || actual.Type != expected.Type || actual.Content != expected.Content || actual.MimeType != expected.MimeType {
 				testingInstance.Errorf("case %d (%s): mismatch at position %d", index, testCase.testName, position)
 			}
+			info, statError := os.Stat(actual.Path)
+			if statError != nil {
+				testingInstance.Fatalf("case %d (%s): stat failed for %s: %v", index, testCase.testName, actual.Path, statError)
+			}
+			expectedSize := utils.FormatFileSize(info.Size())
+			if actual.Size != expectedSize {
+				testingInstance.Errorf("case %d (%s): expected size %s for %s, got %s", index, testCase.testName, expectedSize, actual.Path, actual.Size)
+			}
+			expectedTimestamp := utils.FormatTimestamp(info.ModTime())
+			if actual.LastModified != expectedTimestamp {
+				testingInstance.Errorf("case %d (%s): expected last modified %s for %s, got %s", index, testCase.testName, expectedTimestamp, actual.Path, actual.LastModified)
+			}
 		}
 	}
 }
@@ -167,6 +179,18 @@ func TestGetTreeData(testingInstance *testing.T) {
 			expected := testCase.expectedChildren[position]
 			if actual.Path != expected.Path || actual.Type != expected.Type || actual.Name != expected.Name || actual.MimeType != expected.MimeType {
 				testingInstance.Errorf("case %d (%s): child mismatch at position %d", index, testCase.testName, position)
+			}
+			info, statError := os.Stat(actual.Path)
+			if statError != nil {
+				testingInstance.Fatalf("case %d (%s): stat failed for %s: %v", index, testCase.testName, actual.Path, statError)
+			}
+			expectedSize := utils.FormatFileSize(info.Size())
+			if actual.Size != expectedSize {
+				testingInstance.Errorf("case %d (%s): expected size %s for %s, got %s", index, testCase.testName, expectedSize, actual.Path, actual.Size)
+			}
+			expectedTimestamp := utils.FormatTimestamp(info.ModTime())
+			if actual.LastModified != expectedTimestamp {
+				testingInstance.Errorf("case %d (%s): expected last modified %s for %s, got %s", index, testCase.testName, expectedTimestamp, actual.Path, actual.LastModified)
 			}
 		}
 	}
