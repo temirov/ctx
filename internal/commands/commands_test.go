@@ -33,6 +33,15 @@ const binaryBase64Content = "AAE="
 const binaryMimeTypeExpected = "application/octet-stream"
 
 // testCaseFailureMessage defines the format for subtest failure descriptions.
+// stubCounter implements tokenizer.Counter for testing purposes.
+type stubCounter struct{}
+
+func (stubCounter) Name() string { return "stub" }
+
+func (stubCounter) CountString(input string) (int, error) {
+	return len([]rune(input)), nil
+}
+
 const testCaseFailureMessage = "case %d (%s): %v"
 
 // TestGetContentData verifies content collection behavior.
@@ -82,7 +91,7 @@ func TestGetContentData(testingInstance *testing.T) {
 		},
 	}
 	for index, testCase := range testCases {
-		actualOutputs, contentRetrievalError := commands.GetContentData(temporaryRoot, testCase.ignorePatterns, testCase.binaryContentPattern)
+		actualOutputs, contentRetrievalError := commands.GetContentData(temporaryRoot, testCase.ignorePatterns, testCase.binaryContentPattern, nil)
 		if contentRetrievalError != nil {
 			testingInstance.Fatalf(testCaseFailureMessage, index, testCase.testName, contentRetrievalError)
 		}
@@ -193,5 +202,145 @@ func TestGetTreeData(testingInstance *testing.T) {
 				testingInstance.Errorf("case %d (%s): expected last modified %s for %s, got %s", index, testCase.testName, expectedTimestamp, actual.Path, actual.LastModified)
 			}
 		}
+	}
+}
+
+// TestGetContentDataWithTokens verifies token counting integration for content data.
+func TestGetContentDataWithTokens(testingInstance *testing.T) {
+	temporaryRoot := testingInstance.TempDir()
+	textPath := filepath.Join(temporaryRoot, "tokens.txt")
+	const fileContent = "token count"
+	if err := os.WriteFile(textPath, []byte(fileContent), 0o600); err != nil {
+		testingInstance.Fatalf("writing file: %v", err)
+	}
+	outputs, err := commands.GetContentData(temporaryRoot, nil, nil, stubCounter{})
+	if err != nil {
+		testingInstance.Fatalf("GetContentData error: %v", err)
+	}
+	if len(outputs) == 0 {
+		testingInstance.Fatalf("expected at least one output")
+	}
+	var tokens int
+	for _, output := range outputs {
+		if output.Path == textPath {
+			tokens = output.Tokens
+			break
+		}
+	}
+	if tokens != len([]rune(fileContent)) {
+		testingInstance.Errorf("expected %d tokens, got %d", len([]rune(fileContent)), tokens)
+	}
+}
+
+// TestTreeBuilderTokenCounts verifies token aggregation in tree summaries.
+func TestTreeBuilderTokenCounts(testingInstance *testing.T) {
+	temporaryRoot := testingInstance.TempDir()
+	textPath := filepath.Join(temporaryRoot, "tokens.txt")
+	const fileContent = "token count"
+	if err := os.WriteFile(textPath, []byte(fileContent), 0o600); err != nil {
+		testingInstance.Fatalf("writing file: %v", err)
+	}
+	treeBuilder := commands.TreeBuilder{TokenCounter: stubCounter{}, IncludeSummary: true}
+	nodes, err := treeBuilder.GetTreeData(temporaryRoot)
+	if err != nil {
+		testingInstance.Fatalf("GetTreeData error: %v", err)
+	}
+	if len(nodes) != 1 {
+		testingInstance.Fatalf("expected single root node")
+	}
+	root := nodes[0]
+	if root == nil {
+		testingInstance.Fatalf("root node nil")
+	}
+	var fileNode *types.TreeOutputNode
+	for _, child := range root.Children {
+		if child != nil && child.Path == textPath {
+			fileNode = child
+			break
+		}
+	}
+	if fileNode == nil {
+		testingInstance.Fatalf("file node not found")
+	}
+	expectedTokens := len([]rune(fileContent))
+	if fileNode.Tokens != expectedTokens {
+		testingInstance.Errorf("expected file tokens %d, got %d", expectedTokens, fileNode.Tokens)
+	}
+	if root.TotalTokens != expectedTokens {
+		testingInstance.Errorf("expected root tokens %d, got %d", expectedTokens, root.TotalTokens)
+	}
+}
+
+// TestGetTreeDataSummary verifies summary aggregation for directory trees.
+// TestGetTreeDataSummary verifies summary aggregation for directory trees.
+func TestGetTreeDataSummary(testingInstance *testing.T) {
+	temporaryRoot := testingInstance.TempDir()
+	childDir := filepath.Join(temporaryRoot, "pkg")
+	if mkdirError := os.Mkdir(childDir, 0700); mkdirError != nil {
+		testingInstance.Fatalf("creating child directory: %v", mkdirError)
+	}
+	rootFilePath := filepath.Join(temporaryRoot, "root.txt")
+	childFilePath := filepath.Join(childDir, "child.txt")
+	rootContent := []byte("root-data")
+	childContent := []byte("child-data")
+	if writeError := os.WriteFile(rootFilePath, rootContent, 0600); writeError != nil {
+		testingInstance.Fatalf("writing root file: %v", writeError)
+	}
+	if writeError := os.WriteFile(childFilePath, childContent, 0600); writeError != nil {
+		testingInstance.Fatalf("writing child file: %v", writeError)
+	}
+	treeBuilder := commands.TreeBuilder{IncludeSummary: true}
+	nodes, treeConstructionError := treeBuilder.GetTreeData(temporaryRoot)
+	if treeConstructionError != nil {
+		testingInstance.Fatalf("building tree with summary: %v", treeConstructionError)
+	}
+	if len(nodes) != 1 {
+		testingInstance.Fatalf("expected single root node, got %d", len(nodes))
+	}
+	rootNode := nodes[0]
+	expectedRootFiles := 2
+	if rootNode.TotalFiles != expectedRootFiles {
+		testingInstance.Fatalf("expected %d files at root, got %d", expectedRootFiles, rootNode.TotalFiles)
+	}
+	rootExpectedSize := utils.FormatFileSize(int64(len(rootContent) + len(childContent)))
+	if rootNode.TotalSize != rootExpectedSize {
+		testingInstance.Fatalf("expected root size %s, got %s", rootExpectedSize, rootNode.TotalSize)
+	}
+	var directoryNode, fileNode *types.TreeOutputNode
+	for _, child := range rootNode.Children {
+		switch child.Path {
+		case rootFilePath:
+			fileNode = child
+		case childDir:
+			directoryNode = child
+		}
+	}
+	if fileNode == nil || directoryNode == nil {
+		testingInstance.Fatalf("expected both file and directory children, got %+v", rootNode.Children)
+	}
+	if fileNode.TotalFiles != 1 {
+		testingInstance.Fatalf("file summary incorrect: %+v", fileNode)
+	}
+	fileExpectedSize := utils.FormatFileSize(int64(len(rootContent)))
+	if fileNode.TotalSize != fileExpectedSize {
+		testingInstance.Fatalf("expected file summary size %s, got %s", fileExpectedSize, fileNode.TotalSize)
+	}
+	if directoryNode.TotalFiles != 1 {
+		testingInstance.Fatalf("directory summary incorrect: %+v", directoryNode)
+	}
+	directoryExpectedSize := utils.FormatFileSize(int64(len(childContent)))
+	if directoryNode.TotalSize != directoryExpectedSize {
+		testingInstance.Fatalf("expected directory summary size %s, got %s", directoryExpectedSize, directoryNode.TotalSize)
+	}
+	if len(directoryNode.Children) != 1 {
+		testingInstance.Fatalf("expected one child under directory, got %d", len(directoryNode.Children))
+	}
+	nestedFile := directoryNode.Children[0]
+	if nestedFile.TotalFiles != 1 {
+		testingInstance.Fatalf("nested file summary incorrect: %+v", nestedFile)
+	}
+	nestedExpectedSize := utils.FormatFileSize(int64(len(childContent)))
+	if nestedFile.TotalSize != nestedExpectedSize {
+		testingInstance.Fatalf("expected nested file summary size %s, got %s", nestedExpectedSize, nestedFile.TotalSize)
 	}
 }

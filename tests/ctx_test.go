@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/temirov/ctx/internal/tokenizer"
 	appTypes "github.com/temirov/ctx/internal/types"
 	"github.com/temirov/ctx/internal/utils"
 )
@@ -81,6 +82,91 @@ const (
 	nestedYamlFileName         = "nested.yml"
 	nestedTextFileName         = "keep.txt"
 )
+
+func decodeJSONRoots(t *testing.T, data string) []appTypes.TreeOutputNode {
+	t.Helper()
+	var single appTypes.TreeOutputNode
+	if err := json.Unmarshal([]byte(data), &single); err == nil && single.Path != "" {
+		return []appTypes.TreeOutputNode{single}
+	}
+	var multi []appTypes.TreeOutputNode
+	if err := json.Unmarshal([]byte(data), &multi); err == nil {
+		return multi
+	}
+	t.Fatalf("invalid JSON: %s", data)
+	return nil
+}
+
+func decodeXMLRoots(t *testing.T, data string) []appTypes.TreeOutputNode {
+	t.Helper()
+	var single appTypes.TreeOutputNode
+	if err := xml.Unmarshal([]byte(data), &single); err == nil && single.Path != "" {
+		return []appTypes.TreeOutputNode{single}
+	}
+	var wrapper struct {
+		Nodes []appTypes.TreeOutputNode `xml:"node"`
+		Items []appTypes.TreeOutputNode `xml:"item"`
+	}
+	if err := xml.Unmarshal([]byte(data), &wrapper); err == nil {
+		if len(wrapper.Nodes) > 0 {
+			return wrapper.Nodes
+		}
+		if len(wrapper.Items) > 0 {
+			return wrapper.Items
+		}
+	}
+	t.Fatalf("invalid XML: %s", data)
+	return nil
+}
+
+func flattenFileNodes(nodes []appTypes.TreeOutputNode) []appTypes.TreeOutputNode {
+	var files []appTypes.TreeOutputNode
+	var walk func(node appTypes.TreeOutputNode)
+	walk = func(node appTypes.TreeOutputNode) {
+		if node.Type == appTypes.NodeTypeFile || node.Type == appTypes.NodeTypeBinary {
+			files = append(files, node)
+		}
+		for _, child := range node.Children {
+			if child != nil {
+				walk(*child)
+			}
+		}
+	}
+	for _, node := range nodes {
+		walk(node)
+	}
+	return files
+}
+
+func decodeJSONFiles(t *testing.T, data string) []appTypes.TreeOutputNode {
+	return flattenFileNodes(decodeJSONRoots(t, data))
+}
+
+func decodeXMLFiles(t *testing.T, data string) []appTypes.TreeOutputNode {
+	return flattenFileNodes(decodeXMLRoots(t, data))
+}
+
+func findNodeByName(nodes []appTypes.TreeOutputNode, name string) *appTypes.TreeOutputNode {
+	for index := range nodes {
+		if nodes[index].Name == name {
+			return &nodes[index]
+		}
+		if child := findNodeByName(childrenToSlice(nodes[index].Children), name); child != nil {
+			return child
+		}
+	}
+	return nil
+}
+
+func childrenToSlice(children []*appTypes.TreeOutputNode) []appTypes.TreeOutputNode {
+	result := make([]appTypes.TreeOutputNode, 0, len(children))
+	for _, child := range children {
+		if child != nil {
+			result = append(result, *child)
+		}
+	}
+	return result
+}
 
 // buildBinary compiles the ctx binary and returns its path.
 func buildBinary(testingHandle *testing.T) string {
@@ -323,20 +409,11 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				var nodes []appTypes.TreeOutputNode
-				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				roots := decodeJSONRoots(t, output)
+				if len(roots) != 2 {
+					t.Fatalf("expected two top-level nodes, got %d", len(roots))
 				}
-				if len(nodes) != 2 {
-					t.Fatalf("expected two top‑level nodes, got %d", len(nodes))
-				}
-				var fileNode *appTypes.TreeOutputNode
-				for i := range nodes {
-					if nodes[i].Name == "fileA.txt" {
-						fileNode = &nodes[i]
-						break
-					}
-				}
+				fileNode := findNodeByName(roots, "fileA.txt")
 				if fileNode == nil || fileNode.MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s for fileA.txt", expectedTextMimeType)
 				}
@@ -373,12 +450,10 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				var files []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &files); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				roots := decodeJSONRoots(t, output)
+				files := flattenFileNodes(roots)
 				if len(files) != 2 {
-					t.Fatalf("expected two items, got %d", len(files))
+					t.Fatalf("expected two files, got %d", len(files))
 				}
 				for i := range files {
 					if files[i].MimeType != expectedTextMimeType {
@@ -413,30 +488,71 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				type resultWrapper struct {
-					Nodes []appTypes.TreeOutputNode `xml:"code>item"`
+				roots := decodeXMLRoots(t, output)
+				if len(roots) != 1 {
+					t.Fatalf("expected one top-level node, got %d", len(roots))
 				}
-				var wrapper resultWrapper
-				if err := xml.Unmarshal([]byte(output), &wrapper); err != nil {
-					t.Fatalf("invalid XML: %v\n%s", err, output)
-				}
-				if len(wrapper.Nodes) != 1 {
-					t.Fatalf("expected one top-level node, got %d", len(wrapper.Nodes))
-				}
-				if wrapper.Nodes[0].MimeType != expectedTextMimeType {
+				if roots[0].MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
-				info, err := os.Stat(wrapper.Nodes[0].Path)
+				info, err := os.Stat(roots[0].Path)
 				if err != nil {
-					t.Fatalf("stat failed for %s: %v", wrapper.Nodes[0].Path, err)
+					t.Fatalf("stat failed for %s: %v", roots[0].Path, err)
 				}
 				expectedSize := utils.FormatFileSize(info.Size())
-				if wrapper.Nodes[0].Size != expectedSize {
-					t.Fatalf("expected size %s, got %s", expectedSize, wrapper.Nodes[0].Size)
+				if roots[0].Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, roots[0].Size)
 				}
 				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
-				if wrapper.Nodes[0].LastModified != expectedTimestamp {
-					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, wrapper.Nodes[0].LastModified)
+				if roots[0].LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, roots[0].LastModified)
+				}
+			},
+		},
+		{
+			name: "TreeTokensJSON",
+			arguments: []string{
+				appTypes.CommandTree,
+				"--tokens",
+				"--model",
+				"gpt-4o",
+				"--summary",
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"token.txt": "token counting sample",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				roots := decodeJSONRoots(t, output)
+				if len(roots) != 1 {
+					t.Fatalf("expected one root, got %d", len(roots))
+				}
+				root := roots[0]
+				fileNode := findNodeByName(roots, "token.txt")
+				if fileNode == nil {
+					t.Fatalf("token file node not found")
+				}
+				contentBytes, err := os.ReadFile(fileNode.Path)
+				if err != nil {
+					t.Fatalf("failed to read token file: %v", err)
+				}
+				counter, err := tokenizer.NewCounter(tokenizer.Config{Model: "gpt-4o"})
+				if err != nil {
+					t.Fatalf("NewCounter error: %v", err)
+				}
+				countResult, err := tokenizer.CountBytes(counter, contentBytes)
+				if err != nil {
+					t.Fatalf("CountBytes error: %v", err)
+				}
+				if !countResult.Counted {
+					t.Fatalf("expected text content to be counted")
+				}
+				if fileNode.Tokens != countResult.Tokens {
+					t.Fatalf("expected file tokens %d, got %d", countResult.Tokens, fileNode.Tokens)
+				}
+				if root.TotalTokens != countResult.Tokens {
+					t.Fatalf("expected root tokens %d, got %d", countResult.Tokens, root.TotalTokens)
 				}
 			},
 		},
@@ -454,30 +570,25 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				type resultWrapper struct {
-					Files []appTypes.FileOutput `xml:"code>item"`
+				roots := decodeXMLRoots(t, output)
+				files := flattenFileNodes(roots)
+				if len(files) != 1 {
+					t.Fatalf("expected one item, got %d", len(files))
 				}
-				var wrapper resultWrapper
-				if err := xml.Unmarshal([]byte(output), &wrapper); err != nil {
-					t.Fatalf("invalid XML: %v\n%s", err, output)
-				}
-				if len(wrapper.Files) != 1 {
-					t.Fatalf("expected one item, got %d", len(wrapper.Files))
-				}
-				if wrapper.Files[0].MimeType != expectedTextMimeType {
+				if files[0].MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
-				info, err := os.Stat(wrapper.Files[0].Path)
+				info, err := os.Stat(files[0].Path)
 				if err != nil {
-					t.Fatalf("stat failed for %s: %v", wrapper.Files[0].Path, err)
+					t.Fatalf("stat failed for %s: %v", files[0].Path, err)
 				}
 				expectedSize := utils.FormatFileSize(info.Size())
-				if wrapper.Files[0].Size != expectedSize {
-					t.Fatalf("expected size %s, got %s", expectedSize, wrapper.Files[0].Size)
+				if files[0].Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, files[0].Size)
 				}
 				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
-				if wrapper.Files[0].LastModified != expectedTimestamp {
-					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, wrapper.Files[0].LastModified)
+				if files[0].LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, files[0].LastModified)
 				}
 			},
 		},
@@ -697,10 +808,7 @@ func TestCTX(testingHandle *testing.T) {
 			},
 			expectWarning: true,
 			validate: func(t *testing.T, output string) {
-				var files []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &files); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				files := decodeJSONFiles(t, output)
 				if len(files) != 1 {
 					t.Fatalf("expected one readable item, got %d", len(files))
 				}
@@ -737,10 +845,7 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				var files []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &files); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				files := decodeJSONFiles(t, output)
 				if len(files) != 1 {
 					t.Fatalf("expected one item, got %d", len(files))
 				}
@@ -788,10 +893,7 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				var nodes []appTypes.TreeOutputNode
-				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				nodes := decodeJSONRoots(t, output)
 				if len(nodes) != 1 {
 					t.Fatalf("expected one top-level node, got %d", len(nodes))
 				}
@@ -841,10 +943,7 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				var files []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &files); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				files := decodeJSONFiles(t, output)
 				if len(files) != 1 {
 					t.Fatalf("expected one item, got %d", len(files))
 				}
@@ -875,10 +974,7 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				var files []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &files); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				files := decodeJSONFiles(t, output)
 				if len(files) != 1 {
 					t.Fatalf("expected one item, got %d", len(files))
 				}
@@ -942,14 +1038,11 @@ func TestCTX(testingHandle *testing.T) {
 				return setupTestDirectory(t, layout)
 			},
 			validate: func(t *testing.T, output string) {
-				var nodes []appTypes.TreeOutputNode
-				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				nodes := decodeJSONRoots(t, output)
 				if len(nodes) != 1 {
 					t.Fatalf("expected one root node, got %d", len(nodes))
 				}
-				children := nodes[0].Children
+				children := childrenToSlice(nodes[0].Children)
 				if len(children) != 1 || children[0].Name != visibleFileName {
 					t.Fatalf("expected only %s, got %#v", visibleFileName, children)
 				}
@@ -984,15 +1077,12 @@ func TestCTX(testingHandle *testing.T) {
 				return setupTestDirectory(t, layout)
 			},
 			validate: func(t *testing.T, output string) {
-				var nodes []appTypes.TreeOutputNode
-				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				nodes := decodeJSONRoots(t, output)
 				if len(nodes) != 1 {
 					t.Fatalf("expected one root node, got %d", len(nodes))
 				}
-				names := make(map[string]*appTypes.TreeOutputNode)
-				for _, child := range nodes[0].Children {
+				names := make(map[string]appTypes.TreeOutputNode)
+				for _, child := range childrenToSlice(nodes[0].Children) {
 					names[child.Name] = child
 				}
 				if _, ok := names[utils.GitDirectoryName]; !ok {
@@ -1069,14 +1159,11 @@ func TestCTX(testingHandle *testing.T) {
 				return setupTestDirectory(t, layout)
 			},
 			validate: func(t *testing.T, output string) {
-				var nodes []appTypes.TreeOutputNode
-				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				nodes := decodeJSONRoots(t, output)
 				if len(nodes) != 1 {
 					t.Fatalf("expected one root node, got %d", len(nodes))
 				}
-				rootChildren := nodes[0].Children
+				rootChildren := childrenToSlice(nodes[0].Children)
 				if len(rootChildren) != 1 || rootChildren[0].Name != subDirectoryName {
 					t.Fatalf("expected root child %s, got %#v", subDirectoryName, rootChildren)
 				}
@@ -1084,23 +1171,24 @@ func TestCTX(testingHandle *testing.T) {
 				if subNode.Size != "" {
 					t.Fatalf("expected directory %s to omit size, got %q", subDirectoryName, subNode.Size)
 				}
-				if len(subNode.Children) != 1 || subNode.Children[0].Name != visibleFileName {
-					t.Fatalf("expected only %s in %s, got %#v", visibleFileName, subDirectoryName, subNode.Children)
+				children := childrenToSlice(subNode.Children)
+				if len(children) != 1 || children[0].Name != visibleFileName {
+					t.Fatalf("expected only %s in %s, got %#v", visibleFileName, subDirectoryName, children)
 				}
-				if subNode.Children[0].MimeType != expectedTextMimeType {
+				if children[0].MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
 				expectedSize := utils.FormatFileSize(int64(len(visibleFileContent)))
-				if subNode.Children[0].Size != expectedSize {
-					t.Fatalf("expected size %s, got %s", expectedSize, subNode.Children[0].Size)
+				if children[0].Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, children[0].Size)
 				}
-				info, err := os.Stat(subNode.Children[0].Path)
+				info, err := os.Stat(children[0].Path)
 				if err != nil {
-					t.Fatalf("stat failed for %s: %v", subNode.Children[0].Path, err)
+					t.Fatalf("stat failed for %s: %v", children[0].Path, err)
 				}
 				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
-				if subNode.Children[0].LastModified != expectedTimestamp {
-					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, subNode.Children[0].LastModified)
+				if children[0].LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, children[0].LastModified)
 				}
 			},
 		},
@@ -1123,10 +1211,7 @@ func TestCTX(testingHandle *testing.T) {
 				if strings.Contains(output, ignoredFileName) {
 					testingHandle.Fatalf("expected content output to exclude %s\n%s", ignoredFileName, output)
 				}
-				var fileOutputs []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &fileOutputs); err != nil {
-					testingHandle.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				fileOutputs := decodeJSONFiles(testingHandle, output)
 				if len(fileOutputs) != 1 {
 					testingHandle.Fatalf("expected one file, got %d", len(fileOutputs))
 				}
@@ -1160,14 +1245,11 @@ func TestCTX(testingHandle *testing.T) {
 			arguments: []string{appTypes.CommandTree, "-e", toolsDirectoryName, "-e", githubDirectoryName, "-e", yamlPattern},
 			prepare:   setupExclusionPatternFixture,
 			validate: func(testingHandle *testing.T, output string) {
-				var outputNodes []appTypes.TreeOutputNode
-				if err := json.Unmarshal([]byte(output), &outputNodes); err != nil {
-					testingHandle.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				outputNodes := decodeJSONRoots(testingHandle, output)
 				if len(outputNodes) != 1 {
 					testingHandle.Fatalf("expected one root node, got %d", len(outputNodes))
 				}
-				rootChildren := outputNodes[0].Children
+				rootChildren := childrenToSlice(outputNodes[0].Children)
 				if len(rootChildren) != 2 {
 					testingHandle.Fatalf("expected two root children, got %d", len(rootChildren))
 				}
@@ -1191,10 +1273,7 @@ func TestCTX(testingHandle *testing.T) {
 			arguments: []string{appTypes.CommandContent, "-e", toolsDirectoryName, "-e", githubDirectoryName, "-e", yamlPattern},
 			prepare:   setupExclusionPatternFixture,
 			validate: func(testingHandle *testing.T, output string) {
-				var fileOutputs []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &fileOutputs); err != nil {
-					testingHandle.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				fileOutputs := decodeJSONFiles(testingHandle, output)
 				if len(fileOutputs) != 2 {
 					testingHandle.Fatalf("expected two files, got %d", len(fileOutputs))
 				}

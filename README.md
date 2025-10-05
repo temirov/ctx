@@ -121,6 +121,7 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--no-ignore`         | tree, content      | Disable loading of `.ignore` files. |
 | `--git`               | tree, content      | Include the `.git` directory during traversal. |
 | `--format <raw|json|xml>` | all commands       | Select output format (default `json`). |
+| `--summary`           | tree, content      | Print total file count and combined size for results. |
 | `--doc`               | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
 | `--depth <number>`    | callchain          | Limit call graph traversal depth (default `1`). |
 | `--version`           | all commands       | Print ctx version and exit. |
@@ -152,6 +153,8 @@ ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 
 | raw    | Text tree view (`[File] path`) | File blocks (`File: path ... End of file`) | Metadata, source blocks; docs when `--doc`. |
 | json   | `[]TreeOutputNode`             | `[]FileOutput`                             | `CallChainOutput` |
 | xml    | `result/code/item` nodes       | `result/code/item` nodes                   | `callchains/callchain` |
+
+When `--summary` is enabled for tree or content, raw output prepends a `Summary: …` line and shows per-directory totals inside the tree view, while JSON and XML attach `totalFiles` and `totalSize` fields directly to tree entries. The totals are recursive: directory nodes carry the combined size and file count of everything beneath them, respecting ignore rules and explicit excludes.
 
 All JSON and XML outputs include a `mimeType` field for every file. Raw output never displays MIME type information.
 
@@ -212,4 +215,3 @@ Tags that begin with `v` trigger the release workflow, which builds binaries and
 ## License
 
 ctx is released under the [MIT License](MIT-LICENSE).
-

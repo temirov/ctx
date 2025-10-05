@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -13,6 +12,7 @@ import (
 	"github.com/temirov/ctx/internal/config"
 	"github.com/temirov/ctx/internal/docs"
 	"github.com/temirov/ctx/internal/output"
+	"github.com/temirov/ctx/internal/tokenizer"
 	"github.com/temirov/ctx/internal/types"
 	"github.com/temirov/ctx/internal/utils"
 )
@@ -23,6 +23,12 @@ const (
 	noIgnoreFlagName      = "no-ignore"
 	includeGitFlagName    = "git"
 	formatFlagName        = "format"
+	summaryFlagName       = "summary"
+	tokensFlagName        = "tokens"
+	modelFlagName         = "model"
+	pythonFlagName        = "python"
+	sentencePieceFlagName = "spm-model"
+	pythonHelpersFlagName = "py-helpers-dir"
 	documentationFlagName = "doc"
 	versionFlagName       = "version"
 	versionTemplate       = "ctx version: %s\n"
@@ -82,9 +88,18 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	disableIgnoreFlagDescription    = "do not use .ignore"
 	includeGitFlagDescription       = "include git directory"
 	formatFlagDescription           = "output format"
+	summaryFlagDescription          = "include summary of resulting files"
+	tokensFlagDescription           = "include token counts"
+	modelFlagDescription            = "tokenizer model to use for token counting"
+	pythonFlagDescription           = "python executable to use for external tokenizers"
+	sentencePieceDescription        = "SentencePiece tokenizer.model path for llama models"
+	pythonHelpersDescription        = "directory containing tokenizer helper scripts"
+	defaultTokenizerModelName       = "gpt-4o"
+	defaultPythonExecutable         = "python3"
 	documentationFlagDescription    = "include documentation"
 	invalidFormatMessage            = "Invalid format value '%s'"
 	warningSkipPathFormat           = "Warning: skipping %s: %v\n"
+	warningTokenCountFormat         = "Warning: failed to count tokens for %s: %v\n"
 	workingDirectoryErrorFormat     = "unable to determine working directory: %w"
 
 	// errorAbsolutePathFormat reports failure to resolve an absolute path.
@@ -151,6 +166,24 @@ type pathOptions struct {
 	includeGit        bool
 }
 
+type tokenOptions struct {
+	enabled            bool
+	model              string
+	pythonExecutable   string
+	sentencePieceModel string
+	pythonHelpersDir   string
+}
+
+func (options tokenOptions) toConfig(workingDirectory string) tokenizer.Config {
+	return tokenizer.Config{
+		Model:                  options.model,
+		PythonExecutable:       options.pythonExecutable,
+		HelpersDir:             options.pythonHelpersDir,
+		SentencePieceModelPath: options.sentencePieceModel,
+		WorkingDirectory:       workingDirectory,
+	}
+}
+
 // addPathFlags registers path-related flags on the command.
 func addPathFlags(command *cobra.Command, options *pathOptions) {
 	command.Flags().StringArrayVarP(&options.exclusionPatterns, exclusionFlagName, exclusionFlagName, nil, exclusionFlagDescription)
@@ -163,6 +196,10 @@ func addPathFlags(command *cobra.Command, options *pathOptions) {
 func createTreeCommand() *cobra.Command {
 	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
+	var summaryEnabled bool
+	var tokenConfiguration tokenOptions
+	tokenConfiguration.model = defaultTokenizerModelName
+	tokenConfiguration.pythonExecutable = defaultPythonExecutable
 
 	treeCommand := &cobra.Command{
 		Use:     treeUse,
@@ -189,12 +226,20 @@ func createTreeCommand() *cobra.Command {
 				defaultCallChainDepth,
 				outputFormatLower,
 				false,
+				summaryEnabled,
+				tokenConfiguration,
 			)
 		},
 	}
 
 	addPathFlags(treeCommand, &pathConfiguration)
 	treeCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
+	treeCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, false, summaryFlagDescription)
+	treeCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
+	treeCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
+	treeCommand.Flags().StringVar(&tokenConfiguration.pythonExecutable, pythonFlagName, defaultPythonExecutable, pythonFlagDescription)
+	treeCommand.Flags().StringVar(&tokenConfiguration.sentencePieceModel, sentencePieceFlagName, "", sentencePieceDescription)
+	treeCommand.Flags().StringVar(&tokenConfiguration.pythonHelpersDir, pythonHelpersFlagName, "", pythonHelpersDescription)
 	return treeCommand
 }
 
@@ -203,6 +248,10 @@ func createContentCommand() *cobra.Command {
 	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
 	var documentationEnabled bool
+	var summaryEnabled bool
+	var tokenConfiguration tokenOptions
+	tokenConfiguration.model = defaultTokenizerModelName
+	tokenConfiguration.pythonExecutable = defaultPythonExecutable
 
 	contentCommand := &cobra.Command{
 		Use:     contentUse,
@@ -229,6 +278,8 @@ func createContentCommand() *cobra.Command {
 				defaultCallChainDepth,
 				outputFormatLower,
 				documentationEnabled,
+				summaryEnabled,
+				tokenConfiguration,
 			)
 		},
 	}
@@ -236,6 +287,12 @@ func createContentCommand() *cobra.Command {
 	addPathFlags(contentCommand, &pathConfiguration)
 	contentCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
 	contentCommand.Flags().BoolVar(&documentationEnabled, documentationFlagName, false, documentationFlagDescription)
+	contentCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, false, summaryFlagDescription)
+	contentCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
+	contentCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
+	contentCommand.Flags().StringVar(&tokenConfiguration.pythonExecutable, pythonFlagName, defaultPythonExecutable, pythonFlagDescription)
+	contentCommand.Flags().StringVar(&tokenConfiguration.sentencePieceModel, sentencePieceFlagName, "", sentencePieceDescription)
+	contentCommand.Flags().StringVar(&tokenConfiguration.pythonHelpersDir, pythonHelpersFlagName, "", pythonHelpersDescription)
 	return contentCommand
 }
 
@@ -267,6 +324,8 @@ func createCallChainCommand() *cobra.Command {
 				callChainDepth,
 				outputFormatLower,
 				documentationEnabled,
+				false,
+				tokenOptions{},
 			)
 		},
 	}
@@ -288,6 +347,8 @@ func runTool(
 	callChainDepth int,
 	format string,
 	documentationEnabled bool,
+	summaryEnabled bool,
+	tokenConfiguration tokenOptions,
 ) error {
 	workingDirectory, workingDirectoryError := os.Getwd()
 	if workingDirectoryError != nil {
@@ -302,11 +363,20 @@ func runTool(
 		collector = createdCollector
 	}
 
+	var tokenCounter tokenizer.Counter
+	if tokenConfiguration.enabled {
+		createdCounter, counterError := tokenizer.NewCounter(tokenConfiguration.toConfig(workingDirectory))
+		if counterError != nil {
+			return counterError
+		}
+		tokenCounter = createdCounter
+	}
+
 	switch commandName {
 	case types.CommandCallChain:
 		return runCallChain(paths[0], format, callChainDepth, documentationEnabled, collector, workingDirectory)
 	case types.CommandTree, types.CommandContent:
-		return runTreeOrContentCommand(commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, collector)
+		return runTreeOrContentCommand(commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, summaryEnabled, tokenCounter, collector)
 	default:
 		return fmt.Errorf(unsupportedCommandMessage)
 	}
@@ -353,6 +423,8 @@ func runTreeOrContentCommand(
 	includeGit bool,
 	format string,
 	withDocumentation bool,
+	withSummary bool,
+	tokenCounter tokenizer.Counter,
 	collector *docs.Collector,
 ) error {
 	validatedPaths, pathValidationError := resolveAndValidatePaths(paths)
@@ -369,16 +441,26 @@ func runTreeOrContentCommand(
 				continue
 			}
 			if commandName == types.CommandTree {
-				treeBuilder := commands.TreeBuilder{IgnorePatterns: ignorePatternList}
+				treeBuilder := commands.TreeBuilder{IgnorePatterns: ignorePatternList, IncludeSummary: withSummary, TokenCounter: tokenCounter}
 				nodes, dataError := treeBuilder.GetTreeData(info.AbsolutePath)
 				if dataError == nil && len(nodes) > 0 {
 					collected = append(collected, nodes[0])
 				}
 			} else {
-				files, dataError := commands.GetContentData(info.AbsolutePath, ignorePatternList, binaryContentPatternList)
+				files, dataError := commands.GetContentData(info.AbsolutePath, ignorePatternList, binaryContentPatternList, tokenCounter)
 				if dataError == nil {
 					for index := range files {
+						if withDocumentation && collector != nil {
+							entries, _ := collector.CollectFromFile(files[index].Path)
+							files[index].Documentation = entries
+						}
 						collected = append(collected, &files[index])
+					}
+					contentRoot, contentTreeError := commands.BuildContentTree(info.AbsolutePath, files, withSummary)
+					if contentTreeError != nil {
+						fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, contentTreeError)
+					} else if contentRoot != nil {
+						collected = append(collected, contentRoot)
 					}
 				}
 			}
@@ -394,14 +476,31 @@ func runTreeOrContentCommand(
 				if utils.IsFileBinary(info.AbsolutePath) {
 					nodeType = types.NodeTypeBinary
 				}
-				collected = append(collected, &types.TreeOutputNode{
+				node := &types.TreeOutputNode{
 					Path:         info.AbsolutePath,
 					Name:         filepath.Base(info.AbsolutePath),
 					Type:         nodeType,
 					Size:         utils.FormatFileSize(fileInfo.Size()),
+					SizeBytes:    fileInfo.Size(),
 					LastModified: utils.FormatTimestamp(fileInfo.ModTime()),
 					MimeType:     mimeType,
-				})
+				}
+				var tokenCount int
+				if tokenCounter != nil && nodeType != types.NodeTypeBinary {
+					countResult, countErr := tokenizer.CountFile(tokenCounter, info.AbsolutePath)
+					if countErr != nil {
+						fmt.Fprintf(os.Stderr, warningTokenCountFormat, info.AbsolutePath, countErr)
+					} else if countResult.Counted {
+						tokenCount = countResult.Tokens
+					}
+				}
+				node.Tokens = tokenCount
+				if withSummary {
+					node.TotalFiles = 1
+					node.TotalSize = node.Size
+					node.TotalTokens = tokenCount
+				}
+				collected = append(collected, node)
 			} else {
 				fileInfo, statError := os.Stat(info.AbsolutePath)
 				if statError != nil {
@@ -420,44 +519,49 @@ func runTreeOrContentCommand(
 					fileType = types.NodeTypeBinary
 					content = ""
 				}
-				collected = append(collected, &types.FileOutput{
+				var tokenCount int
+				if tokenCounter != nil && fileType != types.NodeTypeBinary {
+					countResult, countErr := tokenizer.CountBytes(tokenCounter, fileBytes)
+					if countErr != nil {
+						fmt.Fprintf(os.Stderr, warningTokenCountFormat, info.AbsolutePath, countErr)
+					} else if countResult.Counted {
+						tokenCount = countResult.Tokens
+					}
+				}
+				fileOutput := types.FileOutput{
 					Path:         info.AbsolutePath,
 					Type:         fileType,
 					Content:      content,
 					Size:         utils.FormatFileSize(fileInfo.Size()),
+					SizeBytes:    fileInfo.Size(),
 					LastModified: utils.FormatTimestamp(fileInfo.ModTime()),
 					MimeType:     mimeType,
-				})
+					Tokens:       tokenCount,
+				}
+				if withDocumentation && collector != nil {
+					entries, _ := collector.CollectFromFile(fileOutput.Path)
+					fileOutput.Documentation = entries
+				}
+				collected = append(collected, &fileOutput)
+				contentRoot, contentTreeError := commands.BuildContentTree(info.AbsolutePath, []types.FileOutput{fileOutput}, withSummary)
+				if contentTreeError != nil {
+					fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, contentTreeError)
+				} else if contentRoot != nil {
+					collected = append(collected, contentRoot)
+				}
 			}
 		}
-	}
-
-	var documentationEntries []types.DocumentationEntry
-	if withDocumentation && collector != nil {
-		for _, item := range collected {
-			fileOutput, isFileOutput := item.(*types.FileOutput)
-			if isFileOutput {
-				entries, _ := collector.CollectFromFile(fileOutput.Path)
-				documentationEntries = append(documentationEntries, entries...)
-			}
-		}
-		sort.Slice(documentationEntries, func(firstEntryIndex, secondEntryIndex int) bool {
-			if documentationEntries[firstEntryIndex].Kind != documentationEntries[secondEntryIndex].Kind {
-				return documentationEntries[firstEntryIndex].Kind < documentationEntries[secondEntryIndex].Kind
-			}
-			return documentationEntries[firstEntryIndex].Name < documentationEntries[secondEntryIndex].Name
-		})
 	}
 
 	if format == types.FormatJSON {
-		renderedJSONOutput, renderJSONError := output.RenderJSON(documentationEntries, collected)
+		renderedJSONOutput, renderJSONError := output.RenderJSON(collected)
 		if renderJSONError != nil {
 			return renderJSONError
 		}
 		fmt.Println(renderedJSONOutput)
 		return nil
 	} else if format == types.FormatXML {
-		renderedXMLOutput, renderXMLError := output.RenderXML(documentationEntries, collected)
+		renderedXMLOutput, renderXMLError := output.RenderXML(collected)
 		if renderXMLError != nil {
 			return renderXMLError
 		}
@@ -465,7 +569,7 @@ func runTreeOrContentCommand(
 		return nil
 	}
 
-	return output.RenderRaw(commandName, documentationEntries, collected)
+	return output.RenderRaw(commandName, collected, withSummary)
 }
 
 // resolveAndValidatePaths converts input paths to absolute form and validates their existence.

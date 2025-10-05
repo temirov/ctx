@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/temirov/ctx/internal/types"
+	"github.com/temirov/ctx/internal/utils"
 )
 
 const (
@@ -15,7 +16,6 @@ const (
 	indentSpacer = "  "
 
 	separatorLine         = "----------------------------------------"
-	documentationHeader   = "--- Documentation ---"
 	callchainMetaHeader   = "----- CALLCHAIN METADATA -----"
 	callchainFunctionsHdr = "----- FUNCTIONS -----"
 	callchainDocsHeader   = "--- DOCS ---"
@@ -136,64 +136,77 @@ func RenderCallChainXML(data *types.CallChainOutput) (string, error) {
 	return xmlHeader + string(encoded), nil
 }
 
-// RenderJSON deduplicates and marshals documentation and results to JSON.
-func RenderJSON(documentationEntries []types.DocumentationEntry, collected []interface{}) (string, error) {
-	dedupedDocs := removeDuplicateDocumentationEntries(documentationEntries)
+// RenderJSON deduplicates and marshals results to JSON.
+func RenderJSON(collected []interface{}) (string, error) {
 	dedupedItems := removeDuplicateCollectedItems(collected)
-
-	if len(dedupedDocs) == 0 {
-		if len(dedupedItems) == 0 {
-			return "[]", nil
+	if len(dedupedItems) == 0 {
+		return "[]", nil
+	}
+	treeNodes := extractTreeNodes(dedupedItems)
+	if len(treeNodes) > 0 {
+		if len(treeNodes) == 1 {
+			encoded, jsonEncodeError := json.MarshalIndent(treeNodes[0], indentPrefix, indentSpacer)
+			return string(encoded), jsonEncodeError
 		}
-		encoded, jsonEncodeError := json.MarshalIndent(dedupedItems, indentPrefix, indentSpacer)
+		encoded, jsonEncodeError := json.MarshalIndent(treeNodes, indentPrefix, indentSpacer)
 		return string(encoded), jsonEncodeError
 	}
-
-	bundle := struct {
-		Documentation []types.DocumentationEntry `json:"documentation"`
-		Code          []interface{}              `json:"code"`
-	}{
-		Documentation: dedupedDocs,
-		Code:          dedupedItems,
+	if len(dedupedItems) == 1 {
+		encoded, jsonEncodeError := json.MarshalIndent(dedupedItems[0], indentPrefix, indentSpacer)
+		return string(encoded), jsonEncodeError
 	}
-	encoded, jsonEncodeError := json.MarshalIndent(bundle, indentPrefix, indentSpacer)
+	encoded, jsonEncodeError := json.MarshalIndent(dedupedItems, indentPrefix, indentSpacer)
 	return string(encoded), jsonEncodeError
 }
 
-// RenderXML deduplicates and marshals documentation and results to XML.
-func RenderXML(documentationEntries []types.DocumentationEntry, collected []interface{}) (string, error) {
-	dedupedDocs := removeDuplicateDocumentationEntries(documentationEntries)
+// RenderXML deduplicates and marshals results to XML.
+func RenderXML(collected []interface{}) (string, error) {
 	dedupedItems := removeDuplicateCollectedItems(collected)
-	bundle := struct {
-		XMLName       xml.Name                   `xml:""`
-		Documentation []types.DocumentationEntry `xml:"documentation>entry,omitempty"`
-		Code          []interface{}              `xml:"code>item,omitempty"`
-	}{
-		XMLName:       xml.Name{Local: xmlRootElement},
-		Documentation: dedupedDocs,
-		Code:          dedupedItems,
+	treeNodes := extractTreeNodes(dedupedItems)
+	if len(treeNodes) == 0 {
+		wrapper := struct {
+			XMLName xml.Name      `xml:"results"`
+			Items   []interface{} `xml:"item"`
+		}{Items: dedupedItems}
+		encoded, xmlMarshalError := xml.MarshalIndent(wrapper, indentPrefix, indentSpacer)
+		if xmlMarshalError != nil {
+			return "", xmlMarshalError
+		}
+		return xmlHeader + string(encoded), nil
 	}
-	encoded, xmlMarshalError := xml.MarshalIndent(bundle, indentPrefix, indentSpacer)
+	if len(treeNodes) == 1 {
+		encoded, xmlMarshalError := xml.MarshalIndent(treeNodes[0], indentPrefix, indentSpacer)
+		if xmlMarshalError != nil {
+			return "", xmlMarshalError
+		}
+		return xmlHeader + string(encoded), nil
+	}
+	wrapper := struct {
+		XMLName xml.Name                `xml:"results"`
+		Nodes   []*types.TreeOutputNode `xml:"node"`
+	}{Nodes: treeNodes}
+	encoded, xmlMarshalError := xml.MarshalIndent(wrapper, indentPrefix, indentSpacer)
 	if xmlMarshalError != nil {
 		return "", xmlMarshalError
 	}
 	return xmlHeader + string(encoded), nil
 }
 
-// RenderRaw deduplicates and prints documentation and results in raw text format.
-func RenderRaw(commandName string, documentationEntries []types.DocumentationEntry, collected []interface{}) error {
-	dedupedDocs := removeDuplicateDocumentationEntries(documentationEntries)
+// RenderRaw deduplicates and prints results in raw text format.
+func RenderRaw(commandName string, collected []interface{}, includeSummary bool) error {
 	dedupedItems := removeDuplicateCollectedItems(collected)
 
-	if len(dedupedDocs) > 0 {
-		fmt.Println(documentationHeader)
-		for _, entry := range dedupedDocs {
-			fmt.Println(entry.Kind, entry.Name)
-			if entry.Doc != "" {
-				fmt.Println(entry.Doc)
-			}
-			fmt.Println()
+	if includeSummary {
+		summary := computeSummary(dedupedItems)
+		label := "files"
+		if summary.TotalFiles == 1 {
+			label = "file"
 		}
+		extra := ""
+		if summary.TotalTokens > 0 {
+			extra = fmt.Sprintf(", %d tokens", summary.TotalTokens)
+		}
+		fmt.Printf("Summary: %d %s, %s%s\n\n", summary.TotalFiles, label, summary.TotalSize, extra)
 	}
 
 	for _, item := range dedupedItems {
@@ -222,7 +235,7 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 					fmt.Printf(binaryNodeFormat, outputItem.Path, mimeTypeLabel, outputItem.MimeType)
 				} else {
 					fmt.Printf("\n--- Directory Tree: %s ---\n", outputItem.Path)
-					printTree(outputItem, "")
+					printTree(outputItem, "", includeSummary)
 				}
 			}
 		case *types.CallChainOutput:
@@ -235,18 +248,15 @@ func RenderRaw(commandName string, documentationEntries []types.DocumentationEnt
 	return nil
 }
 
-// removeDuplicateDocumentationEntries returns a slice with duplicate documentation entries removed.
-func removeDuplicateDocumentationEntries(entries []types.DocumentationEntry) []types.DocumentationEntry {
-	seen := make(map[string]struct{}, len(entries))
-	var out []types.DocumentationEntry
-	for _, documentationEntry := range entries {
-		key := documentationEntry.Kind + ":" + documentationEntry.Name
-		if _, exists := seen[key]; !exists {
-			seen[key] = struct{}{}
-			out = append(out, documentationEntry)
+func extractTreeNodes(items []interface{}) []*types.TreeOutputNode {
+	var nodes []*types.TreeOutputNode
+	for _, item := range items {
+		node, ok := item.(*types.TreeOutputNode)
+		if ok {
+			nodes = append(nodes, node)
 		}
 	}
-	return out
+	return nodes
 }
 
 // removeDuplicateCollectedItems returns a slice with duplicate collected items removed.
@@ -273,19 +283,96 @@ func removeDuplicateCollectedItems(items []interface{}) []interface{} {
 	return out
 }
 
+// computeSummary aggregates file counts and sizes from collected items.
+func computeSummary(items []interface{}) *types.OutputSummary {
+	var totalFiles int
+	var totalBytes int64
+	var totalTokens int
+	for _, item := range items {
+		switch outputItem := item.(type) {
+		case *types.FileOutput:
+			totalFiles++
+			totalBytes += outputItem.SizeBytes
+			totalTokens += outputItem.Tokens
+		case *types.TreeOutputNode:
+			files, bytes, tokens := summarizeTree(outputItem)
+			totalFiles += files
+			totalBytes += bytes
+			totalTokens += tokens
+		}
+	}
+	return &types.OutputSummary{
+		TotalFiles:  totalFiles,
+		TotalSize:   utils.FormatFileSize(totalBytes),
+		TotalTokens: totalTokens,
+	}
+}
+
+// summarizeTree returns the file count, total size, and tokens for a tree node.
+func summarizeTree(node *types.TreeOutputNode) (int, int64, int) {
+	if node == nil {
+		return 0, 0, 0
+	}
+	var totalFiles int
+	var totalBytes int64
+	var totalTokens int
+	if node.Type == types.NodeTypeFile || node.Type == types.NodeTypeBinary {
+		totalFiles++
+		totalBytes += node.SizeBytes
+		totalTokens += node.Tokens
+	}
+	for _, child := range node.Children {
+		childFiles, childBytes, childTokens := summarizeTree(child)
+		totalFiles += childFiles
+		totalBytes += childBytes
+		totalTokens += childTokens
+	}
+	return totalFiles, totalBytes, totalTokens
+}
+
 // printTree recursively prints a directory tree to stdout.
-func printTree(node *types.TreeOutputNode, prefix string) {
+func printTree(node *types.TreeOutputNode, prefix string, includeSummary bool) {
 	switch node.Type {
 	case types.NodeTypeFile:
-		fmt.Printf("%s[File] %s\n", prefix, node.Path)
+		if node.Tokens > 0 {
+			fmt.Printf("%s[File] %s (%d tokens)\n", prefix, node.Path, node.Tokens)
+		} else {
+			fmt.Printf("%s[File] %s\n", prefix, node.Path)
+		}
 		return
 	case types.NodeTypeBinary:
 		fmt.Printf(binaryTreeFormat, prefix, node.Path, mimeTypeLabel, node.MimeType)
 		return
 	}
 	fmt.Printf("%s%s\n", prefix, node.Path)
+	if includeSummary {
+		label := "files"
+		count := node.TotalFiles
+		size := node.TotalSize
+		tokens := node.TotalTokens
+		if count == 0 || size == "" || tokens == 0 {
+			files, bytes, countedTokens := summarizeTree(node)
+			if count == 0 {
+				count = files
+			}
+			if size == "" {
+				size = utils.FormatFileSize(bytes)
+			}
+			if tokens == 0 {
+				tokens = countedTokens
+			}
+		}
+		if count == 1 {
+			label = "file"
+		}
+		extra := ""
+		if tokens > 0 {
+			extra = fmt.Sprintf(", %d tokens", tokens)
+		}
+		fmt.Printf("%s  Summary: %d %s, %s%s\n", prefix, count, label, size, extra)
+	}
 	for _, child := range node.Children {
-		printTree(child, prefix+"  ")
+		printTree(child, prefix+"  ", includeSummary)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/temirov/ctx/internal/tokenizer"
 	"github.com/temirov/ctx/internal/types"
 	"github.com/temirov/ctx/internal/utils"
 )
@@ -24,6 +25,9 @@ const (
 
 	// errorReadDirectoryFormat is used when a directory cannot be read.
 	errorReadDirectoryFormat = "reading directory %s: %w"
+
+	// warningTokenCountFormat is used when token estimation fails for a file.
+	warningTokenCountFormat = "Warning: failed to count tokens for %s: %v\n"
 )
 
 // GetTreeData generates the tree structure data for a given directory.
@@ -50,6 +54,10 @@ func (treeBuilder *TreeBuilder) GetTreeData(rootDirectoryPath string) ([]*types.
 		return nil, fmt.Errorf(errorBuildTreeFormat, rootDirectoryPath, buildError)
 	}
 	rootNode.Children = children
+	if treeBuilder.IncludeSummary {
+		files, bytes, tokens := treeBuilder.collectSummary(rootNode.Children)
+		applySummary(rootNode, files, bytes, tokens)
+	}
 
 	return []*types.TreeOutputNode{rootNode}, nil
 }
@@ -91,6 +99,10 @@ func (treeBuilder *TreeBuilder) buildTreeNodes(currentDirectoryPath string, root
 			} else {
 				node.Children = childNodes
 			}
+			if treeBuilder.IncludeSummary {
+				files, bytes, tokens := treeBuilder.collectSummary(node.Children)
+				applySummary(node, files, bytes, tokens)
+			}
 		} else {
 			childMimeType := utils.DetectMimeType(childPath)
 			isBinaryFile := utils.IsFileBinary(childPath)
@@ -102,10 +114,57 @@ func (treeBuilder *TreeBuilder) buildTreeNodes(currentDirectoryPath string, root
 			node.MimeType = childMimeType
 			if infoError == nil {
 				node.Size = utils.FormatFileSize(entryInfo.Size())
+				node.SizeBytes = entryInfo.Size()
+			}
+			if treeBuilder.TokenCounter != nil && node.Type != types.NodeTypeBinary {
+				tokenResult, tokenErr := tokenizer.CountFile(treeBuilder.TokenCounter, childPath)
+				if tokenErr != nil {
+					fmt.Fprintf(os.Stderr, warningTokenCountFormat, childPath, tokenErr)
+				} else if tokenResult.Counted {
+					node.Tokens = tokenResult.Tokens
+				}
+			}
+			if treeBuilder.IncludeSummary {
+				applySummary(node, 1, node.SizeBytes, node.Tokens)
 			}
 		}
 		nodes = append(nodes, node)
 	}
 
 	return nodes, nil
+}
+
+// collectSummary returns the aggregate file count, size, and tokens for the provided children.
+func (treeBuilder *TreeBuilder) collectSummary(children []*types.TreeOutputNode) (int, int64, int) {
+	var totalFiles int
+	var totalBytes int64
+	var totalTokens int
+	for _, child := range children {
+		if child == nil {
+			continue
+		}
+		files := child.TotalFiles
+		bytes := child.SizeBytes
+		tokens := child.TotalTokens
+		if child.Type == types.NodeTypeFile || child.Type == types.NodeTypeBinary {
+			if files == 0 {
+				files = 1
+			}
+			if tokens == 0 {
+				tokens = child.Tokens
+			}
+		}
+		totalFiles += files
+		totalBytes += bytes
+		totalTokens += tokens
+	}
+	return totalFiles, totalBytes, totalTokens
+}
+
+// applySummary stores aggregate counts, bytes, and tokens on the node.
+func applySummary(node *types.TreeOutputNode, totalFiles int, totalBytes int64, totalTokens int) {
+	node.TotalFiles = totalFiles
+	node.SizeBytes = totalBytes
+	node.TotalSize = utils.FormatFileSize(totalBytes)
+	node.TotalTokens = totalTokens
 }
