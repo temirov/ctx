@@ -384,6 +384,18 @@ func TestCTX(testingHandle *testing.T) {
 					if files[i].MimeType != expectedTextMimeType {
 						t.Fatalf("expected MIME type %s for %s", expectedTextMimeType, files[i].Path)
 					}
+					info, err := os.Stat(files[i].Path)
+					if err != nil {
+						t.Fatalf("stat failed for %s: %v", files[i].Path, err)
+					}
+					expectedSize := utils.FormatFileSize(info.Size())
+					if files[i].Size != expectedSize {
+						t.Fatalf("expected size %s for %s, got %s", expectedSize, files[i].Path, files[i].Size)
+					}
+					expectedTimestamp := utils.FormatTimestamp(info.ModTime())
+					if files[i].LastModified != expectedTimestamp {
+						t.Fatalf("expected last modified %s for %s, got %s", expectedTimestamp, files[i].Path, files[i].LastModified)
+					}
 				}
 			},
 		},
@@ -414,6 +426,18 @@ func TestCTX(testingHandle *testing.T) {
 				if wrapper.Nodes[0].MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
+				info, err := os.Stat(wrapper.Nodes[0].Path)
+				if err != nil {
+					t.Fatalf("stat failed for %s: %v", wrapper.Nodes[0].Path, err)
+				}
+				expectedSize := utils.FormatFileSize(info.Size())
+				if wrapper.Nodes[0].Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, wrapper.Nodes[0].Size)
+				}
+				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
+				if wrapper.Nodes[0].LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, wrapper.Nodes[0].LastModified)
+				}
 			},
 		},
 		{
@@ -442,6 +466,18 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if wrapper.Files[0].MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s", expectedTextMimeType)
+				}
+				info, err := os.Stat(wrapper.Files[0].Path)
+				if err != nil {
+					t.Fatalf("stat failed for %s: %v", wrapper.Files[0].Path, err)
+				}
+				expectedSize := utils.FormatFileSize(info.Size())
+				if wrapper.Files[0].Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, wrapper.Files[0].Size)
+				}
+				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
+				if wrapper.Files[0].LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, wrapper.Files[0].LastModified)
 				}
 			},
 		},
@@ -671,6 +707,18 @@ func TestCTX(testingHandle *testing.T) {
 				if files[0].MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
+				expectedSize := utils.FormatFileSize(int64(len("OK")))
+				if files[0].Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, files[0].Size)
+				}
+				info, err := os.Stat(files[0].Path)
+				if err != nil {
+					t.Fatalf("stat failed for %s: %v", files[0].Path, err)
+				}
+				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
+				if files[0].LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, files[0].LastModified)
+				}
 			},
 		},
 		{
@@ -706,6 +754,22 @@ func TestCTX(testingHandle *testing.T) {
 				if fileOutput.MimeType != expectedBinaryMimeType {
 					t.Fatalf("expected MIME type %q, got %q", expectedBinaryMimeType, fileOutput.MimeType)
 				}
+				binaryBytes, decodeError := base64.StdEncoding.DecodeString(onePixelPNGBase64Content)
+				if decodeError != nil {
+					t.Fatalf("failed to decode binary fixture during validation: %v", decodeError)
+				}
+				expectedSize := utils.FormatFileSize(int64(len(binaryBytes)))
+				if fileOutput.Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, fileOutput.Size)
+				}
+				info, err := os.Stat(fileOutput.Path)
+				if err != nil {
+					t.Fatalf("stat failed for %s: %v", fileOutput.Path, err)
+				}
+				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
+				if fileOutput.LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, fileOutput.LastModified)
+				}
 			},
 		},
 		{
@@ -740,6 +804,22 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if child.MimeType != expectedBinaryMimeType {
 					t.Fatalf("expected MIME type %q, got %q", expectedBinaryMimeType, child.MimeType)
+				}
+				binaryBytes, decodeError := base64.StdEncoding.DecodeString(onePixelPNGBase64Content)
+				if decodeError != nil {
+					t.Fatalf("failed to decode binary fixture during validation: %v", decodeError)
+				}
+				expectedSize := utils.FormatFileSize(int64(len(binaryBytes)))
+				if child.Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, child.Size)
+				}
+				info, err := os.Stat(child.Path)
+				if err != nil {
+					t.Fatalf("stat failed for %s: %v", child.Path, err)
+				}
+				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
+				if child.LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, child.LastModified)
 				}
 			},
 		},
@@ -876,6 +956,18 @@ func TestCTX(testingHandle *testing.T) {
 				if children[0].MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
+				expectedSize := utils.FormatFileSize(int64(len(visibleFileContent)))
+				if children[0].Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, children[0].Size)
+				}
+				info, err := os.Stat(children[0].Path)
+				if err != nil {
+					t.Fatalf("stat failed for %s: %v", children[0].Path, err)
+				}
+				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
+				if children[0].LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, children[0].LastModified)
+				}
 			},
 		},
 		{
@@ -912,6 +1004,18 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if visibleNode.MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s", expectedTextMimeType)
+				}
+				expectedSize := utils.FormatFileSize(int64(len(visibleFileContent)))
+				if visibleNode.Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, visibleNode.Size)
+				}
+				info, err := os.Stat(visibleNode.Path)
+				if err != nil {
+					t.Fatalf("stat failed for %s: %v", visibleNode.Path, err)
+				}
+				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
+				if visibleNode.LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, visibleNode.LastModified)
 				}
 			},
 		},
@@ -977,11 +1081,26 @@ func TestCTX(testingHandle *testing.T) {
 					t.Fatalf("expected root child %s, got %#v", subDirectoryName, rootChildren)
 				}
 				subNode := rootChildren[0]
+				if subNode.Size != "" {
+					t.Fatalf("expected directory %s to omit size, got %q", subDirectoryName, subNode.Size)
+				}
 				if len(subNode.Children) != 1 || subNode.Children[0].Name != visibleFileName {
 					t.Fatalf("expected only %s in %s, got %#v", visibleFileName, subDirectoryName, subNode.Children)
 				}
 				if subNode.Children[0].MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s", expectedTextMimeType)
+				}
+				expectedSize := utils.FormatFileSize(int64(len(visibleFileContent)))
+				if subNode.Children[0].Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, subNode.Children[0].Size)
+				}
+				info, err := os.Stat(subNode.Children[0].Path)
+				if err != nil {
+					t.Fatalf("stat failed for %s: %v", subNode.Children[0].Path, err)
+				}
+				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
+				if subNode.Children[0].LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, subNode.Children[0].LastModified)
 				}
 			},
 		},
@@ -1021,6 +1140,18 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if fileOutput.MimeType != expectedTextMimeType {
 					testingHandle.Fatalf("expected MIME type %s", expectedTextMimeType)
+				}
+				expectedSize := utils.FormatFileSize(int64(len(visibleFileContent)))
+				if fileOutput.Size != expectedSize {
+					testingHandle.Fatalf("expected size %s, got %s", expectedSize, fileOutput.Size)
+				}
+				info, err := os.Stat(fileOutput.Path)
+				if err != nil {
+					testingHandle.Fatalf("stat failed for %s: %v", fileOutput.Path, err)
+				}
+				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
+				if fileOutput.LastModified != expectedTimestamp {
+					testingHandle.Fatalf("expected last modified %s, got %s", expectedTimestamp, fileOutput.LastModified)
 				}
 			},
 		},
