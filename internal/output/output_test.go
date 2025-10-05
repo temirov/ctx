@@ -4,13 +4,23 @@ import (
 	"bytes"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/temirov/ctx/internal/output"
 	"github.com/temirov/ctx/internal/types"
+	"github.com/temirov/ctx/internal/utils"
 )
 
 // textMimeTypeExpected defines the MIME type expected for text files.
 const textMimeTypeExpected = "text/plain; charset=utf-8"
+
+var sampleLastModified = time.Date(2024, time.January, 2, 3, 4, 5, 0, time.UTC)
+
+const sampleFileSize int64 = 123
+
+const sampleFileSizeHuman = "123b"
+
+var sampleLastModifiedFormatted = utils.FormatTimestamp(sampleLastModified)
 
 // callChainRawExpected defines the expected raw rendering of a call chain.
 const callChainRawExpected = "----- CALLCHAIN METADATA -----\n" +
@@ -53,7 +63,7 @@ func TestRenderCallChainRaw(testingInstance *testing.T) {
 }
 
 // jsonExpected defines the expected JSON rendering.
-const jsonExpected = "{\n" +
+var jsonExpected = "{\n" +
 	"  \"documentation\": [\n" +
 	"    {\n" +
 	"      \"type\": \"kind\",\n" +
@@ -66,6 +76,8 @@ const jsonExpected = "{\n" +
 	"      \"path\": \"file.txt\",\n" +
 	"      \"type\": \"file\",\n" +
 	"      \"content\": \"data\",\n" +
+	"      \"size\": \"" + sampleFileSizeHuman + "\",\n" +
+	"      \"lastModified\": \"" + sampleLastModifiedFormatted + "\",\n" +
 	"      \"mimeType\": \"" + textMimeTypeExpected + "\"\n" +
 	"    }\n" +
 	"  ]\n" +
@@ -77,7 +89,10 @@ const renderJSONErrorMessage = "render json error"
 // TestRenderJSON verifies RenderJSON output and deduplication.
 func TestRenderJSON(testingInstance *testing.T) {
 	docs := []types.DocumentationEntry{{Kind: "kind", Name: "name", Doc: "doc"}, {Kind: "kind", Name: "name", Doc: "doc"}}
-	items := []interface{}{&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}, &types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}}
+	items := []interface{}{
+		&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", Size: sampleFileSizeHuman, LastModified: sampleLastModifiedFormatted, MimeType: textMimeTypeExpected},
+		&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", Size: sampleFileSizeHuman, LastModified: sampleLastModifiedFormatted, MimeType: textMimeTypeExpected},
+	}
 	actual, renderJSONError := output.RenderJSON(docs, items)
 	if renderJSONError != nil {
 		testingInstance.Fatalf("%s: %v", renderJSONErrorMessage, renderJSONError)
@@ -88,7 +103,7 @@ func TestRenderJSON(testingInstance *testing.T) {
 }
 
 // xmlExpected defines the expected XML rendering.
-const xmlExpected = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+var xmlExpected = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
 	"<result>\n" +
 	"  <documentation>\n" +
 	"    <entry>\n" +
@@ -102,6 +117,8 @@ const xmlExpected = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
 	"      <path>file.txt</path>\n" +
 	"      <type>file</type>\n" +
 	"      <content>data</content>\n" +
+	"      <size>" + sampleFileSizeHuman + "</size>\n" +
+	"      <lastModified>" + sampleLastModifiedFormatted + "</lastModified>\n" +
 	"      <mimeType>" + textMimeTypeExpected + "</mimeType>\n" +
 	"      <documentation></documentation>\n" +
 	"    </item>\n" +
@@ -114,7 +131,10 @@ const renderXMLErrorMessage = "render xml error"
 // TestRenderXML verifies RenderXML output and deduplication.
 func TestRenderXML(testingInstance *testing.T) {
 	docs := []types.DocumentationEntry{{Kind: "kind", Name: "name", Doc: "doc"}, {Kind: "kind", Name: "name", Doc: "doc"}}
-	items := []interface{}{&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}, &types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}}
+	items := []interface{}{
+		&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", Size: sampleFileSizeHuman, LastModified: sampleLastModifiedFormatted, MimeType: textMimeTypeExpected},
+		&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", Size: sampleFileSizeHuman, LastModified: sampleLastModifiedFormatted, MimeType: textMimeTypeExpected},
+	}
 	actual, renderXMLError := output.RenderXML(docs, items)
 	if renderXMLError != nil {
 		testingInstance.Fatalf("%s: %v", renderXMLErrorMessage, renderXMLError)
@@ -145,7 +165,9 @@ const bufferReadErrorMessage = "buffer read error"
 // TestRenderRaw verifies RenderRaw printing.
 func TestRenderRaw(testingInstance *testing.T) {
 	docs := []types.DocumentationEntry{{Kind: "kind", Name: "name", Doc: "doc"}}
-	items := []interface{}{&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", MimeType: textMimeTypeExpected}}
+	items := []interface{}{
+		&types.FileOutput{Path: "file.txt", Type: types.NodeTypeFile, Content: "data", Size: sampleFileSizeHuman, LastModified: sampleLastModifiedFormatted, MimeType: textMimeTypeExpected},
+	}
 	reader, writer, pipeCreationError := os.Pipe()
 	if pipeCreationError != nil {
 		testingInstance.Fatalf("%s: %v", pipeCreationErrorMessage, pipeCreationError)
