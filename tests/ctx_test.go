@@ -575,6 +575,56 @@ func TestCTX(testingHandle *testing.T) {
 			},
 		},
 		{
+			name: "ContentTokensJSON",
+			arguments: []string{
+				appTypes.CommandContent,
+				"--tokens",
+				"--model",
+				"gpt-4o",
+				"--summary",
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"main.go": "package main\n// hello",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				roots := decodeJSONRoots(t, output)
+				if len(roots) != 1 {
+					t.Fatalf("expected one root, got %d", len(roots))
+				}
+				root := roots[0]
+				fileNode := findNodeByName(roots, "main.go")
+				if fileNode == nil {
+					t.Fatalf("content file node not found")
+				}
+				if fileNode.Tokens <= 0 {
+					t.Fatalf("expected positive token count, got %d", fileNode.Tokens)
+				}
+				if root.TotalTokens != fileNode.Tokens {
+					t.Fatalf("expected root tokens %d, got %d", fileNode.Tokens, root.TotalTokens)
+				}
+				var jsonRoot map[string]interface{}
+				if err := json.Unmarshal([]byte(output), &jsonRoot); err != nil {
+					t.Fatalf("failed to decode JSON output: %v", err)
+				}
+				childrenValue, ok := jsonRoot["children"].([]interface{})
+				if !ok || len(childrenValue) == 0 {
+					t.Fatalf("missing children in JSON output: %v", jsonRoot)
+				}
+				fileEntry, ok := childrenValue[0].(map[string]interface{})
+				if !ok {
+					t.Fatalf("unexpected child payload type: %T", childrenValue[0])
+				}
+				if _, hasTotalFiles := fileEntry["totalFiles"]; hasTotalFiles {
+					t.Fatalf("file entry unexpectedly contains totalFiles: %v", fileEntry)
+				}
+				if _, hasTotalSize := fileEntry["totalSize"]; hasTotalSize {
+					t.Fatalf("file entry unexpectedly contains totalSize: %v", fileEntry)
+				}
+			},
+		},
+		{
 			name: "ContentXML",
 			arguments: []string{
 				appTypes.CommandContent,

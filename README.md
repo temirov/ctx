@@ -122,6 +122,11 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--git`               | tree, content      | Include the `.git` directory during traversal. |
 | `--format <raw|json|xml>` | all commands       | Select output format (default `json`). |
 | `--summary`           | tree, content      | Print total file count and combined size for results. |
+| `--tokens`            | tree, content      | Estimate token counts for files and surface totals in summaries. |
+| `--model <name>`      | tree, content      | Select tokenizer model (default `gpt-4o`). |
+| `--python <path>`     | tree, content      | Python executable used for non-OpenAI tokenizers. |
+| `--spm-model <path>`  | tree, content      | SentencePiece `tokenizer.model` required for `llama-*` models. |
+| `--py-helpers-dir <dir>` | tree, content   | Directory containing `anthropic_count.py` and `llama_count.py`. |
 | `--doc`               | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
 | `--depth <number>`    | callchain          | Limit call graph traversal depth (default `1`). |
 | `--version`           | all commands       | Print ctx version and exit. |
@@ -157,6 +162,18 @@ ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 
 When `--summary` is enabled for tree or content, raw output prepends a `Summary: …` line and shows per-directory totals inside the tree view, while JSON and XML attach `totalFiles` and `totalSize` fields directly to tree entries. The totals are recursive: directory nodes carry the combined size and file count of everything beneath them, respecting ignore rules and explicit excludes.
 
 All JSON and XML outputs include a `mimeType` field for every file. Raw output never displays MIME type information.
+
+### Token Counting
+
+Enable `--tokens` to populate a `tokens` field on files and a `totalTokens` aggregate on directories when summaries are included. By default ctx uses OpenAI's `gpt-4o` tokenizer via `tiktoken-go`. Switch models with `--model`, or supply Anthropic and Llama helpers by pairing `--model claude-*` or `--model llama-*` with the appropriate Python tooling (`--python`, `--py-helpers-dir`, and `--spm-model`).
+
+Example:
+
+```bash
+ctx tree . --tokens --summary
+```
+
+The summary line now reports total tokens alongside file counts and sizes, and each file entry includes its estimated token usage in JSON and XML output.
 
 ## Configuration
 
