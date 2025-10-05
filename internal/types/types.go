@@ -33,17 +33,21 @@ type FileOutput struct {
 	Path          string               `json:"path" xml:"path"`
 	Type          string               `json:"type" xml:"type"`
 	Content       string               `json:"content" xml:"content"`
+	Size          string               `json:"size,omitempty" xml:"size,omitempty"`
+	LastModified  string               `json:"lastModified,omitempty" xml:"lastModified,omitempty"`
 	MimeType      string               `json:"mimeType,omitempty" xml:"mimeType,omitempty"`
 	Documentation []DocumentationEntry `json:"documentation,omitempty" xml:"documentation>entry,omitempty"`
 }
 
 // TreeOutputNode represents a node of a directory tree returned by the tree command.
 type TreeOutputNode struct {
-	Path     string            `json:"path" xml:"path"`
-	Name     string            `json:"name" xml:"name"`
-	Type     string            `json:"type" xml:"type"`
-	MimeType string            `json:"mimeType,omitempty" xml:"mimeType,omitempty"`
-	Children []*TreeOutputNode `json:"children,omitempty" xml:"children>node,omitempty"`
+	Path         string            `json:"path" xml:"path"`
+	Name         string            `json:"name" xml:"name"`
+	Type         string            `json:"type" xml:"type"`
+	Size         string            `json:"size,omitempty" xml:"size,omitempty"`
+	LastModified string            `json:"lastModified,omitempty" xml:"lastModified,omitempty"`
+	MimeType     string            `json:"mimeType,omitempty" xml:"mimeType,omitempty"`
+	Children     []*TreeOutputNode `json:"children,omitempty" xml:"children>node,omitempty"`
 }
 
 // CallChainOutput is the result of the callchain command.

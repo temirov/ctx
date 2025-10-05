@@ -384,18 +384,30 @@ func runTreeOrContentCommand(
 			}
 		} else {
 			if commandName == types.CommandTree {
+				fileInfo, statError := os.Stat(info.AbsolutePath)
+				if statError != nil {
+					fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, statError)
+					continue
+				}
 				mimeType := utils.DetectMimeType(info.AbsolutePath)
 				nodeType := types.NodeTypeFile
 				if utils.IsFileBinary(info.AbsolutePath) {
 					nodeType = types.NodeTypeBinary
 				}
 				collected = append(collected, &types.TreeOutputNode{
-					Path:     info.AbsolutePath,
-					Name:     filepath.Base(info.AbsolutePath),
-					Type:     nodeType,
-					MimeType: mimeType,
+					Path:         info.AbsolutePath,
+					Name:         filepath.Base(info.AbsolutePath),
+					Type:         nodeType,
+					Size:         utils.FormatFileSize(fileInfo.Size()),
+					LastModified: utils.FormatTimestamp(fileInfo.ModTime()),
+					MimeType:     mimeType,
 				})
 			} else {
+				fileInfo, statError := os.Stat(info.AbsolutePath)
+				if statError != nil {
+					fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, statError)
+					continue
+				}
 				fileBytes, fileReadError := os.ReadFile(info.AbsolutePath)
 				if fileReadError != nil {
 					fmt.Fprintf(os.Stderr, commands.WarningFileReadFormat, info.AbsolutePath, fileReadError)
@@ -409,10 +421,12 @@ func runTreeOrContentCommand(
 					content = ""
 				}
 				collected = append(collected, &types.FileOutput{
-					Path:     info.AbsolutePath,
-					Type:     fileType,
-					Content:  content,
-					MimeType: mimeType,
+					Path:         info.AbsolutePath,
+					Type:         fileType,
+					Content:      content,
+					Size:         utils.FormatFileSize(fileInfo.Size()),
+					LastModified: utils.FormatTimestamp(fileInfo.ModTime()),
+					MimeType:     mimeType,
 				})
 			}
 		}
