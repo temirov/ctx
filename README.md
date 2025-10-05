@@ -121,7 +121,7 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--no-ignore`         | tree, content      | Disable loading of `.ignore` files. |
 | `--git`               | tree, content      | Include the `.git` directory during traversal. |
 | `--format <raw|json|xml>` | all commands       | Select output format (default `json`). |
-| `--summary`           | tree, content      | Print total file count and combined size for results. |
+| `--summary`           | tree, content      | Print total file count and combined size for results (enabled by default, set to `false` to disable). |
 | `--tokens`            | tree, content      | Estimate token counts for files and surface totals in summaries. |
 | `--model <name>`      | tree, content      | Select tokenizer model (default `gpt-4o`). |
 | `--python <path>`     | tree, content      | Python executable used for non-OpenAI tokenizers. |
@@ -159,7 +159,7 @@ ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 
 | json   | `[]TreeOutputNode`             | `[]FileOutput`                             | `CallChainOutput` |
 | xml    | `result/code/item` nodes       | `result/code/item` nodes                   | `callchains/callchain` |
 
-When `--summary` is enabled for tree or content, raw output prepends a `Summary: …` line and shows per-directory totals inside the tree view, while JSON and XML attach `totalFiles` and `totalSize` fields directly to tree entries. The totals are recursive: directory nodes carry the combined size and file count of everything beneath them, respecting ignore rules and explicit excludes.
+When `--summary` (enabled by default) is active for tree or content, raw output prepends a `Summary: …` line and shows per-directory totals inside the tree view, while JSON and XML attach `totalFiles`, `totalSize`, and `totalTokens` fields directly to directory entries. The totals are recursive: directory nodes carry the combined size, token count, and file count of everything beneath them, respecting ignore rules and explicit excludes. Pass `--summary false` to suppress these aggregates.
 
 All JSON and XML outputs include a `mimeType` field for every file. Raw output never displays MIME type information.
 

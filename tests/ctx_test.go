@@ -711,6 +711,80 @@ func TestCTX(testingHandle *testing.T) {
 			},
 		},
 		{
+			name: "TreeRawSummaryDefault",
+			arguments: []string{
+				appTypes.CommandTree,
+				"--format",
+				appTypes.FormatRaw,
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"summary.txt": "hello",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				if !strings.Contains(output, "Summary: 1 file") {
+					t.Fatalf("expected default summary in output\n%s", output)
+				}
+			},
+		},
+		{
+			name: "TreeRawSummaryDisabled",
+			arguments: []string{
+				appTypes.CommandTree,
+				"--format",
+				appTypes.FormatRaw,
+				"--summary=false",
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"summary.txt": "hello",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				if strings.Contains(output, "Summary:") {
+					t.Fatalf("unexpected summary when disabled\n%s", output)
+				}
+			},
+		},
+		{
+			name: "ContentRawSummaryDefault",
+			arguments: []string{
+				appTypes.CommandContent,
+				"--format",
+				appTypes.FormatRaw,
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"summary.txt": "hello",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				if !strings.Contains(output, "Summary:") {
+					t.Fatalf("expected default summary in content output\n%s", output)
+				}
+			},
+		},
+		{
+			name: "ContentRawSummaryDisabled",
+			arguments: []string{
+				appTypes.CommandContent,
+				"--format",
+				appTypes.FormatRaw,
+				"--summary=false",
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"summary.txt": "hello",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				if strings.Contains(output, "Summary:") {
+					t.Fatalf("unexpected summary when disabled for content\n%s", output)
+				}
+			},
+		},
+		{
 			name: "CallChainRaw",
 			arguments: []string{
 				appTypes.CommandCallChain,

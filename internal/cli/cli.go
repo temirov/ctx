@@ -196,7 +196,7 @@ func addPathFlags(command *cobra.Command, options *pathOptions) {
 func createTreeCommand() *cobra.Command {
 	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
-	var summaryEnabled bool
+	var summaryEnabled bool = true
 	var tokenConfiguration tokenOptions
 	tokenConfiguration.model = defaultTokenizerModelName
 	tokenConfiguration.pythonExecutable = defaultPythonExecutable
@@ -234,7 +234,7 @@ func createTreeCommand() *cobra.Command {
 
 	addPathFlags(treeCommand, &pathConfiguration)
 	treeCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
-	treeCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, false, summaryFlagDescription)
+	treeCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, true, summaryFlagDescription)
 	treeCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
 	treeCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
 	treeCommand.Flags().StringVar(&tokenConfiguration.pythonExecutable, pythonFlagName, defaultPythonExecutable, pythonFlagDescription)
@@ -248,7 +248,7 @@ func createContentCommand() *cobra.Command {
 	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
 	var documentationEnabled bool
-	var summaryEnabled bool
+	var summaryEnabled bool = true
 	var tokenConfiguration tokenOptions
 	tokenConfiguration.model = defaultTokenizerModelName
 	tokenConfiguration.pythonExecutable = defaultPythonExecutable
@@ -287,7 +287,7 @@ func createContentCommand() *cobra.Command {
 	addPathFlags(contentCommand, &pathConfiguration)
 	contentCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
 	contentCommand.Flags().BoolVar(&documentationEnabled, documentationFlagName, false, documentationFlagDescription)
-	contentCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, false, summaryFlagDescription)
+	contentCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, true, summaryFlagDescription)
 	contentCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
 	contentCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
 	contentCommand.Flags().StringVar(&tokenConfiguration.pythonExecutable, pythonFlagName, defaultPythonExecutable, pythonFlagDescription)

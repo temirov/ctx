@@ -14,57 +14,6 @@ Leave Bugfix section empty but dont delete the section itself.
 
 ### Top level summary
 
-the summary flag should be true by default but can be turned off with `--summmary false`
-
-### Exclude files after shell expansion
-
-12:25:54 tyemirov@Vadyms-MacBook-Pro:~/Development/Research/tokens - [] $ ctx t
-[
-  {
-    "path": "/Users/tyemirov/Development/Research/tokens",
-    "name": "tokens",
-    "type": "directory",
-    "children": [
-      {
-        "path": "/Users/tyemirov/Development/Research/tokens/README.md",
-        "name": "README.md",
-        "type": "file",
-        "mimeType": "text/plain; charset=utf-8"
-      },
-      {
-        "path": "/Users/tyemirov/Development/Research/tokens/anthropic_count.py",
-        "name": "anthropic_count.py",
-        "type": "file",
-        "mimeType": "text/plain; charset=utf-8"
-      },
-      {
-        "path": "/Users/tyemirov/Development/Research/tokens/go.mod",
-        "name": "go.mod",
-        "type": "file",
-        "mimeType": "text/plain; charset=utf-8"
-      },
-      {
-        "path": "/Users/tyemirov/Development/Research/tokens/go.sum",
-        "name": "go.sum",
-        "type": "file",
-        "mimeType": "text/plain; charset=utf-8"
-      },
-      {
-        "path": "/Users/tyemirov/Development/Research/tokens/llama_count.py",
-        "name": "llama_count.py",
-        "type": "file",
-        "mimeType": "text/plain; charset=utf-8"
-      },
-      {
-        "path": "/Users/tyemirov/Development/Research/tokens/main.go",
-        "name": "main.go",
-        "type": "file",
-        "mimeType": "text/plain; charset=utf-8"
-      }
-    ]
-  }
-]
-
-ctx c -e go.*  returns a single file, go.sum
-
-I expect both go.sum and go.mod to be exluded
+The program shall include model for which tokens were calculated: 
+"tokens": 325,
+"model": chatgpt5 <whatever model was used>
