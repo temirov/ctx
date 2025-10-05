@@ -34,7 +34,7 @@ const (
 )
 
 // NewCounter returns a Counter implementation for the requested model.
-func NewCounter(cfg Config) (Counter, error) {
+func NewCounter(cfg Config) (Counter, string, error) {
 	model := strings.TrimSpace(cfg.Model)
 	if model == "" {
 		model = defaultModel
@@ -44,13 +44,13 @@ func NewCounter(cfg Config) (Counter, error) {
 	if isOpenAIModel(lowerModel) {
 		encoding, err := tiktoken.EncodingForModel(lowerModel)
 		if err == nil && encoding != nil {
-			return openAICounter{encoding: encoding, name: lowerModel}, nil
+			return openAICounter{encoding: encoding, name: lowerModel}, model, nil
 		}
 		fallback, fallbackErr := tiktoken.GetEncoding(defaultEncodingName)
 		if fallbackErr != nil {
-			return nil, fmt.Errorf("initialize fallback tokenizer: %w", fallbackErr)
+			return nil, "", fmt.Errorf("initialize fallback tokenizer: %w", fallbackErr)
 		}
-		return openAICounter{encoding: fallback, name: defaultEncodingName}, nil
+		return openAICounter{encoding: fallback, name: defaultEncodingName}, defaultEncodingName, nil
 	}
 
 	timeout := cfg.Timeout
@@ -68,7 +68,7 @@ func NewCounter(cfg Config) (Counter, error) {
 	case strings.HasPrefix(lowerModel, "claude-"):
 		directory, err := materializeHelperScripts(helpersDir)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		scriptPath := filepath.Join(directory, anthropicScriptName)
 		return pythonCounter{
@@ -77,15 +77,15 @@ func NewCounter(cfg Config) (Counter, error) {
 			args:       []string{"--model", lowerModel},
 			helperName: "anthropic_tokenizer",
 			timeout:    timeout,
-		}, nil
+		}, model, nil
 	case strings.HasPrefix(lowerModel, "llama-"):
 		spModelPath := resolvePath(cfg.WorkingDirectory, strings.TrimSpace(cfg.SentencePieceModelPath))
 		if spModelPath == "" {
-			return nil, errors.New("llama model requires --spm-model path to SentencePiece tokenizer.model")
+			return nil, "", errors.New("llama model requires --spm-model path to SentencePiece tokenizer.model")
 		}
 		directory, err := materializeHelperScripts(helpersDir)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		scriptPath := filepath.Join(directory, llamaScriptName)
 		return pythonCounter{
@@ -94,13 +94,13 @@ func NewCounter(cfg Config) (Counter, error) {
 			args:       []string{"--spm-model", spModelPath},
 			helperName: "sentencepiece",
 			timeout:    timeout,
-		}, nil
+		}, model, nil
 	default:
 		encoding, err := tiktoken.GetEncoding(defaultEncodingName)
 		if err != nil {
-			return nil, fmt.Errorf("initialize default tokenizer: %w", err)
+			return nil, "", fmt.Errorf("initialize default tokenizer: %w", err)
 		}
-		return openAICounter{encoding: encoding, name: defaultEncodingName}, nil
+		return openAICounter{encoding: encoding, name: defaultEncodingName}, defaultEncodingName, nil
 	}
 }
 

@@ -56,7 +56,7 @@ func (treeBuilder *TreeBuilder) GetTreeData(rootDirectoryPath string) ([]*types.
 	rootNode.Children = children
 	if treeBuilder.IncludeSummary {
 		files, bytes, tokens := treeBuilder.collectSummary(rootNode.Children)
-		applySummary(rootNode, files, bytes, tokens)
+		applySummary(rootNode, files, bytes, tokens, treeBuilder.TokenModel)
 	}
 
 	return []*types.TreeOutputNode{rootNode}, nil
@@ -101,7 +101,7 @@ func (treeBuilder *TreeBuilder) buildTreeNodes(currentDirectoryPath string, root
 			}
 			if treeBuilder.IncludeSummary {
 				files, bytes, tokens := treeBuilder.collectSummary(node.Children)
-				applySummary(node, files, bytes, tokens)
+				applySummary(node, files, bytes, tokens, treeBuilder.TokenModel)
 			}
 		} else {
 			childMimeType := utils.DetectMimeType(childPath)
@@ -122,6 +122,9 @@ func (treeBuilder *TreeBuilder) buildTreeNodes(currentDirectoryPath string, root
 					fmt.Fprintf(os.Stderr, warningTokenCountFormat, childPath, tokenErr)
 				} else if tokenResult.Counted {
 					node.Tokens = tokenResult.Tokens
+					if treeBuilder.TokenModel != "" {
+						node.Model = treeBuilder.TokenModel
+					}
 				}
 			}
 		}
@@ -159,9 +162,14 @@ func (treeBuilder *TreeBuilder) collectSummary(children []*types.TreeOutputNode)
 }
 
 // applySummary stores aggregate counts, bytes, and tokens on the node.
-func applySummary(node *types.TreeOutputNode, totalFiles int, totalBytes int64, totalTokens int) {
+func applySummary(node *types.TreeOutputNode, totalFiles int, totalBytes int64, totalTokens int, tokenModel string) {
 	node.TotalFiles = totalFiles
 	node.SizeBytes = totalBytes
 	node.TotalSize = utils.FormatFileSize(totalBytes)
 	node.TotalTokens = totalTokens
+	if totalTokens > 0 && tokenModel != "" {
+		node.Model = tokenModel
+	} else if totalTokens == 0 {
+		node.Model = ""
+	}
 }

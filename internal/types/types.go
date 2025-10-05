@@ -40,6 +40,7 @@ type FileOutput struct {
 	LastModified  string               `json:"lastModified,omitempty" xml:"lastModified,omitempty"`
 	MimeType      string               `json:"mimeType,omitempty" xml:"mimeType,omitempty"`
 	Tokens        int                  `json:"tokens,omitempty" xml:"tokens,omitempty"`
+	Model         string               `json:"model,omitempty" xml:"model,omitempty"`
 	Documentation []DocumentationEntry `json:"documentation,omitempty" xml:"documentation>entry,omitempty"`
 }
 
@@ -54,6 +55,7 @@ type TreeOutputNode struct {
 	LastModified  string               `json:"lastModified,omitempty" xml:"lastModified,omitempty"`
 	MimeType      string               `json:"mimeType,omitempty" xml:"mimeType,omitempty"`
 	Tokens        int                  `json:"tokens,omitempty" xml:"tokens,omitempty"`
+	Model         string               `json:"model,omitempty" xml:"model,omitempty"`
 	Children      []*TreeOutputNode    `json:"children,omitempty" xml:"children>node,omitempty"`
 	TotalFiles    int                  `json:"totalFiles,omitempty" xml:"totalFiles,omitempty"`
 	TotalSize     string               `json:"totalSize,omitempty" xml:"totalSize,omitempty"`
@@ -76,4 +78,5 @@ type OutputSummary struct {
 	TotalFiles  int    `json:"totalFiles" xml:"totalFiles"`
 	TotalSize   string `json:"totalSize" xml:"totalSize"`
 	TotalTokens int    `json:"totalTokens,omitempty" xml:"totalTokens,omitempty"`
+	Model       string `json:"model,omitempty" xml:"model,omitempty"`
 }

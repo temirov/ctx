@@ -8,12 +8,59 @@ Fix bugs one by one. Write a nice comprehensive commit message AFTER EACH bug is
 
 Remove a bug from the notes.md after the bug is fixed. commit and push to the remote.
 
-Leave Bugfix section empty but dont delete the section itself.
+Leave BugFixes section empty but don't delete the section itself.
 
 ## BugFixes
 
-### Top level summary
+### Exclude files after shell expansion
 
-The program shall include model for which tokens were calculated: 
-"tokens": 325,
-"model": chatgpt5 <whatever model was used>
+12:25:54 tyemirov@Vadyms-MacBook-Pro:~/Development/Research/tokens - [] $ ctx t
+[
+  {
+    "path": "/Users/tyemirov/Development/Research/tokens",
+    "name": "tokens",
+    "type": "directory",
+    "children": [
+      {
+        "path": "/Users/tyemirov/Development/Research/tokens/README.md",
+        "name": "README.md",
+        "type": "file",
+        "mimeType": "text/plain; charset=utf-8"
+      },
+      {
+        "path": "/Users/tyemirov/Development/Research/tokens/anthropic_count.py",
+        "name": "anthropic_count.py",
+        "type": "file",
+        "mimeType": "text/plain; charset=utf-8"
+      },
+      {
+        "path": "/Users/tyemirov/Development/Research/tokens/go.mod",
+        "name": "go.mod",
+        "type": "file",
+        "mimeType": "text/plain; charset=utf-8"
+      },
+      {
+        "path": "/Users/tyemirov/Development/Research/tokens/go.sum",
+        "name": "go.sum",
+        "type": "file",
+        "mimeType": "text/plain; charset=utf-8"
+      },
+      {
+        "path": "/Users/tyemirov/Development/Research/tokens/llama_count.py",
+        "name": "llama_count.py",
+        "type": "file",
+        "mimeType": "text/plain; charset=utf-8"
+      },
+      {
+        "path": "/Users/tyemirov/Development/Research/tokens/main.go",
+        "name": "main.go",
+        "type": "file",
+        "mimeType": "text/plain; charset=utf-8"
+      }
+    ]
+  }
+]
+
+ctx c -e go.*  returns a single file, go.sum
+
+I expect both go.sum and go.mod to be exluded

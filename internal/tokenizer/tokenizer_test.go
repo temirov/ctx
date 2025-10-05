@@ -33,12 +33,15 @@ func TestCountBytesBinary(t *testing.T) {
 }
 
 func TestNewCounterDefault(t *testing.T) {
-	counter, err := NewCounter(Config{Model: "gpt-4o"})
+	counter, model, err := NewCounter(Config{Model: "gpt-4o"})
 	if err != nil {
 		t.Fatalf("NewCounter error: %v", err)
 	}
 	if counter == nil {
 		t.Fatalf("expected non-nil counter")
+	}
+	if model != "gpt-4o" {
+		t.Fatalf("expected model gpt-4o, got %q", model)
 	}
 	tokens, err := counter.CountString("hello world")
 	if err != nil {

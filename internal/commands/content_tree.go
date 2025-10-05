@@ -11,7 +11,7 @@ import (
 )
 
 // BuildContentTree constructs a directory tree representation for content command outputs.
-func BuildContentTree(rootPath string, files []types.FileOutput, includeSummary bool) (*types.TreeOutputNode, error) {
+func BuildContentTree(rootPath string, files []types.FileOutput, includeSummary bool, tokenModel string) (*types.TreeOutputNode, error) {
 	if len(files) == 0 {
 		return buildEmptyRoot(rootPath, includeSummary)
 	}
@@ -34,6 +34,7 @@ func BuildContentTree(rootPath string, files []types.FileOutput, includeSummary 
 					Content:       file.Content,
 					Documentation: file.Documentation,
 					Tokens:        file.Tokens,
+					Model:         file.Model,
 				}
 				return node, nil
 			}
@@ -66,12 +67,13 @@ func BuildContentTree(rootPath string, files []types.FileOutput, includeSummary 
 			Content:       file.Content,
 			Documentation: file.Documentation,
 			Tokens:        file.Tokens,
+			Model:         file.Model,
 		}
 		parentNode.Children = append(parentNode.Children, fileNode)
 	}
 	sortTreeChildren(rootNode)
 	if includeSummary {
-		populateDirectorySummaries(rootNode)
+		populateDirectorySummaries(rootNode, tokenModel)
 	}
 	return rootNode, nil
 }
@@ -97,7 +99,7 @@ func buildEmptyRoot(rootPath string, includeSummary bool) (*types.TreeOutputNode
 		node.Type = types.NodeTypeDirectory
 	}
 	if includeSummary {
-		applySummary(node, 0, 0, 0)
+		applySummary(node, 0, 0, 0, "")
 	}
 	return node, nil
 }
@@ -135,7 +137,7 @@ func sortTreeChildren(node *types.TreeOutputNode) {
 	}
 }
 
-func populateDirectorySummaries(node *types.TreeOutputNode) (int, int64, int) {
+func populateDirectorySummaries(node *types.TreeOutputNode, tokenModel string) (int, int64, int) {
 	if node.Type == types.NodeTypeFile || node.Type == types.NodeTypeBinary {
 		return 1, node.SizeBytes, node.Tokens
 	}
@@ -143,11 +145,11 @@ func populateDirectorySummaries(node *types.TreeOutputNode) (int, int64, int) {
 	var totalBytes int64
 	var totalTokens int
 	for _, child := range node.Children {
-		childFiles, childBytes, childTokens := populateDirectorySummaries(child)
+		childFiles, childBytes, childTokens := populateDirectorySummaries(child, tokenModel)
 		totalFiles += childFiles
 		totalBytes += childBytes
 		totalTokens += childTokens
 	}
-	applySummary(node, totalFiles, totalBytes, totalTokens)
+	applySummary(node, totalFiles, totalBytes, totalTokens, tokenModel)
 	return totalFiles, totalBytes, totalTokens
 }

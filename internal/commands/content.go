@@ -21,7 +21,7 @@ const (
 )
 
 // GetContentData returns FileOutput slices for the specified directory.
-func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatterns []string, tokenCounter tokenizer.Counter) ([]types.FileOutput, error) {
+func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatterns []string, tokenCounter tokenizer.Counter, tokenModel string) ([]types.FileOutput, error) {
 	absoluteRootPath, absolutePathError := filepath.Abs(rootPath)
 	if absolutePathError != nil {
 		return nil, fmt.Errorf("failed to get absolute path for %s: %w", rootPath, absolutePathError)
@@ -87,7 +87,7 @@ func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatte
 			}
 		}
 
-		fileOutputs = append(fileOutputs, types.FileOutput{
+		output := types.FileOutput{
 			Path:         walkedPath,
 			Type:         fileType,
 			Content:      fileContent,
@@ -96,7 +96,11 @@ func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatte
 			LastModified: utils.FormatTimestamp(fileInfo.ModTime()),
 			MimeType:     mimeType,
 			Tokens:       tokenCount,
-		})
+		}
+		if tokenCount > 0 {
+			output.Model = tokenModel
+		}
+		fileOutputs = append(fileOutputs, output)
 		return nil
 	})
 	if directoryWalkError != nil {

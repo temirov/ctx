@@ -165,7 +165,7 @@ All JSON and XML outputs include a `mimeType` field for every file. Raw output n
 
 ### Token Counting
 
-Enable `--tokens` to populate a `tokens` field on files and a `totalTokens` aggregate on directories when summaries are included. By default ctx uses OpenAI's `gpt-4o` tokenizer via `tiktoken-go`. Switch models with `--model`, or supply Anthropic and Llama helpers by pairing `--model claude-*` or `--model llama-*` with the appropriate Python tooling (`--python`, `--py-helpers-dir`, and `--spm-model`).
+Enable `--tokens` to populate a `tokens` field on files (along with a `model` that identifies the tokenizer) and a `totalTokens` aggregate on directories when summaries are included. By default ctx uses OpenAI's `gpt-4o` tokenizer via `tiktoken-go`. Switch models with `--model`, or supply Anthropic and Llama helpers by pairing `--model claude-*` or `--model llama-*` with the appropriate Python tooling (`--python`, `--py-helpers-dir`, and `--spm-model`).
 
 Example:
 
@@ -173,7 +173,7 @@ Example:
 ctx tree . --tokens --summary
 ```
 
-The summary line now reports total tokens alongside file counts and sizes, and each file entry includes its estimated token usage in JSON and XML output.
+The summary line now reports total tokens (and the tokenizer model when applicable) alongside file counts and sizes, and each file entry includes its estimated token usage and model in JSON and XML output.
 
 ## Configuration
 

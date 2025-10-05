@@ -364,19 +364,21 @@ func runTool(
 	}
 
 	var tokenCounter tokenizer.Counter
+	var tokenModel string
 	if tokenConfiguration.enabled {
-		createdCounter, counterError := tokenizer.NewCounter(tokenConfiguration.toConfig(workingDirectory))
+		createdCounter, resolvedModel, counterError := tokenizer.NewCounter(tokenConfiguration.toConfig(workingDirectory))
 		if counterError != nil {
 			return counterError
 		}
 		tokenCounter = createdCounter
+		tokenModel = resolvedModel
 	}
 
 	switch commandName {
 	case types.CommandCallChain:
 		return runCallChain(paths[0], format, callChainDepth, documentationEnabled, collector, workingDirectory)
 	case types.CommandTree, types.CommandContent:
-		return runTreeOrContentCommand(commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, summaryEnabled, tokenCounter, collector)
+		return runTreeOrContentCommand(commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, summaryEnabled, tokenCounter, tokenModel, collector)
 	default:
 		return fmt.Errorf(unsupportedCommandMessage)
 	}
@@ -425,6 +427,7 @@ func runTreeOrContentCommand(
 	withDocumentation bool,
 	withSummary bool,
 	tokenCounter tokenizer.Counter,
+	tokenModel string,
 	collector *docs.Collector,
 ) error {
 	validatedPaths, pathValidationError := resolveAndValidatePaths(paths)
@@ -441,13 +444,13 @@ func runTreeOrContentCommand(
 				continue
 			}
 			if commandName == types.CommandTree {
-				treeBuilder := commands.TreeBuilder{IgnorePatterns: ignorePatternList, IncludeSummary: withSummary, TokenCounter: tokenCounter}
+				treeBuilder := commands.TreeBuilder{IgnorePatterns: ignorePatternList, IncludeSummary: withSummary, TokenCounter: tokenCounter, TokenModel: tokenModel}
 				nodes, dataError := treeBuilder.GetTreeData(info.AbsolutePath)
 				if dataError == nil && len(nodes) > 0 {
 					collected = append(collected, nodes[0])
 				}
 			} else {
-				files, dataError := commands.GetContentData(info.AbsolutePath, ignorePatternList, binaryContentPatternList, tokenCounter)
+				files, dataError := commands.GetContentData(info.AbsolutePath, ignorePatternList, binaryContentPatternList, tokenCounter, tokenModel)
 				if dataError == nil {
 					for index := range files {
 						if withDocumentation && collector != nil {
@@ -456,7 +459,7 @@ func runTreeOrContentCommand(
 						}
 						collected = append(collected, &files[index])
 					}
-					contentRoot, contentTreeError := commands.BuildContentTree(info.AbsolutePath, files, withSummary)
+					contentRoot, contentTreeError := commands.BuildContentTree(info.AbsolutePath, files, withSummary, tokenModel)
 					if contentTreeError != nil {
 						fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, contentTreeError)
 					} else if contentRoot != nil {
@@ -495,6 +498,9 @@ func runTreeOrContentCommand(
 					}
 				}
 				node.Tokens = tokenCount
+				if tokenCount > 0 && tokenModel != "" {
+					node.Model = tokenModel
+				}
 				collected = append(collected, node)
 			} else {
 				fileInfo, statError := os.Stat(info.AbsolutePath)
@@ -532,13 +538,17 @@ func runTreeOrContentCommand(
 					LastModified: utils.FormatTimestamp(fileInfo.ModTime()),
 					MimeType:     mimeType,
 					Tokens:       tokenCount,
+					Model:        tokenModel,
+				}
+				if tokenCount == 0 {
+					fileOutput.Model = ""
 				}
 				if withDocumentation && collector != nil {
 					entries, _ := collector.CollectFromFile(fileOutput.Path)
 					fileOutput.Documentation = entries
 				}
 				collected = append(collected, &fileOutput)
-				contentRoot, contentTreeError := commands.BuildContentTree(info.AbsolutePath, []types.FileOutput{fileOutput}, withSummary)
+				contentRoot, contentTreeError := commands.BuildContentTree(info.AbsolutePath, []types.FileOutput{fileOutput}, withSummary, tokenModel)
 				if contentTreeError != nil {
 					fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, contentTreeError)
 				} else if contentRoot != nil {

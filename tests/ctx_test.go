@@ -537,9 +537,12 @@ func TestCTX(testingHandle *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to read token file: %v", err)
 				}
-				counter, err := tokenizer.NewCounter(tokenizer.Config{Model: "gpt-4o"})
+				counter, resolvedModel, err := tokenizer.NewCounter(tokenizer.Config{Model: "gpt-4o"})
 				if err != nil {
 					t.Fatalf("NewCounter error: %v", err)
+				}
+				if resolvedModel != "gpt-4o" {
+					t.Fatalf("expected resolved model gpt-4o, got %q", resolvedModel)
 				}
 				countResult, err := tokenizer.CountBytes(counter, contentBytes)
 				if err != nil {
@@ -553,6 +556,12 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if root.TotalTokens != countResult.Tokens {
 					t.Fatalf("expected root tokens %d, got %d", countResult.Tokens, root.TotalTokens)
+				}
+				if fileNode.Model != "gpt-4o" {
+					t.Fatalf("expected file model gpt-4o, got %q", fileNode.Model)
+				}
+				if root.Model != "gpt-4o" {
+					t.Fatalf("expected root model gpt-4o, got %q", root.Model)
 				}
 				var jsonRoot map[string]interface{}
 				if err := json.Unmarshal([]byte(output), &jsonRoot); err != nil {
@@ -571,6 +580,12 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if _, hasTotalSize := fileEntry["totalSize"]; hasTotalSize {
 					t.Fatalf("file entry unexpectedly contains totalSize: %v", fileEntry)
+				}
+				if modelValue, ok := fileEntry["model"].(string); !ok || modelValue != "gpt-4o" {
+					t.Fatalf("expected child model gpt-4o, got %v", fileEntry["model"])
+				}
+				if rootModel, ok := jsonRoot["model"].(string); !ok || rootModel != "gpt-4o" {
+					t.Fatalf("expected root model gpt-4o, got %v", jsonRoot["model"])
 				}
 			},
 		},
@@ -604,6 +619,12 @@ func TestCTX(testingHandle *testing.T) {
 				if root.TotalTokens != fileNode.Tokens {
 					t.Fatalf("expected root tokens %d, got %d", fileNode.Tokens, root.TotalTokens)
 				}
+				if fileNode.Model != "gpt-4o" {
+					t.Fatalf("expected file model gpt-4o, got %q", fileNode.Model)
+				}
+				if root.Model != "gpt-4o" {
+					t.Fatalf("expected root model gpt-4o, got %q", root.Model)
+				}
 				var jsonRoot map[string]interface{}
 				if err := json.Unmarshal([]byte(output), &jsonRoot); err != nil {
 					t.Fatalf("failed to decode JSON output: %v", err)
@@ -621,6 +642,12 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if _, hasTotalSize := fileEntry["totalSize"]; hasTotalSize {
 					t.Fatalf("file entry unexpectedly contains totalSize: %v", fileEntry)
+				}
+				if modelValue, ok := fileEntry["model"].(string); !ok || modelValue != "gpt-4o" {
+					t.Fatalf("expected child model gpt-4o, got %v", fileEntry["model"])
+				}
+				if rootModel, ok := jsonRoot["model"].(string); !ok || rootModel != "gpt-4o" {
+					t.Fatalf("expected root model gpt-4o, got %v", jsonRoot["model"])
 				}
 			},
 		},

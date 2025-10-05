@@ -91,7 +91,7 @@ func TestGetContentData(testingInstance *testing.T) {
 		},
 	}
 	for index, testCase := range testCases {
-		actualOutputs, contentRetrievalError := commands.GetContentData(temporaryRoot, testCase.ignorePatterns, testCase.binaryContentPattern, nil)
+		actualOutputs, contentRetrievalError := commands.GetContentData(temporaryRoot, testCase.ignorePatterns, testCase.binaryContentPattern, nil, "")
 		if contentRetrievalError != nil {
 			testingInstance.Fatalf(testCaseFailureMessage, index, testCase.testName, contentRetrievalError)
 		}
@@ -213,7 +213,7 @@ func TestGetContentDataWithTokens(testingInstance *testing.T) {
 	if err := os.WriteFile(textPath, []byte(fileContent), 0o600); err != nil {
 		testingInstance.Fatalf("writing file: %v", err)
 	}
-	outputs, err := commands.GetContentData(temporaryRoot, nil, nil, stubCounter{})
+	outputs, err := commands.GetContentData(temporaryRoot, nil, nil, stubCounter{}, "stub")
 	if err != nil {
 		testingInstance.Fatalf("GetContentData error: %v", err)
 	}
@@ -221,14 +221,19 @@ func TestGetContentDataWithTokens(testingInstance *testing.T) {
 		testingInstance.Fatalf("expected at least one output")
 	}
 	var tokens int
+	var model string
 	for _, output := range outputs {
 		if output.Path == textPath {
 			tokens = output.Tokens
+			model = output.Model
 			break
 		}
 	}
 	if tokens != len([]rune(fileContent)) {
 		testingInstance.Errorf("expected %d tokens, got %d", len([]rune(fileContent)), tokens)
+	}
+	if model != "stub" {
+		testingInstance.Errorf("expected model 'stub', got %q", model)
 	}
 }
 
@@ -240,7 +245,7 @@ func TestTreeBuilderTokenCounts(testingInstance *testing.T) {
 	if err := os.WriteFile(textPath, []byte(fileContent), 0o600); err != nil {
 		testingInstance.Fatalf("writing file: %v", err)
 	}
-	treeBuilder := commands.TreeBuilder{TokenCounter: stubCounter{}, IncludeSummary: true}
+	treeBuilder := commands.TreeBuilder{TokenCounter: stubCounter{}, IncludeSummary: true, TokenModel: "stub"}
 	nodes, err := treeBuilder.GetTreeData(temporaryRoot)
 	if err != nil {
 		testingInstance.Fatalf("GetTreeData error: %v", err)
@@ -266,8 +271,14 @@ func TestTreeBuilderTokenCounts(testingInstance *testing.T) {
 	if fileNode.Tokens != expectedTokens {
 		testingInstance.Errorf("expected file tokens %d, got %d", expectedTokens, fileNode.Tokens)
 	}
+	if fileNode.Model != "stub" {
+		testingInstance.Errorf("expected file model 'stub', got %q", fileNode.Model)
+	}
 	if root.TotalTokens != expectedTokens {
 		testingInstance.Errorf("expected root tokens %d, got %d", expectedTokens, root.TotalTokens)
+	}
+	if root.Model != "stub" {
+		testingInstance.Errorf("expected root model 'stub', got %q", root.Model)
 	}
 }
 

@@ -206,7 +206,11 @@ func RenderRaw(commandName string, collected []interface{}, includeSummary bool)
 		if summary.TotalTokens > 0 {
 			extra = fmt.Sprintf(", %d tokens", summary.TotalTokens)
 		}
-		fmt.Printf("Summary: %d %s, %s%s\n\n", summary.TotalFiles, label, summary.TotalSize, extra)
+		modelSuffix := ""
+		if summary.Model != "" {
+			modelSuffix = fmt.Sprintf(" (model: %s)", summary.Model)
+		}
+		fmt.Printf("Summary: %d %s, %s%s%s\n\n", summary.TotalFiles, label, summary.TotalSize, extra, modelSuffix)
 	}
 
 	for _, item := range dedupedItems {
@@ -288,23 +292,31 @@ func computeSummary(items []interface{}) *types.OutputSummary {
 	var totalFiles int
 	var totalBytes int64
 	var totalTokens int
+	var summaryModel string
 	for _, item := range items {
 		switch outputItem := item.(type) {
 		case *types.FileOutput:
 			totalFiles++
 			totalBytes += outputItem.SizeBytes
 			totalTokens += outputItem.Tokens
+			if outputItem.Model != "" && summaryModel == "" {
+				summaryModel = outputItem.Model
+			}
 		case *types.TreeOutputNode:
 			files, bytes, tokens := summarizeTree(outputItem)
 			totalFiles += files
 			totalBytes += bytes
 			totalTokens += tokens
+			if outputItem.Model != "" && summaryModel == "" {
+				summaryModel = outputItem.Model
+			}
 		}
 	}
 	return &types.OutputSummary{
 		TotalFiles:  totalFiles,
 		TotalSize:   utils.FormatFileSize(totalBytes),
 		TotalTokens: totalTokens,
+		Model:       summaryModel,
 	}
 }
 
