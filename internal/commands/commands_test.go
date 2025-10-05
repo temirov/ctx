@@ -318,12 +318,11 @@ func TestGetTreeDataSummary(testingInstance *testing.T) {
 	if fileNode == nil || directoryNode == nil {
 		testingInstance.Fatalf("expected both file and directory children, got %+v", rootNode.Children)
 	}
-	if fileNode.TotalFiles != 1 {
-		testingInstance.Fatalf("file summary incorrect: %+v", fileNode)
+	if fileNode.TotalFiles != 0 {
+		testingInstance.Fatalf("expected no summary on file node, got %+v", fileNode)
 	}
-	fileExpectedSize := utils.FormatFileSize(int64(len(rootContent)))
-	if fileNode.TotalSize != fileExpectedSize {
-		testingInstance.Fatalf("expected file summary size %s, got %s", fileExpectedSize, fileNode.TotalSize)
+	if fileNode.TotalSize != "" {
+		testingInstance.Fatalf("expected empty total size on file node, got %s", fileNode.TotalSize)
 	}
 	if directoryNode.TotalFiles != 1 {
 		testingInstance.Fatalf("directory summary incorrect: %+v", directoryNode)
@@ -336,11 +335,10 @@ func TestGetTreeDataSummary(testingInstance *testing.T) {
 		testingInstance.Fatalf("expected one child under directory, got %d", len(directoryNode.Children))
 	}
 	nestedFile := directoryNode.Children[0]
-	if nestedFile.TotalFiles != 1 {
-		testingInstance.Fatalf("nested file summary incorrect: %+v", nestedFile)
+	if nestedFile.TotalFiles != 0 {
+		testingInstance.Fatalf("expected no summary on nested file node, got %+v", nestedFile)
 	}
-	nestedExpectedSize := utils.FormatFileSize(int64(len(childContent)))
-	if nestedFile.TotalSize != nestedExpectedSize {
-		testingInstance.Fatalf("expected nested file summary size %s, got %s", nestedExpectedSize, nestedFile.TotalSize)
+	if nestedFile.TotalSize != "" {
+		testingInstance.Fatalf("expected empty total size on nested file node, got %s", nestedFile.TotalSize)
 	}
 }

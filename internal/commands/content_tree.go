@@ -35,9 +35,6 @@ func BuildContentTree(rootPath string, files []types.FileOutput, includeSummary 
 					Documentation: file.Documentation,
 					Tokens:        file.Tokens,
 				}
-				if includeSummary {
-					applySummary(node, 1, file.SizeBytes, file.Tokens)
-				}
 				return node, nil
 			}
 		}
@@ -69,9 +66,6 @@ func BuildContentTree(rootPath string, files []types.FileOutput, includeSummary 
 			Content:       file.Content,
 			Documentation: file.Documentation,
 			Tokens:        file.Tokens,
-		}
-		if includeSummary {
-			applySummary(fileNode, 1, file.SizeBytes, file.Tokens)
 		}
 		parentNode.Children = append(parentNode.Children, fileNode)
 	}
@@ -143,10 +137,7 @@ func sortTreeChildren(node *types.TreeOutputNode) {
 
 func populateDirectorySummaries(node *types.TreeOutputNode) (int, int64, int) {
 	if node.Type == types.NodeTypeFile || node.Type == types.NodeTypeBinary {
-		if node.TotalFiles == 0 {
-			applySummary(node, 1, node.SizeBytes, node.Tokens)
-		}
-		return node.TotalFiles, node.SizeBytes, node.TotalTokens
+		return 1, node.SizeBytes, node.Tokens
 	}
 	var totalFiles int
 	var totalBytes int64

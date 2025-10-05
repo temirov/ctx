@@ -495,11 +495,6 @@ func runTreeOrContentCommand(
 					}
 				}
 				node.Tokens = tokenCount
-				if withSummary {
-					node.TotalFiles = 1
-					node.TotalSize = node.Size
-					node.TotalTokens = tokenCount
-				}
 				collected = append(collected, node)
 			} else {
 				fileInfo, statError := os.Stat(info.AbsolutePath)

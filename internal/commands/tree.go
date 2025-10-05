@@ -124,9 +124,6 @@ func (treeBuilder *TreeBuilder) buildTreeNodes(currentDirectoryPath string, root
 					node.Tokens = tokenResult.Tokens
 				}
 			}
-			if treeBuilder.IncludeSummary {
-				applySummary(node, 1, node.SizeBytes, node.Tokens)
-			}
 		}
 		nodes = append(nodes, node)
 	}

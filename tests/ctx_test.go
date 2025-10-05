@@ -554,6 +554,24 @@ func TestCTX(testingHandle *testing.T) {
 				if root.TotalTokens != countResult.Tokens {
 					t.Fatalf("expected root tokens %d, got %d", countResult.Tokens, root.TotalTokens)
 				}
+				var jsonRoot map[string]interface{}
+				if err := json.Unmarshal([]byte(output), &jsonRoot); err != nil {
+					t.Fatalf("failed to decode JSON output: %v", err)
+				}
+				childrenValue, ok := jsonRoot["children"].([]interface{})
+				if !ok || len(childrenValue) == 0 {
+					t.Fatalf("missing children in JSON output: %v", jsonRoot)
+				}
+				fileEntry, ok := childrenValue[0].(map[string]interface{})
+				if !ok {
+					t.Fatalf("unexpected child payload type: %T", childrenValue[0])
+				}
+				if _, hasTotalFiles := fileEntry["totalFiles"]; hasTotalFiles {
+					t.Fatalf("file entry unexpectedly contains totalFiles: %v", fileEntry)
+				}
+				if _, hasTotalSize := fileEntry["totalSize"]; hasTotalSize {
+					t.Fatalf("file entry unexpectedly contains totalSize: %v", fileEntry)
+				}
 			},
 		},
 		{
