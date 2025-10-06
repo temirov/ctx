@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/temirov/ctx/internal/commands"
+	"github.com/temirov/ctx/internal/output"
 	"github.com/temirov/ctx/internal/tokenizer"
 	appTypes "github.com/temirov/ctx/internal/types"
 	"github.com/temirov/ctx/internal/utils"
@@ -137,6 +139,51 @@ func flattenFileNodes(nodes []appTypes.TreeOutputNode) []appTypes.TreeOutputNode
 		walk(node)
 	}
 	return files
+}
+
+func TestContentJSONStreamingMatchesExpectedOutput(t *testing.T) {
+	binary := buildBinary(t)
+	workingDir := setupTestDirectory(t, map[string]string{
+		"sample.txt": "sample content",
+	})
+
+	command := exec.Command(binary, []string{appTypes.CommandContent, "--format", appTypes.FormatJSON, workingDir}...)
+	command.Dir = workingDir
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+
+	if err := command.Run(); err != nil {
+		t.Fatalf("content command failed: %v\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
+	}
+
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+
+	var collected []appTypes.FileOutput
+	if err := commands.StreamContent(workingDir, nil, nil, nil, "", func(file appTypes.FileOutput) error {
+		collected = append(collected, file)
+		return nil
+	}); err != nil {
+		t.Fatalf("StreamContent failed: %v", err)
+	}
+
+	tree, err := commands.BuildContentTree(workingDir, collected, true, "")
+	if err != nil {
+		t.Fatalf("BuildContentTree failed: %v", err)
+	}
+
+	expected, err := output.RenderJSON([]interface{}{tree})
+	if err != nil {
+		t.Fatalf("RenderJSON failed: %v", err)
+	}
+
+	if stdout.String() != expected {
+		t.Fatalf("unexpected output\nexpected: %s\nactual: %s", expected, stdout.String())
+	}
 }
 
 func decodeJSONFiles(t *testing.T, data string) []appTypes.TreeOutputNode {
