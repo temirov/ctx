@@ -44,12 +44,15 @@ def main() -> None:
     messages_payload = [{"role": "user", "content": user_text}]
     system_prompt = parsed_args.system
 
+    request_args = {
+        "model": parsed_args.model,
+        "messages": messages_payload,
+    }
+    if system_prompt:
+        request_args["system"] = system_prompt
+
     try:
-        token_count = client.messages.count_tokens(
-            model=parsed_args.model,
-            messages=messages_payload,
-            system=system_prompt,
-        )
+        token_count = client.messages.count_tokens(**request_args)
     except Exception as count_error:
         sys.stderr.write(f"Failed to count tokens via Anthropic API: {count_error}\n")
         sys.exit(1)
