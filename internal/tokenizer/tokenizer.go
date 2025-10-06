@@ -81,20 +81,10 @@ func NewCounter(cfg Config) (Counter, string, error) {
 			return nil, "", err
 		}
 		scriptPath := filepath.Join(directory, llamaScriptName)
-		var args []string
-		spmModelPath := strings.TrimSpace(os.Getenv("CTX_SPM_MODEL"))
-		if spmModelPath != "" {
-			resolved := resolvePath(cfg.WorkingDirectory, spmModelPath)
-			if _, err := os.Stat(resolved); err != nil {
-				return nil, "", fmt.Errorf("unable to access SentencePiece model %s: %w", resolved, err)
-			}
-			args = append(args, "--spm-model", resolved)
-		}
-		args = append(args, "--model", model)
 		return scriptCounter{
 			runner:     uvExecutable,
 			scriptPath: scriptPath,
-			args:       args,
+			args:       []string{"--model", model},
 			helperName: "sentencepiece",
 			timeout:    timeout,
 		}, model, nil

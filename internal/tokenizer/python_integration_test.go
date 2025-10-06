@@ -51,16 +51,6 @@ func TestPythonHelperLlama(t *testing.T) {
 	requireHelperExecution(t)
 	uv := uvExecutable(t)
 	t.Setenv("CTX_UV", uv)
-
-	spModelPath := os.Getenv("CTX_TEST_SPM_MODEL")
-	if spModelPath == "" {
-		t.Skip("CTX_TEST_SPM_MODEL not set; skipping llama helper test")
-	}
-	if _, err := os.Stat(spModelPath); err != nil {
-		t.Skipf("sentencepiece model unavailable: %v", err)
-	}
-
-	t.Setenv("CTX_SPM_MODEL", spModelPath)
 	counter, model, err := NewCounter(Config{Model: "llama-3.1-8b"})
 	if err != nil {
 		t.Fatalf("NewCounter error: %v", err)

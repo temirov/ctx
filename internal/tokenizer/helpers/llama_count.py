@@ -1,4 +1,3 @@
-
 #!/usr/bin/env -S uv run
 # /// script
 # requires-python = ">=3.11"
@@ -8,8 +7,6 @@
 # ]
 # ///
 
-import argparse
-import os
 from pathlib import Path
 import sys
 
@@ -28,63 +25,36 @@ except Exception as import_error:  # pragma: no cover - network dependent
     )
     sys.exit(1)
 
-DEFAULT_REPO = os.getenv("CTX_SPM_MODEL_REPO", "hf-internal-testing/llama-tokenizer")
-DEFAULT_FILE = os.getenv("CTX_SPM_MODEL_FILE", "tokenizer.model")
-DEFAULT_CACHE = Path(os.getenv("CTX_SPM_CACHE_DIR", Path.home() / ".cache/ctx/llama-tokenizer"))
+DEFAULT_REPO = "hf-internal-testing/llama-tokenizer"
+DEFAULT_FILE = "tokenizer.model"
+DEFAULT_CACHE = Path.home() / ".cache/ctx/llama-tokenizer"
 
 
-def resolve_model_path(path_argument: str | None) -> Path:
-    candidates = [path_argument, os.getenv("CTX_SPM_MODEL")]
-    for candidate in candidates:
-        if not candidate:
-            continue
-        resolved = Path(candidate).expanduser()
-        if resolved.is_file():
-            return resolved
-        if candidate == path_argument:
-            sys.stderr.write(
-                f"provided --spm-model path {resolved} does not exist
-"
-            )
-            sys.exit(1)
-
+def resolve_model_path() -> Path:
+    DEFAULT_CACHE.mkdir(parents=True, exist_ok=True)
     try:
-        DEFAULT_CACHE.mkdir(parents=True, exist_ok=True)
         downloaded = hf_hub_download(
-            repo_id=os.getenv("CTX_SPM_MODEL_REPO", DEFAULT_REPO),
-            filename=os.getenv("CTX_SPM_MODEL_FILE", DEFAULT_FILE),
+            repo_id=DEFAULT_REPO,
+            filename=DEFAULT_FILE,
             local_dir=str(DEFAULT_CACHE),
             local_dir_use_symlinks=False,
         )
         return Path(downloaded)
     except Exception as download_error:  # pragma: no cover
         sys.stderr.write(
-            "failed to download SentencePiece model: "
+            "failed to download SentencePiece model automatically: "
             f"{download_error}
 "
         )
         sys.stderr.write(
-            "set CTX_SPM_MODEL to a local tokenizer.model or configure CTX_SPM_MODEL_REPO/FILE
+            "install sentencepiece manually or place tokenizer.model at ~/.cache/ctx/llama-tokenizer
 "
         )
         sys.exit(1)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--spm-model",
-        required=False,
-        help="Path to SentencePiece tokenizer.model",
-    )
-    parser.add_argument(
-        "--model",
-        required=False,
-        help="Requested model name (informational)",
-    )
-    args = parser.parse_args()
-
-    model_path = resolve_model_path(args.spm_model)
+    model_path = resolve_model_path()
     processor = spm.SentencePieceProcessor()
     processor.Load(str(model_path))
 
