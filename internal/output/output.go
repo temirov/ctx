@@ -198,19 +198,8 @@ func RenderRaw(commandName string, collected []interface{}, includeSummary bool)
 
 	if includeSummary {
 		summary := computeSummary(dedupedItems)
-		label := "files"
-		if summary.TotalFiles == 1 {
-			label = "file"
-		}
-		extra := ""
-		if summary.TotalTokens > 0 {
-			extra = fmt.Sprintf(", %d tokens", summary.TotalTokens)
-		}
-		modelSuffix := ""
-		if summary.Model != "" {
-			modelSuffix = fmt.Sprintf(" (model: %s)", summary.Model)
-		}
-		fmt.Printf("Summary: %d %s, %s%s%s\n\n", summary.TotalFiles, label, summary.TotalSize, extra, modelSuffix)
+		fmt.Println(FormatSummaryLine(summary))
+		fmt.Println()
 	}
 
 	for _, item := range dedupedItems {
@@ -386,6 +375,51 @@ func printTree(node *types.TreeOutputNode, prefix string, includeSummary bool) {
 	for _, child := range node.Children {
 		printTree(child, prefix+"  ", includeSummary)
 	}
+}
+
+// PrintTreeRaw renders a directory tree using the raw formatter.
+func PrintTreeRaw(node *types.TreeOutputNode, includeSummary bool) {
+	if node == nil {
+		return
+	}
+	printTree(node, "", includeSummary)
+}
+
+// PrintFileRaw renders a single file output in raw format.
+func PrintFileRaw(file types.FileOutput) {
+	fmt.Printf("File: %s\n", file.Path)
+	if file.Type == types.NodeTypeBinary {
+		fmt.Printf("%s%s\n", mimeTypeLabel, file.MimeType)
+		if file.Content == "" {
+			fmt.Println(binaryContentOmitted)
+		} else {
+			fmt.Println(file.Content)
+		}
+	} else {
+		fmt.Println(file.Content)
+	}
+	fmt.Printf("End of file: %s\n", file.Path)
+	fmt.Println(separatorLine)
+}
+
+// FormatSummaryLine formats an OutputSummary into the raw summary line.
+func FormatSummaryLine(summary *types.OutputSummary) string {
+	if summary == nil {
+		summary = &types.OutputSummary{}
+	}
+	label := "files"
+	if summary.TotalFiles == 1 {
+		label = "file"
+	}
+	extra := ""
+	if summary.TotalTokens > 0 {
+		extra = fmt.Sprintf(", %d tokens", summary.TotalTokens)
+	}
+	modelSuffix := ""
+	if summary.Model != "" {
+		modelSuffix = fmt.Sprintf(" (model: %s)", summary.Model)
+	}
+	return fmt.Sprintf("Summary: %d %s, %s%s%s", summary.TotalFiles, label, summary.TotalSize, extra, modelSuffix)
 }
 
 // orderedFunctionNames returns a deterministic ordering of function names.

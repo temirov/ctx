@@ -117,9 +117,6 @@ func (treeBuilder *TreeBuilder) buildTreeNodes(currentDirectoryPath string, root
 				node.SizeBytes = entryInfo.Size()
 			}
 			if treeBuilder.TokenCounter != nil && node.Type != types.NodeTypeBinary {
-				if label, ok := tokenizer.ProgressLabel(treeBuilder.TokenCounter, treeBuilder.TokenModel); ok {
-					fmt.Fprintf(os.Stderr, "Counting tokens (%s): %s\n", label, childPath)
-				}
 				tokenResult, tokenErr := tokenizer.CountFile(treeBuilder.TokenCounter, childPath)
 				if tokenErr != nil {
 					fmt.Fprintf(os.Stderr, warningTokenCountFormat, childPath, tokenErr)

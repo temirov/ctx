@@ -133,25 +133,3 @@ func TestNewCounterAnthropicAlias(t *testing.T) {
 		t.Fatalf("unexpected helper args: %v", script.args)
 	}
 }
-
-func TestProgressLabelScriptCounter(t *testing.T) {
-	label, ok := ProgressLabel(scriptCounter{helperName: "anthropic_tokenizer"}, "claude-4")
-	if !ok {
-		t.Fatalf("expected progress label for scriptCounter")
-	}
-	if label != "claude-4" {
-		t.Fatalf("expected label to use model, got %q", label)
-	}
-
-	label, ok = ProgressLabel(scriptCounter{helperName: "sentencepiece"}, "")
-	if !ok {
-		t.Fatalf("expected progress label for sentencepiece")
-	}
-	if label != "sentencepiece" {
-		t.Fatalf("expected label to fall back to helper name, got %q", label)
-	}
-
-	if _, ok = ProgressLabel(openAICounter{name: "cl100k"}, ""); ok {
-		t.Fatalf("did not expect progress label for openAI counter")
-	}
-}
