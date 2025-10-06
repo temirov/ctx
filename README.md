@@ -175,6 +175,16 @@ ctx tree . --tokens --summary
 
 The summary line now reports total tokens (and the tokenizer model when applicable) alongside file counts and sizes, and each file entry includes its estimated token usage and model in JSON and XML output.
 
+#### Testing Python helpers
+
+To exercise the embedded Python helpers, install the required packages (for example, `pip install anthropic_tokenizer sentencepiece`) and run:
+
+```bash
+CTX_TEST_PYTHON=python3 go test -tags python_helpers ./internal/tokenizer
+```
+
+Set `CTX_TEST_SPM_MODEL` to the path of a `tokenizer.model` file to include the SentencePiece (llama) helper in the run. Tests automatically skip when dependencies are missing.
+
 ## Configuration
 
 Exclusion patterns are loaded **only** during directory traversal; explicitly listed file paths are never ignored.
