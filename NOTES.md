@@ -12,4 +12,3 @@ Leave BugFixes section empty but don't delete the section itself.
 
 ## BugFixes
 
-### Tokenizer

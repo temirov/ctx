@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 
 	"github.com/temirov/ctx/internal/types"
@@ -228,7 +230,7 @@ func RenderRaw(commandName string, collected []interface{}, includeSummary bool)
 					fmt.Printf(binaryNodeFormat, outputItem.Path, mimeTypeLabel, outputItem.MimeType)
 				} else {
 					fmt.Printf("\n--- Directory Tree: %s ---\n", outputItem.Path)
-					printTree(outputItem, "", includeSummary)
+					writeTree(os.Stdout, outputItem, "", includeSummary)
 				}
 			}
 		case *types.CallChainOutput:
@@ -331,21 +333,21 @@ func summarizeTree(node *types.TreeOutputNode) (int, int64, int) {
 	return totalFiles, totalBytes, totalTokens
 }
 
-// printTree recursively prints a directory tree to stdout.
-func printTree(node *types.TreeOutputNode, prefix string, includeSummary bool) {
+// writeTree recursively prints a directory tree to the provided writer.
+func writeTree(writer io.Writer, node *types.TreeOutputNode, prefix string, includeSummary bool) {
 	switch node.Type {
 	case types.NodeTypeFile:
 		if node.Tokens > 0 {
-			fmt.Printf("%s[File] %s (%d tokens)\n", prefix, node.Path, node.Tokens)
+			fmt.Fprintf(writer, "%s[File] %s (%d tokens)\n", prefix, node.Path, node.Tokens)
 		} else {
-			fmt.Printf("%s[File] %s\n", prefix, node.Path)
+			fmt.Fprintf(writer, "%s[File] %s\n", prefix, node.Path)
 		}
 		return
 	case types.NodeTypeBinary:
-		fmt.Printf(binaryTreeFormat, prefix, node.Path, mimeTypeLabel, node.MimeType)
+		fmt.Fprintf(writer, binaryTreeFormat, prefix, node.Path, mimeTypeLabel, node.MimeType)
 		return
 	}
-	fmt.Printf("%s%s\n", prefix, node.Path)
+	fmt.Fprintf(writer, "%s%s\n", prefix, node.Path)
 	if includeSummary {
 		label := "files"
 		count := node.TotalFiles
@@ -370,36 +372,46 @@ func printTree(node *types.TreeOutputNode, prefix string, includeSummary bool) {
 		if tokens > 0 {
 			extra = fmt.Sprintf(", %d tokens", tokens)
 		}
-		fmt.Printf("%s  Summary: %d %s, %s%s\n", prefix, count, label, size, extra)
+		fmt.Fprintf(writer, "%s  Summary: %d %s, %s%s\n", prefix, count, label, size, extra)
 	}
 	for _, child := range node.Children {
-		printTree(child, prefix+"  ", includeSummary)
+		writeTree(writer, child, prefix+"  ", includeSummary)
 	}
 }
 
 // PrintTreeRaw renders a directory tree using the raw formatter.
 func PrintTreeRaw(node *types.TreeOutputNode, includeSummary bool) {
+	WriteTreeRaw(os.Stdout, node, includeSummary)
+}
+
+// WriteTreeRaw renders a directory tree to the provided writer.
+func WriteTreeRaw(writer io.Writer, node *types.TreeOutputNode, includeSummary bool) {
 	if node == nil {
 		return
 	}
-	printTree(node, "", includeSummary)
+	writeTree(writer, node, "", includeSummary)
 }
 
 // PrintFileRaw renders a single file output in raw format.
 func PrintFileRaw(file types.FileOutput) {
-	fmt.Printf("File: %s\n", file.Path)
+	WriteFileRaw(os.Stdout, file)
+}
+
+// WriteFileRaw renders a single file output to the provided writer.
+func WriteFileRaw(writer io.Writer, file types.FileOutput) {
+	fmt.Fprintf(writer, "File: %s\n", file.Path)
 	if file.Type == types.NodeTypeBinary {
-		fmt.Printf("%s%s\n", mimeTypeLabel, file.MimeType)
+		fmt.Fprintf(writer, "%s%s\n", mimeTypeLabel, file.MimeType)
 		if file.Content == "" {
-			fmt.Println(binaryContentOmitted)
+			fmt.Fprintln(writer, binaryContentOmitted)
 		} else {
-			fmt.Println(file.Content)
+			fmt.Fprintln(writer, file.Content)
 		}
 	} else {
-		fmt.Println(file.Content)
+		fmt.Fprintln(writer, file.Content)
 	}
-	fmt.Printf("End of file: %s\n", file.Path)
-	fmt.Println(separatorLine)
+	fmt.Fprintf(writer, "End of file: %s\n", file.Path)
+	fmt.Fprintln(writer, separatorLine)
 }
 
 // FormatSummaryLine formats an OutputSummary into the raw summary line.

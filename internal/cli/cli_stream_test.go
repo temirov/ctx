@@ -62,11 +62,22 @@ func TestRunTreeRawStreamingOutputsSummaryAfterFiles(t *testing.T) {
 		t.Fatalf("write nested file: %v", err)
 	}
 
-	validated := []types.ValidatedPath{{AbsolutePath: tempDir, IsDir: true}}
-
 	outputText := captureStdout(t, func() {
-		if err := runTreeRawStreaming(validated, nil, true, true, false, true, treeStubCounter{}, "stub-model"); err != nil {
-			t.Fatalf("runTreeRawStreaming error: %v", err)
+		if err := runTreeOrContentCommand(
+			types.CommandTree,
+			[]string{tempDir},
+			nil,
+			true,
+			true,
+			false,
+			types.FormatRaw,
+			false,
+			true,
+			treeStubCounter{},
+			"stub-model",
+			nil,
+		); err != nil {
+			t.Fatalf("runTreeOrContentCommand error: %v", err)
 		}
 	})
 
@@ -97,5 +108,52 @@ func TestRunTreeRawStreamingOutputsSummaryAfterFiles(t *testing.T) {
 	globalIndex := strings.LastIndex(outputText, globalSummary)
 	if globalIndex == -1 {
 		t.Fatalf("expected global summary in output")
+	}
+}
+
+func TestRunContentRawStreamingStreamsBeforeSummary(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "content.txt")
+	if err := os.WriteFile(filePath, []byte("hello"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	outputText := captureStdout(t, func() {
+		if err := runTreeOrContentCommand(
+			types.CommandContent,
+			[]string{tempDir},
+			nil,
+			true,
+			true,
+			false,
+			types.FormatRaw,
+			false,
+			true,
+			treeStubCounter{},
+			"stub-model",
+			nil,
+		); err != nil {
+			t.Fatalf("runTreeOrContentCommand error: %v", err)
+		}
+	})
+
+	if !strings.Contains(outputText, "File: "+filePath) {
+		t.Fatalf("expected file header in output")
+	}
+	fileHeaderIndex := strings.Index(outputText, "File: "+filePath)
+	endMarker := "End of file: " + filePath
+	endIndex := strings.Index(outputText, endMarker)
+	if endIndex == -1 {
+		t.Fatalf("expected end of file marker")
+	}
+	if endIndex < fileHeaderIndex {
+		t.Fatalf("end marker appeared before file header")
+	}
+	summaryIndex := strings.LastIndex(outputText, "Summary:")
+	if summaryIndex == -1 {
+		t.Fatalf("expected summary in output")
+	}
+	if summaryIndex < endIndex {
+		t.Fatalf("summary appeared before file finished streaming")
 	}
 }

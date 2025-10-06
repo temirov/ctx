@@ -195,6 +195,24 @@ CTX_TEST_PYTHON=python3 go test -tags python_helpers ./internal/tokenizer
 
 Set `CTX_TEST_RUN_HELPERS=1` to enable the optional helper suite and `CTX_TEST_UV` to the uv executable (defaults to `uv`). Tests automatically skip when prerequisites are missing.
 
+#### Streaming pipeline
+
+Tree and content commands now emit structured events from `internal/services/stream`, and format-specific renderers in `internal/output` stream those events directly:
+
+- `--format raw` prints human-friendly lines for every directory, file, chunk, and summary as soon as the event arrives.
+- `--format json` writes newline-delimited JSON objects (one per event) that match the schema in `internal/services/stream/events.go`.
+- `--format xml` wraps the same event feed in an `<events>` envelope, emitting `<event …>` elements incrementally.
+
+Downstream tools can rebuild aggregated views (trees, summaries, token counts) by consuming the event feed, and the CLI no longer buffers entire directory trees before producing output.
+
+Run the streaming regression tests with:
+
+```bash
+go test ./internal/services/stream ./internal/output ./internal/cli
+```
+
+These tests cover event ordering, renderer behaviour, and CLI integration to ensure events arrive in order and summaries are emitted only after all file content has streamed.
+
 ## Configuration
 
 Exclusion patterns are loaded **only** during directory traversal; explicitly listed file paths are never ignored.

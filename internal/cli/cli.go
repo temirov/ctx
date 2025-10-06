@@ -2,6 +2,8 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,9 +14,11 @@ import (
 	"github.com/temirov/ctx/internal/config"
 	"github.com/temirov/ctx/internal/docs"
 	"github.com/temirov/ctx/internal/output"
+	"github.com/temirov/ctx/internal/services/stream"
 	"github.com/temirov/ctx/internal/tokenizer"
 	"github.com/temirov/ctx/internal/types"
 	"github.com/temirov/ctx/internal/utils"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -94,9 +98,6 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	warningSkipPathFormat           = "Warning: skipping %s: %v\n"
 	warningTokenCountFormat         = "Warning: failed to count tokens for %s: %v\n"
 	workingDirectoryErrorFormat     = "unable to determine working directory: %w"
-	rawBinaryTreeFormat             = "%s[Binary] %s (%s%s)\n"
-	rawMimeTypeLabel                = "Mime Type: "
-
 	// errorAbsolutePathFormat reports failure to resolve an absolute path.
 	errorAbsolutePathFormat = "abs failed for '%s': %w"
 	// errorPathMissingFormat reports a missing path.
@@ -410,209 +411,91 @@ func runTreeOrContentCommand(
 	tokenCounter tokenizer.Counter,
 	tokenModel string,
 	collector *docs.Collector,
-) error {
+) (err error) {
 	validatedPaths, pathValidationError := resolveAndValidatePaths(paths)
 	if pathValidationError != nil {
 		return pathValidationError
 	}
 
-	if commandName == types.CommandContent && format == types.FormatRaw {
-		return runContentRawStreaming(
-			validatedPaths,
-			exclusionPatterns,
-			useGitignore,
-			useIgnoreFile,
-			includeGit,
-			withDocumentation,
-			withSummary,
-			tokenCounter,
-			tokenModel,
-			collector,
-		)
+	var renderer output.StreamRenderer
+	switch format {
+	case types.FormatRaw:
+		renderer = output.NewRawStreamRenderer(os.Stdout, os.Stderr, commandName, withSummary)
+	case types.FormatJSON:
+		renderer = output.NewJSONStreamRenderer(os.Stdout, os.Stderr, commandName)
+	case types.FormatXML:
+		renderer = output.NewXMLStreamRenderer(os.Stdout, os.Stderr, commandName)
+	default:
+		return fmt.Errorf(invalidFormatMessage, format)
 	}
 
-	if commandName == types.CommandTree && format == types.FormatRaw {
-		return runTreeRawStreaming(
-			validatedPaths,
-			exclusionPatterns,
-			useGitignore,
-			useIgnoreFile,
-			includeGit,
-			withSummary,
-			tokenCounter,
-			tokenModel,
-		)
-	}
+	defer func() {
+		if renderer == nil {
+			return
+		}
+		if flushErr := renderer.Flush(); flushErr != nil && err == nil {
+			err = flushErr
+		}
+	}()
 
-	var collected []interface{}
+	ctx := context.Background()
+
 	for _, info := range validatedPaths {
-		if info.IsDir {
-			ignorePatternList, binaryContentPatternList, loadError := config.LoadRecursiveIgnorePatterns(info.AbsolutePath, exclusionPatterns, useGitignore, useIgnoreFile, includeGit)
-			if loadError != nil {
-				fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, loadError)
-				continue
-			}
-			if commandName == types.CommandTree {
-				treeBuilder := commands.TreeBuilder{IgnorePatterns: ignorePatternList, IncludeSummary: withSummary, TokenCounter: tokenCounter, TokenModel: tokenModel}
-				nodes, dataError := treeBuilder.GetTreeData(info.AbsolutePath)
-				if dataError == nil && len(nodes) > 0 {
-					collected = append(collected, nodes[0])
-				}
-			} else {
-				files, dataError := commands.GetContentData(info.AbsolutePath, ignorePatternList, binaryContentPatternList, tokenCounter, tokenModel)
-				if dataError == nil {
-					for index := range files {
-						if withDocumentation && collector != nil {
-							entries, _ := collector.CollectFromFile(files[index].Path)
-							files[index].Documentation = entries
-						}
-						collected = append(collected, &files[index])
-					}
-					contentRoot, contentTreeError := commands.BuildContentTree(info.AbsolutePath, files, withSummary, tokenModel)
-					if contentTreeError != nil {
-						fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, contentTreeError)
-					} else if contentRoot != nil {
-						collected = append(collected, contentRoot)
-					}
-				}
-			}
+		var streamErr error
+		if commandName == types.CommandTree {
+			streamErr = runTreePath(ctx, renderer, info, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, tokenCounter, tokenModel)
 		} else {
-			if commandName == types.CommandTree {
-				fileInfo, statError := os.Stat(info.AbsolutePath)
-				if statError != nil {
-					fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, statError)
-					continue
-				}
-				mimeType := utils.DetectMimeType(info.AbsolutePath)
-				nodeType := types.NodeTypeFile
-				if utils.IsFileBinary(info.AbsolutePath) {
-					nodeType = types.NodeTypeBinary
-				}
-				node := &types.TreeOutputNode{
-					Path:         info.AbsolutePath,
-					Name:         filepath.Base(info.AbsolutePath),
-					Type:         nodeType,
-					Size:         utils.FormatFileSize(fileInfo.Size()),
-					SizeBytes:    fileInfo.Size(),
-					LastModified: utils.FormatTimestamp(fileInfo.ModTime()),
-					MimeType:     mimeType,
-				}
-				var tokenCount int
-				if tokenCounter != nil && nodeType != types.NodeTypeBinary {
-					countResult, countErr := tokenizer.CountFile(tokenCounter, info.AbsolutePath)
-					if countErr != nil {
-						fmt.Fprintf(os.Stderr, warningTokenCountFormat, info.AbsolutePath, countErr)
-					} else if countResult.Counted {
-						tokenCount = countResult.Tokens
-					}
-				}
-				node.Tokens = tokenCount
-				if tokenCount > 0 && tokenModel != "" {
-					node.Model = tokenModel
-				}
-				collected = append(collected, node)
-			} else {
-				fileInfo, statError := os.Stat(info.AbsolutePath)
-				if statError != nil {
-					fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, statError)
-					continue
-				}
-				fileBytes, fileReadError := os.ReadFile(info.AbsolutePath)
-				if fileReadError != nil {
-					fmt.Fprintf(os.Stderr, commands.WarningFileReadFormat, info.AbsolutePath, fileReadError)
-					continue
-				}
-				mimeType := utils.DetectMimeType(info.AbsolutePath)
-				fileType := types.NodeTypeFile
-				content := string(fileBytes)
-				if utils.IsBinary(fileBytes) {
-					fileType = types.NodeTypeBinary
-					content = ""
-				}
-				var tokenCount int
-				if tokenCounter != nil && fileType != types.NodeTypeBinary {
-					countResult, countErr := tokenizer.CountBytes(tokenCounter, fileBytes)
-					if countErr != nil {
-						fmt.Fprintf(os.Stderr, warningTokenCountFormat, info.AbsolutePath, countErr)
-					} else if countResult.Counted {
-						tokenCount = countResult.Tokens
-					}
-				}
-				fileOutput := types.FileOutput{
-					Path:         info.AbsolutePath,
-					Type:         fileType,
-					Content:      content,
-					Size:         utils.FormatFileSize(fileInfo.Size()),
-					SizeBytes:    fileInfo.Size(),
-					LastModified: utils.FormatTimestamp(fileInfo.ModTime()),
-					MimeType:     mimeType,
-					Tokens:       tokenCount,
-					Model:        tokenModel,
-				}
-				if tokenCount == 0 {
-					fileOutput.Model = ""
-				}
-				if withDocumentation && collector != nil {
-					entries, _ := collector.CollectFromFile(fileOutput.Path)
-					fileOutput.Documentation = entries
-				}
-				collected = append(collected, &fileOutput)
-				contentRoot, contentTreeError := commands.BuildContentTree(info.AbsolutePath, []types.FileOutput{fileOutput}, withSummary, tokenModel)
-				if contentTreeError != nil {
-					fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, contentTreeError)
-				} else if contentRoot != nil {
-					collected = append(collected, contentRoot)
-				}
-			}
+			streamErr = runContentPath(ctx, renderer, info, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, withDocumentation, withSummary, tokenCounter, tokenModel, collector)
+		}
+		if streamErr != nil && !errors.Is(streamErr, context.Canceled) {
+			fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, streamErr)
 		}
 	}
 
-	if format == types.FormatJSON {
-		renderedJSONOutput, renderJSONError := output.RenderJSON(collected)
-		if renderJSONError != nil {
-			return renderJSONError
+	return nil
+}
+
+func runTreePath(
+	ctx context.Context,
+	renderer output.StreamRenderer,
+	path types.ValidatedPath,
+	exclusionPatterns []string,
+	useGitignore bool,
+	useIgnoreFile bool,
+	includeGit bool,
+	tokenCounter tokenizer.Counter,
+	tokenModel string,
+) error {
+	var ignorePatterns []string
+	if path.IsDir {
+		patterns, _, loadErr := config.LoadRecursiveIgnorePatterns(path.AbsolutePath, exclusionPatterns, useGitignore, useIgnoreFile, includeGit)
+		if loadErr != nil {
+			return loadErr
 		}
-		fmt.Println(renderedJSONOutput)
-		return nil
-	} else if format == types.FormatXML {
-		renderedXMLOutput, renderXMLError := output.RenderXML(collected)
-		if renderXMLError != nil {
-			return renderXMLError
+		ignorePatterns = patterns
+	}
+
+	producer := func(streamCtx context.Context, ch chan<- stream.Event) error {
+		options := stream.TreeOptions{
+			Root:           path.AbsolutePath,
+			IgnorePatterns: ignorePatterns,
+			TokenCounter:   tokenCounter,
+			TokenModel:     tokenModel,
 		}
-		fmt.Println(renderedXMLOutput)
-		return nil
+		return stream.StreamTree(streamCtx, options, ch)
 	}
 
-	return output.RenderRaw(commandName, collected, withSummary)
-}
-
-type streamingSummary struct {
-	files  int
-	bytes  int64
-	tokens int
-	model  string
-}
-
-func (state *streamingSummary) addFile(size int64, tokens int, model string) {
-	state.files++
-	state.bytes += size
-	state.tokens += tokens
-	if state.model == "" && model != "" && tokens > 0 {
-		state.model = model
+	consumer := func(event stream.Event) error {
+		return renderer.Handle(event)
 	}
+
+	return dispatchStream(ctx, producer, consumer)
 }
 
-func (state *streamingSummary) toOutputSummary() *types.OutputSummary {
-	return &types.OutputSummary{
-		TotalFiles:  state.files,
-		TotalSize:   utils.FormatFileSize(state.bytes),
-		TotalTokens: state.tokens,
-		Model:       state.model,
-	}
-}
-
-func runContentRawStreaming(
-	validatedPaths []types.ValidatedPath,
+func runContentPath(
+	ctx context.Context,
+	renderer output.StreamRenderer,
+	path types.ValidatedPath,
 	exclusionPatterns []string,
 	useGitignore bool,
 	useIgnoreFile bool,
@@ -623,255 +506,74 @@ func runContentRawStreaming(
 	tokenModel string,
 	collector *docs.Collector,
 ) error {
-	summaryState := &streamingSummary{}
-	var treeNodes []*types.TreeOutputNode
-
-	for _, info := range validatedPaths {
-		if info.IsDir {
-			ignorePatternList, binaryPatternList, loadErr := config.LoadRecursiveIgnorePatterns(
-				info.AbsolutePath,
-				exclusionPatterns,
-				useGitignore,
-				useIgnoreFile,
-				includeGit,
-			)
-			if loadErr != nil {
-				fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, loadErr)
-				continue
-			}
-
-			var directoryOutputs []types.FileOutput
-			streamErr := commands.StreamContent(info.AbsolutePath, ignorePatternList, binaryPatternList, tokenCounter, tokenModel, func(fileOut types.FileOutput) error {
-				if withDocumentation && collector != nil {
-					entries, _ := collector.CollectFromFile(fileOut.Path)
-					fileOut.Documentation = entries
-				}
-				directoryOutputs = append(directoryOutputs, fileOut)
-				output.PrintFileRaw(fileOut)
-				summaryState.addFile(fileOut.SizeBytes, fileOut.Tokens, fileOut.Model)
-				return nil
-			})
-			if streamErr != nil {
-				return streamErr
-			}
-
-			if len(directoryOutputs) == 0 {
-				continue
-			}
-
-			rootNode, treeErr := commands.BuildContentTree(info.AbsolutePath, directoryOutputs, withSummary, tokenModel)
-			if treeErr != nil {
-				fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, treeErr)
-				continue
-			}
-			treeNodes = append(treeNodes, rootNode)
-			continue
+	var ignorePatterns []string
+	var binaryPatterns []string
+	if path.IsDir {
+		patterns, binary, loadErr := config.LoadRecursiveIgnorePatterns(path.AbsolutePath, exclusionPatterns, useGitignore, useIgnoreFile, includeGit)
+		if loadErr != nil {
+			return loadErr
 		}
-
-		fileOutput, fileErr := streamSingleFile(info.AbsolutePath, withDocumentation, withSummary, tokenCounter, tokenModel, collector)
-		if fileErr != nil {
-			fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, fileErr)
-			continue
-		}
-		output.PrintFileRaw(fileOutput.file)
-		summaryState.addFile(fileOutput.file.SizeBytes, fileOutput.file.Tokens, fileOutput.file.Model)
-		if fileOutput.tree != nil {
-			treeNodes = append(treeNodes, fileOutput.tree)
-		}
+		ignorePatterns = patterns
+		binaryPatterns = binary
 	}
 
-	if withSummary {
-		summary := summaryState.toOutputSummary()
-		fmt.Println(output.FormatSummaryLine(summary))
-		fmt.Println()
+	producer := func(streamCtx context.Context, ch chan<- stream.Event) error {
+		options := stream.ContentOptions{
+			Root:           path.AbsolutePath,
+			IgnorePatterns: ignorePatterns,
+			BinaryContent:  binaryPatterns,
+			TokenCounter:   tokenCounter,
+			TokenModel:     tokenModel,
+			IncludeSummary: withSummary,
+		}
+		return stream.StreamContent(streamCtx, options, ch)
 	}
 
-	for _, node := range treeNodes {
-		fmt.Printf("\n--- Directory Tree: %s ---\n", node.Path)
-		output.PrintTreeRaw(node, withSummary)
+	consumer := func(event stream.Event) error {
+		if withDocumentation && collector != nil && event.Kind == stream.EventKindFile && event.File != nil {
+			if entries, docErr := collector.CollectFromFile(event.File.Path); docErr == nil && len(entries) > 0 {
+				event.File.Documentation = entries
+			}
+		}
+		return renderer.Handle(event)
 	}
 
-	return nil
+	return dispatchStream(ctx, producer, consumer)
 }
 
-type singleFileResult struct {
-	file types.FileOutput
-	tree *types.TreeOutputNode
-}
-
-func runTreeRawStreaming(
-	validatedPaths []types.ValidatedPath,
-	exclusionPatterns []string,
-	useGitignore bool,
-	useIgnoreFile bool,
-	includeGit bool,
-	withSummary bool,
-	tokenCounter tokenizer.Counter,
-	tokenModel string,
+func dispatchStream(
+	ctx context.Context,
+	produce func(context.Context, chan<- stream.Event) error,
+	consume func(stream.Event) error,
 ) error {
-	summaryState := &streamingSummary{}
-	for _, info := range validatedPaths {
-		if info.IsDir {
-			ignorePatterns, _, loadErr := config.LoadRecursiveIgnorePatterns(
-				info.AbsolutePath,
-				exclusionPatterns,
-				useGitignore,
-				useIgnoreFile,
-				includeGit,
-			)
-			if loadErr != nil {
-				fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, loadErr)
-				continue
-			}
+	group, streamCtx := errgroup.WithContext(ctx)
+	events := make(chan stream.Event)
 
-			handler := func(event commands.TreeEvent) error {
-				switch event.Kind {
-				case commands.TreeEventEnterDir:
-					prefix := strings.Repeat("  ", event.Directory.Depth)
-					fmt.Printf("%s%s\n", prefix, event.Directory.Path)
-				case commands.TreeEventFile:
-					prefix := strings.Repeat("  ", event.File.Depth)
-					if event.File.IsBinary {
-						fmt.Printf(rawBinaryTreeFormat, prefix, event.File.Path, rawMimeTypeLabel, event.File.MimeType)
-					} else if event.File.Tokens > 0 {
-						fmt.Printf("%s[File] %s (%d tokens)\n", prefix, event.File.Path, event.File.Tokens)
-					} else {
-						fmt.Printf("%s[File] %s\n", prefix, event.File.Path)
-					}
-					summaryState.addFile(event.File.SizeBytes, event.File.Tokens, event.File.Model)
-				case commands.TreeEventLeaveDir:
-					if withSummary {
-						prefix := strings.Repeat("  ", event.Directory.Depth)
-						label := "files"
-						if event.Directory.Summary.Files == 1 {
-							label = "file"
-						}
-						sizeText := utils.FormatFileSize(event.Directory.Summary.Bytes)
-						extra := ""
-						if event.Directory.Summary.Tokens > 0 {
-							extra = fmt.Sprintf(", %d tokens", event.Directory.Summary.Tokens)
-						}
-						fmt.Printf("%s  Summary: %d %s, %s%s\n", prefix, event.Directory.Summary.Files, label, sizeText, extra)
-					}
+	group.Go(func() error {
+		defer close(events)
+		return produce(streamCtx, events)
+	})
+
+	group.Go(func() error {
+		for {
+			select {
+			case <-streamCtx.Done():
+				return streamCtx.Err()
+			case event, ok := <-events:
+				if !ok {
+					return nil
 				}
-				return nil
-			}
-
-			report := commands.TreeStreamOptions{
-				Root:           info.AbsolutePath,
-				IgnorePatterns: ignorePatterns,
-				TokenCounter:   tokenCounter,
-				TokenModel:     tokenModel,
-				Warn: func(message string) {
-					fmt.Fprint(os.Stderr, message)
-				},
-			}
-
-			if err := commands.StreamTree(report, handler); err != nil {
-				fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, err)
-			}
-			continue
-		}
-
-		handler := func(event commands.TreeEvent) error {
-			switch event.Kind {
-			case commands.TreeEventFile:
-				prefix := strings.Repeat("  ", event.File.Depth)
-				if event.File.IsBinary {
-					fmt.Printf(rawBinaryTreeFormat, prefix, event.File.Path, rawMimeTypeLabel, event.File.MimeType)
-				} else if event.File.Tokens > 0 {
-					fmt.Printf("%s[File] %s (%d tokens)\n", prefix, event.File.Path, event.File.Tokens)
-				} else {
-					fmt.Printf("%s[File] %s\n", prefix, event.File.Path)
+				if err := consume(event); err != nil {
+					return err
 				}
-				summaryState.addFile(event.File.SizeBytes, event.File.Tokens, event.File.Model)
 			}
-			return nil
 		}
+	})
 
-		report := commands.TreeStreamOptions{
-			Root:         info.AbsolutePath,
-			TokenCounter: tokenCounter,
-			TokenModel:   tokenModel,
-			Warn: func(message string) {
-				fmt.Fprint(os.Stderr, message)
-			},
-		}
-		if err := commands.StreamTree(report, handler); err != nil {
-			fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, err)
-		}
-	}
-
-	if withSummary {
-		summary := summaryState.toOutputSummary()
-		fmt.Println(output.FormatSummaryLine(summary))
-		fmt.Println()
+	if err := group.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		return err
 	}
 	return nil
-}
-
-func streamSingleFile(
-	path string,
-	withDocumentation bool,
-	withSummary bool,
-	tokenCounter tokenizer.Counter,
-	tokenModel string,
-	collector *docs.Collector,
-) (singleFileResult, error) {
-	info, statErr := os.Stat(path)
-	if statErr != nil {
-		return singleFileResult{}, statErr
-	}
-
-	fileBytes, readErr := os.ReadFile(path)
-	if readErr != nil {
-		return singleFileResult{}, readErr
-	}
-
-	mimeType := utils.DetectMimeType(path)
-	fileType := types.NodeTypeFile
-	content := string(fileBytes)
-	if utils.IsBinary(fileBytes) {
-		fileType = types.NodeTypeBinary
-		content = ""
-	}
-
-	var tokenCount int
-	if tokenCounter != nil && fileType != types.NodeTypeBinary {
-		countResult, countErr := tokenizer.CountBytes(tokenCounter, fileBytes)
-		if countErr != nil {
-			fmt.Fprintf(os.Stderr, warningTokenCountFormat, path, countErr)
-		} else if countResult.Counted {
-			tokenCount = countResult.Tokens
-		}
-	}
-
-	output := types.FileOutput{
-		Path:         path,
-		Type:         fileType,
-		Content:      content,
-		Size:         utils.FormatFileSize(info.Size()),
-		SizeBytes:    info.Size(),
-		LastModified: utils.FormatTimestamp(info.ModTime()),
-		MimeType:     mimeType,
-		Tokens:       tokenCount,
-	}
-	if tokenCount > 0 {
-		output.Model = tokenModel
-	}
-	if withDocumentation && collector != nil {
-		entries, _ := collector.CollectFromFile(output.Path)
-		output.Documentation = entries
-	}
-
-	result := singleFileResult{file: output}
-	rootNode, treeErr := commands.BuildContentTree(path, []types.FileOutput{output}, withSummary, tokenModel)
-	if treeErr != nil {
-		fmt.Fprintf(os.Stderr, warningSkipPathFormat, path, treeErr)
-	} else {
-		result.tree = rootNode
-	}
-	return result, nil
 }
 
 // resolveAndValidatePaths converts input paths to absolute form and validates their existence.
