@@ -79,6 +79,9 @@ func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatte
 
 		var tokenCount int
 		if tokenCounter != nil && fileType != types.NodeTypeBinary {
+			if label, ok := tokenizer.ProgressLabel(tokenCounter, tokenModel); ok {
+				fmt.Fprintf(os.Stderr, "Counting tokens (%s): %s\n", label, walkedPath)
+			}
 			countResult, tokenErr := tokenizer.CountBytes(tokenCounter, fileBytes)
 			if tokenErr != nil {
 				fmt.Fprintf(os.Stderr, WarningTokenCountFormat, walkedPath, tokenErr)

@@ -469,6 +469,9 @@ func runTreeOrContentCommand(
 				}
 				var tokenCount int
 				if tokenCounter != nil && nodeType != types.NodeTypeBinary {
+					if label, ok := tokenizer.ProgressLabel(tokenCounter, tokenModel); ok {
+						fmt.Fprintf(os.Stderr, "Counting tokens (%s): %s\n", label, info.AbsolutePath)
+					}
 					countResult, countErr := tokenizer.CountFile(tokenCounter, info.AbsolutePath)
 					if countErr != nil {
 						fmt.Fprintf(os.Stderr, warningTokenCountFormat, info.AbsolutePath, countErr)
@@ -501,6 +504,9 @@ func runTreeOrContentCommand(
 				}
 				var tokenCount int
 				if tokenCounter != nil && fileType != types.NodeTypeBinary {
+					if label, ok := tokenizer.ProgressLabel(tokenCounter, tokenModel); ok {
+						fmt.Fprintf(os.Stderr, "Counting tokens (%s): %s\n", label, info.AbsolutePath)
+					}
 					countResult, countErr := tokenizer.CountBytes(tokenCounter, fileBytes)
 					if countErr != nil {
 						fmt.Fprintf(os.Stderr, warningTokenCountFormat, info.AbsolutePath, countErr)
