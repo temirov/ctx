@@ -179,6 +179,8 @@ The summary line now reports total tokens (and the tokenizer model when applicab
 
 Exclusion patterns are loaded **only** during directory traversal; explicitly listed file paths are never ignored.
 
+> ⚠️ When specifying wildcard patterns (e.g., `-e go.*`), quote them to prevent your shell from expanding the glob before `ctx` runs: `ctx content -e 'go.*'`. The CLI handles pattern matching internally and expects the literal expression.
+
 ## Binary File Handling
 
 When a binary file is encountered, `ctx` omits its content in raw output. JSON and XML results always include the file's MIME type. This is the default behavior when `.ignore` contains no `[binary]` section and no legacy directives:
