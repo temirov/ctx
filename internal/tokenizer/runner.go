@@ -42,14 +42,29 @@ func (counter scriptCounter) CountString(input string) (int, error) {
 		return 0, fmt.Errorf("uv helper error: %v, output: %s", err, strings.TrimSpace(string(outputBytes)))
 	}
 
-	tokenText := strings.TrimSpace(string(outputBytes))
-	if tokenText == "" {
+	tokenCount, parseErr := parseHelperTokenOutput(string(outputBytes))
+	if parseErr != nil {
+		return 0, parseErr
+	}
+	return tokenCount, nil
+}
+
+func parseHelperTokenOutput(rawOutput string) (int, error) {
+	trimmed := strings.TrimSpace(rawOutput)
+	if trimmed == "" {
 		return 0, fmt.Errorf("uv helper returned empty output")
 	}
 
-	tokenCount, parseErr := strconv.Atoi(tokenText)
-	if parseErr != nil {
-		return 0, fmt.Errorf("unexpected uv helper output: %q", tokenText)
+	lines := strings.Split(trimmed, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		candidate := strings.TrimSpace(lines[i])
+		if candidate == "" {
+			continue
+		}
+		if tokenCount, err := strconv.Atoi(candidate); err == nil {
+			return tokenCount, nil
+		}
 	}
-	return tokenCount, nil
+
+	return 0, fmt.Errorf("unexpected uv helper output: %q", trimmed)
 }
