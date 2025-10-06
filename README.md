@@ -164,6 +164,17 @@ All JSON and XML outputs include a `mimeType` field for every file. Raw output n
 
 Enable `--tokens` to populate a `tokens` field on files (along with a `model` that identifies the tokenizer) and a `totalTokens` aggregate on directories when summaries are included. By default ctx uses OpenAI's `gpt-4o` tokenizer via `tiktoken-go`. Switch models with `--model`; when requesting Anthropic (`claude-*`) or Llama (`llama-*`) models, ctx automatically locates a compatible Python 3.8+ interpreter and verifies that the required packages are available. Set `CTX_PYTHON` to override the interpreter path, and `CTX_SPM_MODEL` to point to a `tokenizer.model` file when using Llama helpers.
 
+#### Supported models
+
+`ctx` selects the tokenizer backend based on the `--model` prefix:
+
+| Prefix | Backend | Notes |
+|--------|---------|-------|
+| `gpt-`, `text-embedding`, `davinci`, `curie`, `babbage`, `ada`, `code-` | OpenAI via `tiktoken-go` | Falls back to `cl100k_base` when an exact encoding is unavailable. |
+| `claude-` | Anthropic helper (Python) | Requires Python 3.8+ with `anthropic_tokenizer`. `CTX_PYTHON` can override interpreter detection. |
+| `llama-` | SentencePiece helper (Python) | Requires Python 3.8+, `sentencepiece`, and `CTX_SPM_MODEL` pointing to a `tokenizer.model` file. |
+| anything else | default (`cl100k_base`) | Safe fallback when no specific tokenizer is known. |
+
 Example:
 
 ```bash
