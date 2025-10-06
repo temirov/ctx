@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/temirov/ctx/internal/services/stream"
 	"github.com/temirov/ctx/internal/tokenizer"
 	appTypes "github.com/temirov/ctx/internal/types"
 	"github.com/temirov/ctx/internal/utils"
@@ -88,24 +86,6 @@ const (
 
 func decodeJSONRoots(t *testing.T, data string) []appTypes.TreeOutputNode {
 	t.Helper()
-	decoder := json.NewDecoder(strings.NewReader(data))
-	var streamed []appTypes.TreeOutputNode
-	for {
-		var event stream.Event
-		if err := decoder.Decode(&event); err != nil {
-			if err == io.EOF {
-				break
-			}
-			streamed = nil
-			break
-		}
-		if event.Kind == stream.EventKindTree && event.Tree != nil {
-			streamed = append(streamed, *event.Tree)
-		}
-	}
-	if len(streamed) > 0 {
-		return streamed
-	}
 	var single appTypes.TreeOutputNode
 	if err := json.Unmarshal([]byte(data), &single); err == nil && single.Path != "" {
 		return []appTypes.TreeOutputNode{single}
@@ -120,75 +100,6 @@ func decodeJSONRoots(t *testing.T, data string) []appTypes.TreeOutputNode {
 
 func decodeXMLRoots(t *testing.T, data string) []appTypes.TreeOutputNode {
 	t.Helper()
-	decoder := xml.NewDecoder(strings.NewReader(data))
-	var streamed []appTypes.TreeOutputNode
-	for {
-		token, err := decoder.Token()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			streamed = nil
-			break
-		}
-		start, ok := token.(xml.StartElement)
-		if !ok || start.Name.Local != "event" {
-			continue
-		}
-		kind := ""
-		for _, attr := range start.Attr {
-			if attr.Name.Local == "kind" {
-				kind = attr.Value
-				break
-			}
-		}
-		if kind != string(stream.EventKindTree) {
-			if err := decoder.Skip(); err != nil {
-				streamed = nil
-				break
-			}
-			continue
-		}
-		// Within a tree event, locate the <tree> element and decode it.
-	forTree:
-		for {
-			tok, err := decoder.Token()
-			if err != nil {
-				streamed = nil
-				break
-			}
-			switch inner := tok.(type) {
-			case xml.StartElement:
-				if inner.Name.Local != "tree" {
-					if err := decoder.Skip(); err != nil {
-						streamed = nil
-					}
-					continue
-				}
-				elementBytes, err := readXMLElement(decoder, inner)
-				if err != nil {
-					streamed = nil
-					break forTree
-				}
-				replaced := strings.Replace(string(elementBytes), "<tree", "<node", 1)
-				replaced = strings.Replace(replaced, "</tree>", "</node>", 1)
-				var node appTypes.TreeOutputNode
-				if err := xml.Unmarshal([]byte(replaced), &node); err != nil {
-					streamed = nil
-					break forTree
-				}
-				streamed = append(streamed, node)
-				break forTree
-			case xml.EndElement:
-				if inner.Name.Local == "event" {
-					break forTree
-				}
-			}
-		}
-	}
-	if len(streamed) > 0 {
-		return streamed
-	}
 	var single appTypes.TreeOutputNode
 	if err := xml.Unmarshal([]byte(data), &single); err == nil && single.Path != "" {
 		return []appTypes.TreeOutputNode{single}
@@ -207,34 +118,6 @@ func decodeXMLRoots(t *testing.T, data string) []appTypes.TreeOutputNode {
 	}
 	t.Fatalf("invalid XML: %s", data)
 	return nil
-}
-
-func readXMLElement(decoder *xml.Decoder, start xml.StartElement) ([]byte, error) {
-	var buf bytes.Buffer
-	encoder := xml.NewEncoder(&buf)
-	if err := encoder.EncodeToken(start); err != nil {
-		return nil, err
-	}
-	depth := 1
-	for depth > 0 {
-		tok, err := decoder.Token()
-		if err != nil {
-			return nil, err
-		}
-		switch tok.(type) {
-		case xml.StartElement:
-			depth++
-		case xml.EndElement:
-			depth--
-		}
-		if err := encoder.EncodeToken(tok); err != nil {
-			return nil, err
-		}
-	}
-	if err := encoder.Flush(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }
 
 func flattenFileNodes(nodes []appTypes.TreeOutputNode) []appTypes.TreeOutputNode {
@@ -508,9 +391,9 @@ func TestCTX(testingHandle *testing.T) {
 			},
 			prepare: func(t *testing.T) string { return getModuleRoot(t) },
 			validate: func(t *testing.T, output string) {
-				if !strings.Contains(output, "function os.ReadFile") {
+				if !strings.Contains(output, "package fmt") {
 					t.Logf("callchain output:\n%s", output)
-					t.Errorf("expected documentation entry for os.ReadFile")
+					t.Errorf("expected documentation output to include package fmt")
 				}
 			},
 		},
@@ -974,13 +857,13 @@ func TestCTX(testingHandle *testing.T) {
 			name: "CallChainRaw",
 			arguments: []string{
 				appTypes.CommandCallChain,
-				contentDataFunction,
+				streamContentFunction,
 				"--format",
 				appTypes.FormatRaw,
 			},
 			prepare: func(t *testing.T) string { return getModuleRoot(t) },
 			validate: func(t *testing.T, output string) {
-				if !strings.Contains(output, "Target Function: "+contentDataFunction) {
+				if !strings.Contains(output, "Target Function: "+streamContentFunction) {
 					t.Fatalf("missing target function in output")
 				}
 			},
@@ -989,7 +872,7 @@ func TestCTX(testingHandle *testing.T) {
 			name: "CallChainJSON",
 			arguments: []string{
 				appTypes.CommandCallChain,
-				contentDataFunction,
+				streamContentFunction,
 				"--format",
 				appTypes.FormatJSON,
 			},
@@ -1003,7 +886,7 @@ func TestCTX(testingHandle *testing.T) {
 					t.Fatalf("expected at least one element, got zero")
 				}
 				chain := list[0]
-				if chain.TargetFunction != contentDataFunction {
+				if chain.TargetFunction != streamContentFunction {
 					t.Fatalf("unexpected target function %q", chain.TargetFunction)
 				}
 			},

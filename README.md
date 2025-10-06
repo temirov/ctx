@@ -205,6 +205,8 @@ Tree and content commands now emit structured events from `internal/services/str
 
 Downstream tools can rebuild aggregated views (trees, summaries, token counts) by consuming the event feed, and the CLI no longer buffers entire directory trees before producing output.
 
+All renderers consume the same event stream; JSON and XML remain schema-compatible with their legacy batch outputs while raw preserves the human-readable format.
+
 Run the streaming regression tests with:
 
 ```bash
