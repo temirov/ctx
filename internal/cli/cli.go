@@ -724,20 +724,80 @@ func runTreeRawStreaming(
 				continue
 			}
 
-			_, _, _ = streamTreeDirectory(
-				info.AbsolutePath,
-				"",
-				info.AbsolutePath,
-				ignorePatterns,
-				withSummary,
-				tokenCounter,
-				tokenModel,
-				summaryState,
-			)
+			handler := func(event commands.TreeEvent) error {
+				switch event.Kind {
+				case commands.TreeEventEnterDir:
+					prefix := strings.Repeat("  ", event.Directory.Depth)
+					fmt.Printf("%s%s\n", prefix, event.Directory.Path)
+				case commands.TreeEventFile:
+					prefix := strings.Repeat("  ", event.File.Depth)
+					if event.File.IsBinary {
+						fmt.Printf(rawBinaryTreeFormat, prefix, event.File.Path, rawMimeTypeLabel, event.File.MimeType)
+					} else if event.File.Tokens > 0 {
+						fmt.Printf("%s[File] %s (%d tokens)\n", prefix, event.File.Path, event.File.Tokens)
+					} else {
+						fmt.Printf("%s[File] %s\n", prefix, event.File.Path)
+					}
+					summaryState.addFile(event.File.SizeBytes, event.File.Tokens, event.File.Model)
+				case commands.TreeEventLeaveDir:
+					if withSummary {
+						prefix := strings.Repeat("  ", event.Directory.Depth)
+						label := "files"
+						if event.Directory.Summary.Files == 1 {
+							label = "file"
+						}
+						sizeText := utils.FormatFileSize(event.Directory.Summary.Bytes)
+						extra := ""
+						if event.Directory.Summary.Tokens > 0 {
+							extra = fmt.Sprintf(", %d tokens", event.Directory.Summary.Tokens)
+						}
+						fmt.Printf("%s  Summary: %d %s, %s%s\n", prefix, event.Directory.Summary.Files, label, sizeText, extra)
+					}
+				}
+				return nil
+			}
+
+			report := commands.TreeStreamOptions{
+				Root:           info.AbsolutePath,
+				IgnorePatterns: ignorePatterns,
+				TokenCounter:   tokenCounter,
+				TokenModel:     tokenModel,
+				Warn: func(message string) {
+					fmt.Fprint(os.Stderr, message)
+				},
+			}
+
+			if err := commands.StreamTree(report, handler); err != nil {
+				fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, err)
+			}
 			continue
 		}
 
-		if err := streamTreeFile(info.AbsolutePath, "", tokenCounter, tokenModel, summaryState); err != nil {
+		handler := func(event commands.TreeEvent) error {
+			switch event.Kind {
+			case commands.TreeEventFile:
+				prefix := strings.Repeat("  ", event.File.Depth)
+				if event.File.IsBinary {
+					fmt.Printf(rawBinaryTreeFormat, prefix, event.File.Path, rawMimeTypeLabel, event.File.MimeType)
+				} else if event.File.Tokens > 0 {
+					fmt.Printf("%s[File] %s (%d tokens)\n", prefix, event.File.Path, event.File.Tokens)
+				} else {
+					fmt.Printf("%s[File] %s\n", prefix, event.File.Path)
+				}
+				summaryState.addFile(event.File.SizeBytes, event.File.Tokens, event.File.Model)
+			}
+			return nil
+		}
+
+		report := commands.TreeStreamOptions{
+			Root:         info.AbsolutePath,
+			TokenCounter: tokenCounter,
+			TokenModel:   tokenModel,
+			Warn: func(message string) {
+				fmt.Fprint(os.Stderr, message)
+			},
+		}
+		if err := commands.StreamTree(report, handler); err != nil {
 			fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, err)
 		}
 	}
@@ -747,130 +807,6 @@ func runTreeRawStreaming(
 		fmt.Println(output.FormatSummaryLine(summary))
 		fmt.Println()
 	}
-	return nil
-}
-
-func streamTreeDirectory(
-	currentPath string,
-	prefix string,
-	rootPath string,
-	ignorePatterns []string,
-	includeSummary bool,
-	tokenCounter tokenizer.Counter,
-	tokenModel string,
-	summaryState *streamingSummary,
-) (int, int64, int) {
-	fmt.Printf("%s%s\n", prefix, currentPath)
-	entries, readErr := os.ReadDir(currentPath)
-	if readErr != nil {
-		fmt.Fprintf(os.Stderr, warningSkipPathFormat, currentPath, readErr)
-		return 0, 0, 0
-	}
-
-	files := 0
-	var totalBytes int64
-	totalTokens := 0
-	childPrefix := prefix + "  "
-
-	for _, entry := range entries {
-		childPath := filepath.Join(currentPath, entry.Name())
-		relativePath := utils.RelativePathOrSelf(childPath, rootPath)
-		if utils.ShouldIgnoreByPath(relativePath, ignorePatterns) {
-			if entry.IsDir() {
-				continue
-			}
-			continue
-		}
-
-		info, infoErr := entry.Info()
-		if infoErr != nil {
-			fmt.Fprintf(os.Stderr, warningSkipPathFormat, childPath, infoErr)
-			continue
-		}
-
-		if entry.IsDir() {
-			childFiles, childBytes, childTokens := streamTreeDirectory(childPath, childPrefix, rootPath, ignorePatterns, includeSummary, tokenCounter, tokenModel, summaryState)
-			files += childFiles
-			totalBytes += childBytes
-			totalTokens += childTokens
-			continue
-		}
-
-		mimeType := utils.DetectMimeType(childPath)
-		isBinary := utils.IsFileBinary(childPath)
-		var fileTokens int
-		if tokenCounter != nil && !isBinary {
-			result, countErr := tokenizer.CountFile(tokenCounter, childPath)
-			if countErr != nil {
-				fmt.Fprintf(os.Stderr, warningTokenCountFormat, childPath, countErr)
-			} else if result.Counted {
-				fileTokens = result.Tokens
-			}
-		}
-
-		if isBinary {
-			fmt.Printf(rawBinaryTreeFormat, childPrefix, childPath, rawMimeTypeLabel, mimeType)
-		} else if fileTokens > 0 {
-			fmt.Printf("%s[File] %s (%d tokens)\n", childPrefix, childPath, fileTokens)
-		} else {
-			fmt.Printf("%s[File] %s\n", childPrefix, childPath)
-		}
-
-		files++
-		totalBytes += info.Size()
-		totalTokens += fileTokens
-		summaryState.addFile(info.Size(), fileTokens, tokenModel)
-	}
-
-	if includeSummary {
-		label := "files"
-		if files == 1 {
-			label = "file"
-		}
-		sizeText := utils.FormatFileSize(totalBytes)
-		extra := ""
-		if totalTokens > 0 {
-			extra = fmt.Sprintf(", %d tokens", totalTokens)
-		}
-		fmt.Printf("%s  Summary: %d %s, %s%s\n", prefix, files, label, sizeText, extra)
-	}
-
-	return files, totalBytes, totalTokens
-}
-
-func streamTreeFile(
-	path string,
-	prefix string,
-	tokenCounter tokenizer.Counter,
-	tokenModel string,
-	summaryState *streamingSummary,
-) error {
-	info, statErr := os.Stat(path)
-	if statErr != nil {
-		return statErr
-	}
-
-	mimeType := utils.DetectMimeType(path)
-	isBinary := utils.IsFileBinary(path)
-	var fileTokens int
-	if tokenCounter != nil && !isBinary {
-		result, countErr := tokenizer.CountFile(tokenCounter, path)
-		if countErr != nil {
-			fmt.Fprintf(os.Stderr, warningTokenCountFormat, path, countErr)
-		} else if result.Counted {
-			fileTokens = result.Tokens
-		}
-	}
-
-	if isBinary {
-		fmt.Printf(rawBinaryTreeFormat, prefix, path, rawMimeTypeLabel, mimeType)
-	} else if fileTokens > 0 {
-		fmt.Printf("%s[File] %s (%d tokens)\n", prefix, path, fileTokens)
-	} else {
-		fmt.Printf("%s[File] %s\n", prefix, path)
-	}
-
-	summaryState.addFile(info.Size(), fileTokens, tokenModel)
 	return nil
 }
 
