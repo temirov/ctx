@@ -162,7 +162,7 @@ All JSON and XML outputs include a `mimeType` field for every file. Raw output n
 
 ### Token Counting
 
-Enable `--tokens` to populate a `tokens` field on files (along with a `model` that identifies the tokenizer) and a `totalTokens` aggregate on directories when summaries are included. By default ctx uses OpenAI's `gpt-4o` tokenizer via `tiktoken-go`. Switch models with `--model`; when requesting Anthropic (`claude-*`) or Llama (`llama-*`) models, ctx launches the embedded helpers with [`uv`](https://github.com/astral-sh/uv). Ensure `uv` is available on your `PATH` (or point `CTX_UV` at the executable) and Python 3.11+ will be provisioned automatically. Llama helpers download a compatible SentencePiece model on demand.
+Enable `--tokens` to populate a `tokens` field on files (along with a `model` that identifies the tokenizer) and a `totalTokens` aggregate on directories when summaries are included. By default ctx uses OpenAI's `gpt-4o` tokenizer via `tiktoken-go`. Switch models with `--model`; when requesting Anthropic (`claude-*`) or Llama (`llama-*`) models, ctx launches the embedded helpers with [`uv`](https://github.com/astral-sh/uv). Ensure `uv` is available on your `PATH` (or point `CTX_UV` at the executable) and Python 3.11+ will be provisioned automatically. Claude helpers call Anthropic's `messages.count_tokens` endpoint (free to use) and require `ANTHROPIC_API_KEY` to be exported. Llama helpers download a compatible SentencePiece model on demand.
 
 #### Supported models
 
@@ -171,7 +171,7 @@ Enable `--tokens` to populate a `tokens` field on files (along with a `model` th
 | Prefix | Backend | Notes |
 |--------|---------|-------|
 | `gpt-`, `text-embedding`, `davinci`, `curie`, `babbage`, `ada`, `code-` | OpenAI via `tiktoken-go` | Falls back to `cl100k_base` when an exact encoding is unavailable. |
-| `claude-` | Anthropic helper (via uv) | Requires `uv` and Python 3.11+; helper scripts auto-install dependencies via uv. Override the executable with `CTX_UV`. |
+| `claude-` | Anthropic helper (via uv) | Requires `uv`, Python 3.11+, and `ANTHROPIC_API_KEY`; uses Anthropic's `messages.count_tokens` endpoint. Override the executable with `CTX_UV`. |
 | `llama-` | SentencePiece helper (via uv) | Requires `uv`, Python 3.11+, and will download a tokenizer model automatically (override with `CTX_SPM_MODEL`). |
 | anything else | default (`cl100k_base`) | Safe fallback when no specific tokenizer is known. |
 
@@ -185,7 +185,7 @@ The summary line now reports total tokens (and the tokenizer model when applicab
 
 #### Testing Python helpers
 
-To exercise the embedded Python helpers, install the required packages (for example, `pip install anthropic_tokenizer sentencepiece`) and run:
+To exercise the embedded Python helpers, install the required packages (for example, `pip install anthropic sentencepiece`) and run:
 
 ```bash
 CTX_TEST_PYTHON=python3 go test -tags python_helpers ./internal/tokenizer

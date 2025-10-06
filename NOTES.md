@@ -13,5 +13,3 @@ Leave BugFixes section empty but don't delete the section itself.
 ## BugFixes
 
 ### Tokenizer
-
-1. to get the tokens for claude we need to reach to official claude API messages.count_tokens, which is free but requries the API_KEY environment variable. we shall us that method and document the requirements in the README. if there is no env variable ANTHROPIC_API_KEY we shall fail from Go not Python, and provide a helpful message

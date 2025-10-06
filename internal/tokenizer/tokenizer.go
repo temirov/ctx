@@ -56,13 +56,15 @@ func NewCounter(cfg Config) (Counter, string, error) {
 		timeout = defaultUVTimeout
 	}
 
-	uvExecutable, detectErr := detectUVExecutable()
-	if detectErr != nil {
-		return nil, "", detectErr
-	}
-
 	switch {
 	case strings.HasPrefix(lowerModel, "claude-"):
+		if strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY")) == "" {
+			return nil, "", errors.New("counting tokens for Claude models requires ANTHROPIC_API_KEY to be set; export your Anthropic API key before running ctx")
+		}
+		uvExecutable, detectErr := detectUVExecutable()
+		if detectErr != nil {
+			return nil, "", detectErr
+		}
 		directory, err := materializeHelperScripts("")
 		if err != nil {
 			return nil, "", err
@@ -76,6 +78,10 @@ func NewCounter(cfg Config) (Counter, string, error) {
 			timeout:    timeout,
 		}, model, nil
 	case strings.HasPrefix(lowerModel, "llama-"):
+		uvExecutable, detectErr := detectUVExecutable()
+		if detectErr != nil {
+			return nil, "", detectErr
+		}
 		directory, err := materializeHelperScripts("")
 		if err != nil {
 			return nil, "", err

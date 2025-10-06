@@ -59,11 +59,28 @@ func TestNewCounterDefault(t *testing.T) {
 
 func TestNewCounterUVDetectionFailure(t *testing.T) {
 	t.Setenv("CTX_UV", filepath.Join(os.TempDir(), "nonexistent-uv"))
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 	_, _, err := NewCounter(Config{Model: "claude-3-5-sonnet"})
 	if err == nil {
 		t.Fatalf("expected error when uv executable is missing")
 	}
 	if !strings.Contains(err.Error(), "CTX_UV") {
 		t.Fatalf("expected error to mention CTX_UV, got %v", err)
+	}
+}
+
+func TestNewCounterAnthropicMissingAPIKey(t *testing.T) {
+	executablePath, execErr := os.Executable()
+	if execErr != nil {
+		t.Fatalf("resolve current executable: %v", execErr)
+	}
+	t.Setenv("CTX_UV", executablePath)
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	_, _, err := NewCounter(Config{Model: "claude-3-5-sonnet"})
+	if err == nil {
+		t.Fatalf("expected error when ANTHROPIC_API_KEY is missing")
+	}
+	if !strings.Contains(err.Error(), "ANTHROPIC_API_KEY") {
+		t.Fatalf("expected error to mention ANTHROPIC_API_KEY, got %v", err)
 	}
 }
