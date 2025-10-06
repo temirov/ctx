@@ -94,6 +94,8 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	warningSkipPathFormat           = "Warning: skipping %s: %v\n"
 	warningTokenCountFormat         = "Warning: failed to count tokens for %s: %v\n"
 	workingDirectoryErrorFormat     = "unable to determine working directory: %w"
+	rawBinaryTreeFormat             = "%s[Binary] %s (%s%s)\n"
+	rawMimeTypeLabel                = "Mime Type: "
 
 	// errorAbsolutePathFormat reports failure to resolve an absolute path.
 	errorAbsolutePathFormat = "abs failed for '%s': %w"
@@ -429,6 +431,19 @@ func runTreeOrContentCommand(
 		)
 	}
 
+	if commandName == types.CommandTree && format == types.FormatRaw {
+		return runTreeRawStreaming(
+			validatedPaths,
+			exclusionPatterns,
+			useGitignore,
+			useIgnoreFile,
+			includeGit,
+			withSummary,
+			tokenCounter,
+			tokenModel,
+		)
+	}
+
 	var collected []interface{}
 	for _, info := range validatedPaths {
 		if info.IsDir {
@@ -578,12 +593,21 @@ type streamingSummary struct {
 	model  string
 }
 
-func (state *streamingSummary) add(file types.FileOutput) {
+func (state *streamingSummary) addFile(size int64, tokens int, model string) {
 	state.files++
-	state.bytes += file.SizeBytes
-	state.tokens += file.Tokens
-	if state.model == "" && file.Model != "" {
-		state.model = file.Model
+	state.bytes += size
+	state.tokens += tokens
+	if state.model == "" && model != "" && tokens > 0 {
+		state.model = model
+	}
+}
+
+func (state *streamingSummary) toOutputSummary() *types.OutputSummary {
+	return &types.OutputSummary{
+		TotalFiles:  state.files,
+		TotalSize:   utils.FormatFileSize(state.bytes),
+		TotalTokens: state.tokens,
+		Model:       state.model,
 	}
 }
 
@@ -624,7 +648,7 @@ func runContentRawStreaming(
 				}
 				directoryOutputs = append(directoryOutputs, fileOut)
 				output.PrintFileRaw(fileOut)
-				summaryState.add(fileOut)
+				summaryState.addFile(fileOut.SizeBytes, fileOut.Tokens, fileOut.Model)
 				return nil
 			})
 			if streamErr != nil {
@@ -650,25 +674,20 @@ func runContentRawStreaming(
 			continue
 		}
 		output.PrintFileRaw(fileOutput.file)
-		summaryState.add(fileOutput.file)
+		summaryState.addFile(fileOutput.file.SizeBytes, fileOutput.file.Tokens, fileOutput.file.Model)
 		if fileOutput.tree != nil {
 			treeNodes = append(treeNodes, fileOutput.tree)
 		}
 	}
 
 	if withSummary {
-		summary := &types.OutputSummary{
-			TotalFiles:  summaryState.files,
-			TotalSize:   utils.FormatFileSize(summaryState.bytes),
-			TotalTokens: summaryState.tokens,
-			Model:       summaryState.model,
-		}
+		summary := summaryState.toOutputSummary()
 		fmt.Println(output.FormatSummaryLine(summary))
 		fmt.Println()
 	}
 
 	for _, node := range treeNodes {
-		fmt.Printf("--- Directory Tree: %s ---\n", node.Path)
+		fmt.Printf("\n--- Directory Tree: %s ---\n", node.Path)
 		output.PrintTreeRaw(node, withSummary)
 	}
 
@@ -678,6 +697,181 @@ func runContentRawStreaming(
 type singleFileResult struct {
 	file types.FileOutput
 	tree *types.TreeOutputNode
+}
+
+func runTreeRawStreaming(
+	validatedPaths []types.ValidatedPath,
+	exclusionPatterns []string,
+	useGitignore bool,
+	useIgnoreFile bool,
+	includeGit bool,
+	withSummary bool,
+	tokenCounter tokenizer.Counter,
+	tokenModel string,
+) error {
+	summaryState := &streamingSummary{}
+	for _, info := range validatedPaths {
+		if info.IsDir {
+			ignorePatterns, _, loadErr := config.LoadRecursiveIgnorePatterns(
+				info.AbsolutePath,
+				exclusionPatterns,
+				useGitignore,
+				useIgnoreFile,
+				includeGit,
+			)
+			if loadErr != nil {
+				fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, loadErr)
+				continue
+			}
+
+			_, _, _ = streamTreeDirectory(
+				info.AbsolutePath,
+				"",
+				info.AbsolutePath,
+				ignorePatterns,
+				withSummary,
+				tokenCounter,
+				tokenModel,
+				summaryState,
+			)
+			continue
+		}
+
+		if err := streamTreeFile(info.AbsolutePath, "", tokenCounter, tokenModel, summaryState); err != nil {
+			fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, err)
+		}
+	}
+
+	if withSummary {
+		summary := summaryState.toOutputSummary()
+		fmt.Println(output.FormatSummaryLine(summary))
+		fmt.Println()
+	}
+	return nil
+}
+
+func streamTreeDirectory(
+	currentPath string,
+	prefix string,
+	rootPath string,
+	ignorePatterns []string,
+	includeSummary bool,
+	tokenCounter tokenizer.Counter,
+	tokenModel string,
+	summaryState *streamingSummary,
+) (int, int64, int) {
+	fmt.Printf("%s%s\n", prefix, currentPath)
+	entries, readErr := os.ReadDir(currentPath)
+	if readErr != nil {
+		fmt.Fprintf(os.Stderr, warningSkipPathFormat, currentPath, readErr)
+		return 0, 0, 0
+	}
+
+	files := 0
+	var totalBytes int64
+	totalTokens := 0
+	childPrefix := prefix + "  "
+
+	for _, entry := range entries {
+		childPath := filepath.Join(currentPath, entry.Name())
+		relativePath := utils.RelativePathOrSelf(childPath, rootPath)
+		if utils.ShouldIgnoreByPath(relativePath, ignorePatterns) {
+			if entry.IsDir() {
+				continue
+			}
+			continue
+		}
+
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			fmt.Fprintf(os.Stderr, warningSkipPathFormat, childPath, infoErr)
+			continue
+		}
+
+		if entry.IsDir() {
+			childFiles, childBytes, childTokens := streamTreeDirectory(childPath, childPrefix, rootPath, ignorePatterns, includeSummary, tokenCounter, tokenModel, summaryState)
+			files += childFiles
+			totalBytes += childBytes
+			totalTokens += childTokens
+			continue
+		}
+
+		mimeType := utils.DetectMimeType(childPath)
+		isBinary := utils.IsFileBinary(childPath)
+		var fileTokens int
+		if tokenCounter != nil && !isBinary {
+			result, countErr := tokenizer.CountFile(tokenCounter, childPath)
+			if countErr != nil {
+				fmt.Fprintf(os.Stderr, warningTokenCountFormat, childPath, countErr)
+			} else if result.Counted {
+				fileTokens = result.Tokens
+			}
+		}
+
+		if isBinary {
+			fmt.Printf(rawBinaryTreeFormat, childPrefix, childPath, rawMimeTypeLabel, mimeType)
+		} else if fileTokens > 0 {
+			fmt.Printf("%s[File] %s (%d tokens)\n", childPrefix, childPath, fileTokens)
+		} else {
+			fmt.Printf("%s[File] %s\n", childPrefix, childPath)
+		}
+
+		files++
+		totalBytes += info.Size()
+		totalTokens += fileTokens
+		summaryState.addFile(info.Size(), fileTokens, tokenModel)
+	}
+
+	if includeSummary {
+		label := "files"
+		if files == 1 {
+			label = "file"
+		}
+		sizeText := utils.FormatFileSize(totalBytes)
+		extra := ""
+		if totalTokens > 0 {
+			extra = fmt.Sprintf(", %d tokens", totalTokens)
+		}
+		fmt.Printf("%s  Summary: %d %s, %s%s\n", prefix, files, label, sizeText, extra)
+	}
+
+	return files, totalBytes, totalTokens
+}
+
+func streamTreeFile(
+	path string,
+	prefix string,
+	tokenCounter tokenizer.Counter,
+	tokenModel string,
+	summaryState *streamingSummary,
+) error {
+	info, statErr := os.Stat(path)
+	if statErr != nil {
+		return statErr
+	}
+
+	mimeType := utils.DetectMimeType(path)
+	isBinary := utils.IsFileBinary(path)
+	var fileTokens int
+	if tokenCounter != nil && !isBinary {
+		result, countErr := tokenizer.CountFile(tokenCounter, path)
+		if countErr != nil {
+			fmt.Fprintf(os.Stderr, warningTokenCountFormat, path, countErr)
+		} else if result.Counted {
+			fileTokens = result.Tokens
+		}
+	}
+
+	if isBinary {
+		fmt.Printf(rawBinaryTreeFormat, prefix, path, rawMimeTypeLabel, mimeType)
+	} else if fileTokens > 0 {
+		fmt.Printf("%s[File] %s (%d tokens)\n", prefix, path, fileTokens)
+	} else {
+		fmt.Printf("%s[File] %s\n", prefix, path)
+	}
+
+	summaryState.addFile(info.Size(), fileTokens, tokenModel)
+	return nil
 }
 
 func streamSingleFile(
