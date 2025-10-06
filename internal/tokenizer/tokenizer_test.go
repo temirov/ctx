@@ -1,6 +1,11 @@
 package tokenizer
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 type testCounter struct{}
 
@@ -49,5 +54,16 @@ func TestNewCounterDefault(t *testing.T) {
 	}
 	if tokens <= 0 {
 		t.Fatalf("expected positive token count, got %d", tokens)
+	}
+}
+
+func TestNewCounterPythonDetectionFailure(t *testing.T) {
+	t.Setenv("CTX_PYTHON", filepath.Join(os.TempDir(), "nonexistent-python"))
+	_, _, err := NewCounter(Config{Model: "claude-3-5-sonnet"})
+	if err == nil {
+		t.Fatalf("expected error when python executable is missing")
+	}
+	if !strings.Contains(err.Error(), "CTX_PYTHON") {
+		t.Fatalf("expected error to mention CTX_PYTHON, got %v", err)
 	}
 }

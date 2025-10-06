@@ -5,7 +5,6 @@ package tokenizer
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 )
 
@@ -32,7 +31,8 @@ func TestPythonHelperAnthropic(t *testing.T) {
 	python := pythonExecutable(t)
 	ensurePythonModule(t, python, "anthropic_tokenizer")
 
-	counter, model, err := NewCounter(Config{Model: "claude-3-5-sonnet", PythonExecutable: python})
+	t.Setenv("CTX_PYTHON", python)
+	counter, model, err := NewCounter(Config{Model: "claude-3-5-sonnet"})
 	if err != nil {
 		t.Fatalf("NewCounter error: %v", err)
 	}
@@ -60,12 +60,9 @@ func TestPythonHelperLlama(t *testing.T) {
 		t.Skipf("sentencepiece model unavailable: %v", err)
 	}
 
-	cfg := Config{
-		Model:                  "llama-3.1-8b",
-		PythonExecutable:       python,
-		SentencePieceModelPath: spModelPath,
-	}
-	counter, model, err := NewCounter(cfg)
+	t.Setenv("CTX_PYTHON", python)
+	t.Setenv("CTX_SPM_MODEL", spModelPath)
+	counter, model, err := NewCounter(Config{Model: "llama-3.1-8b"})
 	if err != nil {
 		t.Fatalf("NewCounter error: %v", err)
 	}
@@ -73,14 +70,7 @@ func TestPythonHelperLlama(t *testing.T) {
 		t.Fatalf("expected resolved model llama-3.1-8b, got %q", model)
 	}
 
-	tempDir := t.TempDir()
-	samplePath := filepath.Join(tempDir, "sample.txt")
-	sampleContent := "sentencepiece integration test"
-	if writeErr := os.WriteFile(samplePath, []byte(sampleContent), 0o600); writeErr != nil {
-		t.Fatalf("writing sample file: %v", writeErr)
-	}
-
-	tokens, err := counter.CountString(sampleContent)
+	tokens, err := counter.CountString("sentencepiece integration test")
 	if err != nil {
 		t.Fatalf("CountString error: %v", err)
 	}

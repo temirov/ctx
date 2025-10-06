@@ -26,7 +26,7 @@ func (counter pythonCounter) Name() string {
 func (counter pythonCounter) CountString(input string) (int, error) {
 	execPath := counter.executable
 	if execPath == "" {
-		execPath = pythonExecutableGuess
+		return 0, fmt.Errorf("python executable not configured")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), counter.timeout)
 	defer cancel()

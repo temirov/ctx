@@ -26,9 +26,6 @@ const (
 	summaryFlagName       = "summary"
 	tokensFlagName        = "tokens"
 	modelFlagName         = "model"
-	pythonFlagName        = "python"
-	sentencePieceFlagName = "spm-model"
-	pythonHelpersFlagName = "py-helpers-dir"
 	documentationFlagName = "doc"
 	versionFlagName       = "version"
 	versionTemplate       = "ctx version: %s\n"
@@ -91,11 +88,7 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	summaryFlagDescription          = "include summary of resulting files"
 	tokensFlagDescription           = "include token counts"
 	modelFlagDescription            = "tokenizer model to use for token counting"
-	pythonFlagDescription           = "python executable to use for external tokenizers"
-	sentencePieceDescription        = "SentencePiece tokenizer.model path for llama models"
-	pythonHelpersDescription        = "directory containing tokenizer helper scripts"
 	defaultTokenizerModelName       = "gpt-4o"
-	defaultPythonExecutable         = "python3"
 	documentationFlagDescription    = "include documentation"
 	invalidFormatMessage            = "Invalid format value '%s'"
 	warningSkipPathFormat           = "Warning: skipping %s: %v\n"
@@ -167,20 +160,14 @@ type pathOptions struct {
 }
 
 type tokenOptions struct {
-	enabled            bool
-	model              string
-	pythonExecutable   string
-	sentencePieceModel string
-	pythonHelpersDir   string
+	enabled bool
+	model   string
 }
 
 func (options tokenOptions) toConfig(workingDirectory string) tokenizer.Config {
 	return tokenizer.Config{
-		Model:                  options.model,
-		PythonExecutable:       options.pythonExecutable,
-		HelpersDir:             options.pythonHelpersDir,
-		SentencePieceModelPath: options.sentencePieceModel,
-		WorkingDirectory:       workingDirectory,
+		Model:            options.model,
+		WorkingDirectory: workingDirectory,
 	}
 }
 
@@ -199,7 +186,6 @@ func createTreeCommand() *cobra.Command {
 	var summaryEnabled bool = true
 	var tokenConfiguration tokenOptions
 	tokenConfiguration.model = defaultTokenizerModelName
-	tokenConfiguration.pythonExecutable = defaultPythonExecutable
 
 	treeCommand := &cobra.Command{
 		Use:     treeUse,
@@ -237,9 +223,6 @@ func createTreeCommand() *cobra.Command {
 	treeCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, true, summaryFlagDescription)
 	treeCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
 	treeCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
-	treeCommand.Flags().StringVar(&tokenConfiguration.pythonExecutable, pythonFlagName, defaultPythonExecutable, pythonFlagDescription)
-	treeCommand.Flags().StringVar(&tokenConfiguration.sentencePieceModel, sentencePieceFlagName, "", sentencePieceDescription)
-	treeCommand.Flags().StringVar(&tokenConfiguration.pythonHelpersDir, pythonHelpersFlagName, "", pythonHelpersDescription)
 	return treeCommand
 }
 
@@ -251,7 +234,6 @@ func createContentCommand() *cobra.Command {
 	var summaryEnabled bool = true
 	var tokenConfiguration tokenOptions
 	tokenConfiguration.model = defaultTokenizerModelName
-	tokenConfiguration.pythonExecutable = defaultPythonExecutable
 
 	contentCommand := &cobra.Command{
 		Use:     contentUse,
@@ -290,9 +272,6 @@ func createContentCommand() *cobra.Command {
 	contentCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, true, summaryFlagDescription)
 	contentCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
 	contentCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
-	contentCommand.Flags().StringVar(&tokenConfiguration.pythonExecutable, pythonFlagName, defaultPythonExecutable, pythonFlagDescription)
-	contentCommand.Flags().StringVar(&tokenConfiguration.sentencePieceModel, sentencePieceFlagName, "", sentencePieceDescription)
-	contentCommand.Flags().StringVar(&tokenConfiguration.pythonHelpersDir, pythonHelpersFlagName, "", pythonHelpersDescription)
 	return contentCommand
 }
 
