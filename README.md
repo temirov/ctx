@@ -175,6 +175,8 @@ Enable `--tokens` to populate a `tokens` field on files (along with a `model` th
 | `llama-` | SentencePiece helper (via uv) | Requires `uv`, Python 3.11+, and will download a tokenizer model automatically (override with `CTX_SPM_MODEL`). |
 | anything else | default (`cl100k_base`) | Safe fallback when no specific tokenizer is known. |
 
+Common Claude shorthands are resolved automatically; for example `--model claude-4.5` maps to `claude-sonnet-4-5-20250929`, and `claude-4` selects `claude-sonnet-4-20250514`.
+
 Example:
 
 ```bash

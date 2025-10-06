@@ -97,14 +97,38 @@ func TestNewCounterAnthropicArgs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCounter error: %v", err)
 	}
-	if model != "claude-3-5-sonnet" {
-		t.Fatalf("expected model claude-3-5-sonnet, got %q", model)
+	if model != "claude-3-5-sonnet-20241022" {
+		t.Fatalf("expected canonical model claude-3-5-sonnet-20241022, got %q", model)
 	}
 	script, ok := counter.(scriptCounter)
 	if !ok {
 		t.Fatalf("expected scriptCounter, got %T", counter)
 	}
-	expectedArgs := []string{"--model", "claude-3-5-sonnet"}
+	expectedArgs := []string{"--model", "claude-3-5-sonnet-20241022"}
+	if !reflect.DeepEqual(script.args, expectedArgs) {
+		t.Fatalf("unexpected helper args: %v", script.args)
+	}
+}
+
+func TestNewCounterAnthropicAlias(t *testing.T) {
+	executablePath, execErr := os.Executable()
+	if execErr != nil {
+		t.Fatalf("resolve current executable: %v", execErr)
+	}
+	t.Setenv("CTX_UV", executablePath)
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+	counter, model, err := NewCounter(Config{Model: "claude-4.5"})
+	if err != nil {
+		t.Fatalf("NewCounter error: %v", err)
+	}
+	if model != "claude-sonnet-4-5-20250929" {
+		t.Fatalf("expected canonical model claude-sonnet-4-5-20250929, got %q", model)
+	}
+	script, ok := counter.(scriptCounter)
+	if !ok {
+		t.Fatalf("expected scriptCounter, got %T", counter)
+	}
+	expectedArgs := []string{"--model", "claude-sonnet-4-5-20250929"}
 	if !reflect.DeepEqual(script.args, expectedArgs) {
 		t.Fatalf("unexpected helper args: %v", script.args)
 	}

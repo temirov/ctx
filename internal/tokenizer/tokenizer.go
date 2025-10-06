@@ -37,6 +37,11 @@ func NewCounter(cfg Config) (Counter, string, error) {
 	if model == "" {
 		model = defaultModel
 	}
+
+	if resolved, ok := resolveModelAlias(model); ok {
+		model = resolved
+	}
+
 	lowerModel := strings.ToLower(model)
 
 	if isOpenAIModel(lowerModel) {
@@ -101,6 +106,172 @@ func NewCounter(cfg Config) (Counter, string, error) {
 		}
 		return openAICounter{encoding: encoding, name: defaultEncodingName}, defaultEncodingName, nil
 	}
+}
+
+type aliasEntry struct {
+	canonical string
+	aliases   []string
+}
+
+var modelAliasLookup = buildModelAliasLookup()
+
+func resolveModelAlias(model string) (string, bool) {
+	normalized := normalizeAliasKey(model)
+	if normalized == "" {
+		return "", false
+	}
+
+	if canonical, ok := modelAliasLookup[normalized]; ok {
+		return canonical, true
+	}
+	return "", false
+}
+
+func buildModelAliasLookup() map[string]string {
+	entries := []aliasEntry{
+		{
+			canonical: "claude-3-5-haiku-20241022",
+			aliases: []string{
+				"claude-3.5-haiku",
+				"claude-3-5-haiku",
+				"claude-3.5",
+				"claude-3-5",
+			},
+		},
+		{
+			canonical: "claude-3-5-sonnet-20240620",
+			aliases: []string{
+				"claude-3.5-sonnet-20240620",
+			},
+		},
+		{
+			canonical: "claude-3-5-sonnet-20241022",
+			aliases: []string{
+				"claude-3.5-sonnet",
+				"claude-3-5-sonnet",
+				"claude-3.5",
+				"claude-3-5",
+			},
+		},
+		{
+			canonical: "claude-3-7-sonnet-20250219",
+			aliases: []string{
+				"claude-3.7",
+				"claude-3-7",
+				"claude-3.7-sonnet",
+				"claude-3-7-sonnet",
+			},
+		},
+		{
+			canonical: "claude-3-haiku-20240307",
+			aliases: []string{
+				"claude-3-haiku",
+			},
+		},
+		{
+			canonical: "claude-3-opus-20240229",
+			aliases: []string{
+				"claude-3-opus",
+				"claude-opus-3",
+			},
+		},
+		{
+			canonical: "claude-opus-4-1-20250805",
+			aliases: []string{
+				"claude-4.1",
+				"claude-4-1",
+				"claude-opus-4.1",
+				"claude-opus-4-1",
+			},
+		},
+		{
+			canonical: "claude-opus-4-20250514",
+			aliases: []string{
+				"claude-4-opus",
+				"claude-4",
+				"claude-opus-4",
+			},
+		},
+		{
+			canonical: "claude-sonnet-4-20250514",
+			aliases: []string{
+				"claude-sonnet-4",
+				"claude-4-sonnet",
+				"claude-4",
+			},
+		},
+		{
+			canonical: "claude-sonnet-4-5-20250929",
+			aliases: []string{
+				"claude-4.5",
+				"claude-4-5",
+				"claude-sonnet-4.5",
+				"claude-sonnet-4-5",
+				"claude-4.5-sonnet",
+			},
+		},
+	}
+
+	lookup := make(map[string]string, len(entries)*4)
+	for _, entry := range entries {
+		normalizedCanonical := normalizeAliasKey(entry.canonical)
+		if normalizedCanonical != "" {
+			lookup[normalizedCanonical] = entry.canonical
+		}
+		base := stripClaudeDate(entry.canonical)
+		if base != "" {
+			lookup[normalizeAliasKey(base)] = entry.canonical
+		}
+		for _, alias := range entry.aliases {
+			if normalized := normalizeAliasKey(alias); normalized != "" {
+				lookup[normalized] = entry.canonical
+			}
+		}
+	}
+
+	return lookup
+}
+
+func normalizeAliasKey(input string) string {
+	trimmed := strings.TrimSpace(strings.ToLower(input))
+	if trimmed == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(" ", "-", "_", "-", ".", "-")
+	normalized := replacer.Replace(trimmed)
+	normalized = collapseHyphens(normalized)
+	return normalized
+}
+
+func collapseHyphens(input string) string {
+	for strings.Contains(input, "--") {
+		input = strings.ReplaceAll(input, "--", "-")
+	}
+	return input
+}
+
+func stripClaudeDate(model string) string {
+	parts := strings.Split(model, "-")
+	if len(parts) == 0 {
+		return model
+	}
+	last := parts[len(parts)-1]
+	if len(last) == 8 && isDigits(last) {
+		return strings.Join(parts[:len(parts)-1], "-")
+	}
+	return model
+}
+
+func isDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func isOpenAIModel(model string) bool {
