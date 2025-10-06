@@ -1,3 +1,4 @@
+
 #!/usr/bin/env -S uv run
 # /// script
 # requires-python = ">=3.11"
@@ -24,9 +25,13 @@ def main() -> None:
     except Exception as import_error:  # pragma: no cover - network dependent
         sys.stderr.write(
             "uv runtime missing dependency anthropic_tokenizer: "
-            f"{import_error}\n"
+            f"{import_error}
+"
         )
-        sys.stderr.write("install with: uv pip install anthropic-tokenizer\n")
+        sys.stderr.write(
+            "install with: uv pip install anthropic-tokenizer
+"
+        )
         sys.exit(1)
 
     input_text = sys.stdin.read()

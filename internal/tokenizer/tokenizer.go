@@ -76,23 +76,25 @@ func NewCounter(cfg Config) (Counter, string, error) {
 			timeout:    timeout,
 		}, model, nil
 	case strings.HasPrefix(lowerModel, "llama-"):
-		spmModelPath := strings.TrimSpace(os.Getenv("CTX_SPM_MODEL"))
-		if spmModelPath == "" {
-			return nil, "", errors.New("llama models require CTX_SPM_MODEL to point to a SentencePiece tokenizer.model file")
-		}
-		spmModelPath = resolvePath(cfg.WorkingDirectory, spmModelPath)
-		if _, err := os.Stat(spmModelPath); err != nil {
-			return nil, "", fmt.Errorf("unable to access SentencePiece model %s: %w", spmModelPath, err)
-		}
 		directory, err := materializeHelperScripts("")
 		if err != nil {
 			return nil, "", err
 		}
 		scriptPath := filepath.Join(directory, llamaScriptName)
+		var args []string
+		spmModelPath := strings.TrimSpace(os.Getenv("CTX_SPM_MODEL"))
+		if spmModelPath != "" {
+			resolved := resolvePath(cfg.WorkingDirectory, spmModelPath)
+			if _, err := os.Stat(resolved); err != nil {
+				return nil, "", fmt.Errorf("unable to access SentencePiece model %s: %w", resolved, err)
+			}
+			args = append(args, "--spm-model", resolved)
+		}
+		args = append(args, "--model", model)
 		return scriptCounter{
 			runner:     uvExecutable,
 			scriptPath: scriptPath,
-			args:       []string{"--spm-model", spmModelPath},
+			args:       args,
 			helperName: "sentencepiece",
 			timeout:    timeout,
 		}, model, nil
