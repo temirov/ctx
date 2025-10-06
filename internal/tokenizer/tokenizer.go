@@ -26,9 +26,9 @@ type Config struct {
 }
 
 const (
-	defaultModel         = "gpt-4o"
-	defaultEncodingName  = "cl100k_base"
-	defaultPythonTimeout = 120 * time.Second
+	defaultModel        = "gpt-4o"
+	defaultEncodingName = "cl100k_base"
+	defaultUVTimeout    = 120 * time.Second
 )
 
 // NewCounter returns a Counter implementation for the requested model.
@@ -53,35 +53,29 @@ func NewCounter(cfg Config) (Counter, string, error) {
 
 	timeout := cfg.Timeout
 	if timeout <= 0 {
-		timeout = defaultPythonTimeout
+		timeout = defaultUVTimeout
 	}
 
-	pythonExecutable, detectErr := detectPythonExecutable()
+	uvExecutable, detectErr := detectUVExecutable()
 	if detectErr != nil {
 		return nil, "", detectErr
 	}
 
 	switch {
 	case strings.HasPrefix(lowerModel, "claude-"):
-		if err := ensurePythonModule(pythonExecutable, "anthropic_tokenizer"); err != nil {
-			return nil, "", err
-		}
 		directory, err := materializeHelperScripts("")
 		if err != nil {
 			return nil, "", err
 		}
 		scriptPath := filepath.Join(directory, anthropicScriptName)
-		return pythonCounter{
-			executable: pythonExecutable,
+		return scriptCounter{
+			runner:     uvExecutable,
 			scriptPath: scriptPath,
-			args:       []string{"--model", lowerModel},
+			args:       []string{"--model", model},
 			helperName: "anthropic_tokenizer",
 			timeout:    timeout,
 		}, model, nil
 	case strings.HasPrefix(lowerModel, "llama-"):
-		if err := ensurePythonModule(pythonExecutable, "sentencepiece"); err != nil {
-			return nil, "", err
-		}
 		spmModelPath := strings.TrimSpace(os.Getenv("CTX_SPM_MODEL"))
 		if spmModelPath == "" {
 			return nil, "", errors.New("llama models require CTX_SPM_MODEL to point to a SentencePiece tokenizer.model file")
@@ -95,8 +89,8 @@ func NewCounter(cfg Config) (Counter, string, error) {
 			return nil, "", err
 		}
 		scriptPath := filepath.Join(directory, llamaScriptName)
-		return pythonCounter{
-			executable: pythonExecutable,
+		return scriptCounter{
+			runner:     uvExecutable,
 			scriptPath: scriptPath,
 			args:       []string{"--spm-model", spmModelPath},
 			helperName: "sentencepiece",
@@ -129,51 +123,20 @@ func isOpenAIModel(model string) bool {
 	return false
 }
 
-func detectPythonExecutable() (string, error) {
-	if explicit := strings.TrimSpace(os.Getenv("CTX_PYTHON")); explicit != "" {
-		if _, err := os.Stat(explicit); err == nil {
-			if err := verifyPythonCompatibility(explicit); err != nil {
-				return "", fmt.Errorf("python specified via CTX_PYTHON (%s) is not compatible: %w", explicit, err)
-			}
-			return explicit, nil
-		}
+func detectUVExecutable() (string, error) {
+	if explicit := strings.TrimSpace(os.Getenv("CTX_UV")); explicit != "" {
 		if path, err := exec.LookPath(explicit); err == nil {
-			if err := verifyPythonCompatibility(path); err != nil {
-				return "", fmt.Errorf("python specified via CTX_PYTHON (%s) is not compatible: %w", path, err)
-			}
 			return path, nil
 		}
-		return "", fmt.Errorf("python executable specified via CTX_PYTHON (%s) not found", explicit)
+		if _, err := os.Stat(explicit); err == nil {
+			return explicit, nil
+		}
+		return "", fmt.Errorf("uv executable specified via CTX_UV (%s) not found", explicit)
 	}
-
-	candidates := []string{"python3", "python"}
-	for _, candidate := range candidates {
-		path, err := exec.LookPath(candidate)
-		if err != nil {
-			continue
-		}
-		if err := verifyPythonCompatibility(path); err != nil {
-			continue
-		}
+	if path, err := exec.LookPath("uv"); err == nil {
 		return path, nil
 	}
-	return "", errors.New("python 3.8+ not found; install Python or set CTX_PYTHON to a compatible interpreter")
-}
-
-func verifyPythonCompatibility(pythonPath string) error {
-	cmd := exec.Command(pythonPath, "-c", "import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("python interpreter %s must be version 3.8 or newer", pythonPath)
-	}
-	return nil
-}
-
-func ensurePythonModule(pythonPath, module string) error {
-	cmd := exec.Command(pythonPath, "-c", fmt.Sprintf("import %s", module))
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("python module %s not available; install it in your environment", module)
-	}
-	return nil
+	return "", errors.New("uv executable not found; install uv from https://github.com/astral-sh/uv or expose it via CTX_UV")
 }
 
 func resolvePath(base string, path string) string {

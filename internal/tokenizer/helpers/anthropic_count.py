@@ -1,25 +1,38 @@
-#!/usr/bin/env python3
-import sys
-import argparse
+#!/usr/bin/env -S uv run
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "anthropic-tokenizer>=0"
+# ]
+# ///
 
-def main():
-    argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument("--model", required=False, help="Anthropic model name, e.g., claude-3-5-sonnet")
-    parsed = argument_parser.parse_args()
+import argparse
+import sys
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--model",
+        required=False,
+        help="Anthropic model name, e.g., claude-3-5-sonnet",
+    )
+    parser.parse_args()
 
     try:
-        # PyPI package providing Claude-compatible tokenizer
-        # pip install anthropic_tokenizer
-        from anthropic_tokenizer import tokenize as anthropic_tokenize
-    except Exception as import_error:
-        sys.stderr.write(f"import error: {import_error}\n")
-        sys.stderr.write("please install with: pip install anthropic_tokenizer\n")
+        from anthropic_tokenizer import tokenize as anthropic_tokenize  # type: ignore
+    except Exception as import_error:  # pragma: no cover - network dependent
+        sys.stderr.write(
+            "uv runtime missing dependency anthropic_tokenizer: "
+            f"{import_error}\n"
+        )
+        sys.stderr.write("install with: uv pip install anthropic-tokenizer\n")
         sys.exit(1)
 
     input_text = sys.stdin.read()
     token_ids = anthropic_tokenize(input_text)
-    token_count = len(token_ids)
-    sys.stdout.write(str(token_count))
+    sys.stdout.write(str(len(token_ids)))
+
 
 if __name__ == "__main__":
     main()

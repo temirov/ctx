@@ -57,13 +57,13 @@ func TestNewCounterDefault(t *testing.T) {
 	}
 }
 
-func TestNewCounterPythonDetectionFailure(t *testing.T) {
-	t.Setenv("CTX_PYTHON", filepath.Join(os.TempDir(), "nonexistent-python"))
+func TestNewCounterUVDetectionFailure(t *testing.T) {
+	t.Setenv("CTX_UV", filepath.Join(os.TempDir(), "nonexistent-uv"))
 	_, _, err := NewCounter(Config{Model: "claude-3-5-sonnet"})
 	if err == nil {
-		t.Fatalf("expected error when python executable is missing")
+		t.Fatalf("expected error when uv executable is missing")
 	}
-	if !strings.Contains(err.Error(), "CTX_PYTHON") {
-		t.Fatalf("expected error to mention CTX_PYTHON, got %v", err)
+	if !strings.Contains(err.Error(), "CTX_UV") {
+		t.Fatalf("expected error to mention CTX_UV, got %v", err)
 	}
 }

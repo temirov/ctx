@@ -8,25 +8,29 @@ import (
 	"testing"
 )
 
-func pythonExecutable(t *testing.T) string {
-	python := os.Getenv("CTX_TEST_PYTHON")
-	if python == "" {
-		python = "python3"
+func requireHelperExecution(t *testing.T) {
+	if os.Getenv("CTX_TEST_RUN_HELPERS") != "1" {
+		t.Skip("set CTX_TEST_RUN_HELPERS=1 to run uv helper integration tests")
 	}
-	cmd := exec.Command(python, "-c", "import sys")
-	if err := cmd.Run(); err != nil {
-		t.Skipf("python executable %q unavailable: %v", python, err)
+}
+
+func uvExecutable(t *testing.T) string {
+	candidate := os.Getenv("CTX_TEST_UV")
+	if candidate == "" {
+		candidate = "uv"
 	}
-	return python
+	path, err := exec.LookPath(candidate)
+	if err != nil {
+		t.Skipf("uv executable %q unavailable: %v", candidate, err)
+	}
+	return path
 }
 
 func TestPythonHelperAnthropic(t *testing.T) {
-	python := pythonExecutable(t)
-	if err := ensurePythonModule(python, "anthropic_tokenizer"); err != nil {
-		t.Skipf("python module anthropic_tokenizer not available: %v", err)
-	}
+	requireHelperExecution(t)
+	uv := uvExecutable(t)
+	t.Setenv("CTX_UV", uv)
 
-	t.Setenv("CTX_PYTHON", python)
 	counter, model, err := NewCounter(Config{Model: "claude-3-5-sonnet"})
 	if err != nil {
 		t.Fatalf("NewCounter error: %v", err)
@@ -44,10 +48,9 @@ func TestPythonHelperAnthropic(t *testing.T) {
 }
 
 func TestPythonHelperLlama(t *testing.T) {
-	python := pythonExecutable(t)
-	if err := ensurePythonModule(python, "sentencepiece"); err != nil {
-		t.Skipf("python module sentencepiece not available: %v", err)
-	}
+	requireHelperExecution(t)
+	uv := uvExecutable(t)
+	t.Setenv("CTX_UV", uv)
 
 	spModelPath := os.Getenv("CTX_TEST_SPM_MODEL")
 	if spModelPath == "" {
@@ -57,7 +60,6 @@ func TestPythonHelperLlama(t *testing.T) {
 		t.Skipf("sentencepiece model unavailable: %v", err)
 	}
 
-	t.Setenv("CTX_PYTHON", python)
 	t.Setenv("CTX_SPM_MODEL", spModelPath)
 	counter, model, err := NewCounter(Config{Model: "llama-3.1-8b"})
 	if err != nil {

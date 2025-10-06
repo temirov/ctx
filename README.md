@@ -162,7 +162,7 @@ All JSON and XML outputs include a `mimeType` field for every file. Raw output n
 
 ### Token Counting
 
-Enable `--tokens` to populate a `tokens` field on files (along with a `model` that identifies the tokenizer) and a `totalTokens` aggregate on directories when summaries are included. By default ctx uses OpenAI's `gpt-4o` tokenizer via `tiktoken-go`. Switch models with `--model`; when requesting Anthropic (`claude-*`) or Llama (`llama-*`) models, ctx automatically locates a compatible Python 3.8+ interpreter and verifies that the required packages are available. Set `CTX_PYTHON` to override the interpreter path, and `CTX_SPM_MODEL` to point to a `tokenizer.model` file when using Llama helpers.
+Enable `--tokens` to populate a `tokens` field on files (along with a `model` that identifies the tokenizer) and a `totalTokens` aggregate on directories when summaries are included. By default ctx uses OpenAI's `gpt-4o` tokenizer via `tiktoken-go`. Switch models with `--model`; when requesting Anthropic (`claude-*`) or Llama (`llama-*`) models, ctx launches the embedded helpers with [`uv`](https://github.com/astral-sh/uv). Ensure `uv` is available on your `PATH` (or point `CTX_UV` at the executable) and Python 3.11+ will be provisioned automatically. For Llama helpers, set `CTX_SPM_MODEL` to the path of the requisite `tokenizer.model` file.
 
 #### Supported models
 
@@ -171,8 +171,8 @@ Enable `--tokens` to populate a `tokens` field on files (along with a `model` th
 | Prefix | Backend | Notes |
 |--------|---------|-------|
 | `gpt-`, `text-embedding`, `davinci`, `curie`, `babbage`, `ada`, `code-` | OpenAI via `tiktoken-go` | Falls back to `cl100k_base` when an exact encoding is unavailable. |
-| `claude-` | Anthropic helper (Python) | Requires Python 3.8+ with `anthropic_tokenizer`. `CTX_PYTHON` can override interpreter detection. |
-| `llama-` | SentencePiece helper (Python) | Requires Python 3.8+, `sentencepiece`, and `CTX_SPM_MODEL` pointing to a `tokenizer.model` file. |
+| `claude-` | Anthropic helper (via uv) | Requires `uv` and Python 3.11+; dependencies are declared in the script. Override the executable with `CTX_UV`. |
+| `llama-` | SentencePiece helper (via uv) | Requires `uv`, Python 3.11+, and `CTX_SPM_MODEL` pointing to a `tokenizer.model` file. |
 | anything else | default (`cl100k_base`) | Safe fallback when no specific tokenizer is known. |
 
 Example:
@@ -191,7 +191,7 @@ To exercise the embedded Python helpers, install the required packages (for exam
 CTX_TEST_PYTHON=python3 go test -tags python_helpers ./internal/tokenizer
 ```
 
-Set `CTX_TEST_SPM_MODEL` to the path of a `tokenizer.model` file to include the SentencePiece (llama) helper in the run. Tests automatically skip when dependencies are missing.
+Set `CTX_TEST_RUN_HELPERS=1` to enable the optional helper suite, `CTX_TEST_UV` to the uv executable (defaults to `uv`), and `CTX_TEST_SPM_MODEL` to the path of a `tokenizer.model` file to include the SentencePiece (llama) helper in the run. Tests automatically skip when prerequisites are missing.
 
 ## Configuration
 
