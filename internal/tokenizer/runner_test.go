@@ -42,3 +42,27 @@ func TestParseHelperTokenOutputInvalid(t *testing.T) {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 }
+
+func TestSanitizeHelperOutputStripsInstalledNoise(t *testing.T) {
+	input := "Installed 16 packages in 26ms\nModel not found"
+	result := sanitizeHelperOutput(input)
+	if result != "Model not found" {
+		t.Fatalf("expected sanitized output to keep only model message, got %q", result)
+	}
+}
+
+func TestSanitizeHelperOutputHandlesWhitespace(t *testing.T) {
+	input := "\n\t Installed 20 packages in 30ms \n\nActual error line \n"
+	result := sanitizeHelperOutput(input)
+	if result != "Actual error line" {
+		t.Fatalf("unexpected sanitized output: %q", result)
+	}
+}
+
+func TestSanitizeHelperOutputReturnsEmptyWhenOnlyNoise(t *testing.T) {
+	input := "Installed 5 packages in 5ms\n"
+	result := sanitizeHelperOutput(input)
+	if result != "" {
+		t.Fatalf("expected empty sanitized output, got %q", result)
+	}
+}

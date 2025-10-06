@@ -35,14 +35,18 @@ func (counter scriptCounter) CountString(input string) (int, error) {
 	command.Stdin = strings.NewReader(input)
 
 	outputBytes, err := command.CombinedOutput()
+	cleanOutput := sanitizeHelperOutput(string(outputBytes))
 	if ctx.Err() == context.DeadlineExceeded {
 		return 0, fmt.Errorf("uv helper timeout: %w", ctx.Err())
 	}
 	if err != nil {
-		return 0, fmt.Errorf("uv helper error: %v, output: %s", err, strings.TrimSpace(string(outputBytes)))
+		if cleanOutput != "" {
+			return 0, fmt.Errorf("uv helper error: %v, output: %s", err, cleanOutput)
+		}
+		return 0, fmt.Errorf("uv helper error: %v", err)
 	}
 
-	tokenCount, parseErr := parseHelperTokenOutput(string(outputBytes))
+	tokenCount, parseErr := parseHelperTokenOutput(cleanOutput)
 	if parseErr != nil {
 		return 0, parseErr
 	}
@@ -67,4 +71,32 @@ func parseHelperTokenOutput(rawOutput string) (int, error) {
 	}
 
 	return 0, fmt.Errorf("unexpected uv helper output: %q", trimmed)
+}
+
+func sanitizeHelperOutput(rawOutput string) string {
+	if rawOutput == "" {
+		return ""
+	}
+
+	lines := strings.Split(rawOutput, "\n")
+	filtered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if isHelperNoiseLine(trimmed) {
+			continue
+		}
+		filtered = append(filtered, trimmed)
+	}
+
+	return strings.Join(filtered, "\n")
+}
+
+func isHelperNoiseLine(line string) bool {
+	if strings.HasPrefix(line, "Installed ") && strings.Contains(line, " packages in ") {
+		return true
+	}
+	return false
 }
