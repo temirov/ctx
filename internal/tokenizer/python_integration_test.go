@@ -20,16 +20,11 @@ func pythonExecutable(t *testing.T) string {
 	return python
 }
 
-func ensurePythonModule(t *testing.T, python string, module string) {
-	cmd := exec.Command(python, "-c", "import "+module)
-	if err := cmd.Run(); err != nil {
-		t.Skipf("python module %s not installed: %v", module, err)
-	}
-}
-
 func TestPythonHelperAnthropic(t *testing.T) {
 	python := pythonExecutable(t)
-	ensurePythonModule(t, python, "anthropic_tokenizer")
+	if err := ensurePythonModule(python, "anthropic_tokenizer"); err != nil {
+		t.Skipf("python module anthropic_tokenizer not available: %v", err)
+	}
 
 	t.Setenv("CTX_PYTHON", python)
 	counter, model, err := NewCounter(Config{Model: "claude-3-5-sonnet"})
@@ -50,7 +45,9 @@ func TestPythonHelperAnthropic(t *testing.T) {
 
 func TestPythonHelperLlama(t *testing.T) {
 	python := pythonExecutable(t)
-	ensurePythonModule(t, python, "sentencepiece")
+	if err := ensurePythonModule(python, "sentencepiece"); err != nil {
+		t.Skipf("python module sentencepiece not available: %v", err)
+	}
 
 	spModelPath := os.Getenv("CTX_TEST_SPM_MODEL")
 	if spModelPath == "" {
