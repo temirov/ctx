@@ -366,6 +366,7 @@ func TestCTX(testingHandle *testing.T) {
 		prepare       func(*testing.T) string
 		expectError   bool
 		expectWarning bool
+		requiresHelpers bool
 		validate      func(*testing.T, string)
 	}{
 		{
@@ -648,6 +649,37 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				if rootModel, ok := jsonRoot["model"].(string); !ok || rootModel != "gpt-4o" {
 					t.Fatalf("expected root model gpt-4o, got %v", jsonRoot["model"])
+				}
+			},
+		},
+		{
+			name: "ContentTokensUVLlama",
+			arguments: []string{
+				appTypes.CommandContent,
+				"--tokens",
+				"--model",
+				"llama-3.1-8b",
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"sample.txt": "llama helper integration",
+				})
+			},
+			requiresHelpers: true,
+			validate: func(t *testing.T, output string) {
+				roots := decodeJSONRoots(t, output)
+				if len(roots) == 0 {
+					t.Fatalf("expected at least one root, got zero")
+				}
+				fileNode := findNodeByName(roots, "sample.txt")
+				if fileNode == nil {
+					t.Fatalf("llama sample file not found")
+				}
+				if fileNode.Tokens <= 0 {
+					t.Fatalf("expected positive token count, got %d", fileNode.Tokens)
+				}
+				if fileNode.Model != "llama-3.1-8b" {
+					t.Fatalf("expected file model llama-3.1-8b, got %q", fileNode.Model)
 				}
 			},
 		},
@@ -1463,6 +1495,19 @@ func TestCTX(testingHandle *testing.T) {
 
 	for _, testCase := range testCases {
 		testingHandle.Run(testCase.name, func(t *testing.T) {
+			if testCase.requiresHelpers {
+				if os.Getenv("CTX_TEST_RUN_HELPERS") != "1" {
+					t.Skip("set CTX_TEST_RUN_HELPERS=1 to run helper-dependent tests")
+				}
+				uvExecutable := os.Getenv("CTX_TEST_UV")
+				if uvExecutable == "" {
+					uvExecutable = "uv"
+				}
+				if _, err := exec.LookPath(uvExecutable); err != nil {
+					t.Skipf("uv executable %q unavailable: %v", uvExecutable, err)
+				}
+				t.Setenv("CTX_UV", uvExecutable)
+			}
 			workingDir := testCase.prepare(t)
 
 			var output string
