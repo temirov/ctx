@@ -1,6 +1,7 @@
 package output
 
 import (
+	"encoding/xml"
 	"fmt"
 	"io"
 
@@ -12,13 +13,19 @@ type xmlStreamRenderer struct {
 	stdout              io.Writer
 	stderr              io.Writer
 	command             string
-	roots               []*types.TreeOutputNode
+	totalRoots          int
+	rootsEmitted        int
+	headerWritten       bool
+	wrapperOpened       bool
 	currentRootPath     string
 	currentRootCaptured bool
 }
 
-func NewXMLStreamRenderer(stdout, stderr io.Writer, command string) StreamRenderer {
-	return &xmlStreamRenderer{stdout: stdout, stderr: stderr, command: command}
+func NewXMLStreamRenderer(stdout, stderr io.Writer, command string, totalRoots int) StreamRenderer {
+	if totalRoots < 1 {
+		totalRoots = 1
+	}
+	return &xmlStreamRenderer{stdout: stdout, stderr: stderr, command: command, totalRoots: totalRoots}
 }
 
 func (renderer *xmlStreamRenderer) Handle(event stream.Event) error {
@@ -35,7 +42,7 @@ func (renderer *xmlStreamRenderer) Handle(event stream.Event) error {
 		renderer.currentRootPath = normalizePath(event.Path)
 		renderer.currentRootCaptured = false
 	case stream.EventKindTree:
-		renderer.captureRoot(event.Tree, event.Path)
+		return renderer.handleTree(event.Tree, event.Path)
 	case stream.EventKindDone:
 		renderer.currentRootPath = ""
 		renderer.currentRootCaptured = false
@@ -47,41 +54,81 @@ func (renderer *xmlStreamRenderer) Flush() error {
 	if renderer.stdout == nil {
 		return nil
 	}
-
-	items := make([]interface{}, 0, len(renderer.roots))
-	for _, node := range renderer.roots {
-		items = append(items, node)
+	if renderer.wrapperOpened {
+		if _, err := renderer.stdout.Write([]byte("</results>\n")); err != nil {
+			return err
+		}
+		renderer.wrapperOpened = false
+		return nil
 	}
-
-	encoded, err := RenderXML(items)
-	if err != nil {
-		return err
+	if renderer.rootsEmitted > 0 && !renderer.headerWritten {
+		if _, err := renderer.stdout.Write([]byte("\n")); err != nil {
+			return err
+		}
 	}
-
-	if _, err := io.WriteString(renderer.stdout, encoded); err != nil {
-		return err
-	}
-
-	renderer.roots = nil
 	return nil
 }
 
-func (renderer *xmlStreamRenderer) captureRoot(node *types.TreeOutputNode, path string) {
-	if node == nil {
-		return
+func (renderer *xmlStreamRenderer) handleTree(node *types.TreeOutputNode, path string) error {
+	if node == nil || renderer.stdout == nil {
+		return nil
 	}
-
-	if renderer.currentRootPath != "" {
-		if renderer.currentRootCaptured {
-			return
-		}
-		if !pathsEqual(renderer.currentRootPath, path) && !pathsEqual(renderer.currentRootPath, node.Path) {
-			return
-		}
-		renderer.roots = append(renderer.roots, cloneTreeNode(node))
-		renderer.currentRootCaptured = true
-		return
+	if renderer.currentRootCaptured {
+		return nil
 	}
+	expected := renderer.currentRootPath
+	if expected != "" {
+		normalizedPath := normalizePath(path)
+		if !pathsEqual(expected, normalizedPath) && !pathsEqual(expected, node.Path) {
+			return nil
+		}
+	}
+	if err := renderer.emitNode(node); err != nil {
+		return err
+	}
+	renderer.currentRootCaptured = true
+	return nil
+}
 
-	renderer.roots = append(renderer.roots, cloneTreeNode(node))
+func (renderer *xmlStreamRenderer) emitNode(node *types.TreeOutputNode) error {
+	if renderer.totalRoots > 1 {
+		if !renderer.headerWritten {
+			if _, err := renderer.stdout.Write([]byte(xmlHeader)); err != nil {
+				return err
+			}
+			renderer.headerWritten = true
+		}
+		if !renderer.wrapperOpened {
+			if _, err := renderer.stdout.Write([]byte("<results>\n")); err != nil {
+				return err
+			}
+			renderer.wrapperOpened = true
+		}
+		encoded, err := xml.MarshalIndent(node, indentSpacer, indentSpacer)
+		if err != nil {
+			return err
+		}
+		if _, err := renderer.stdout.Write(encoded); err != nil {
+			return err
+		}
+		if _, err := renderer.stdout.Write([]byte("\n")); err != nil {
+			return err
+		}
+	} else {
+		if !renderer.headerWritten {
+			if _, err := renderer.stdout.Write([]byte(xmlHeader)); err != nil {
+				return err
+			}
+			renderer.headerWritten = true
+		}
+		encoded, err := xml.MarshalIndent(node, indentPrefix, indentSpacer)
+		if err != nil {
+			return err
+		}
+		if _, err := renderer.stdout.Write(encoded); err != nil {
+			return err
+		}
+	}
+	renderer.rootsEmitted++
+	return nil
 }

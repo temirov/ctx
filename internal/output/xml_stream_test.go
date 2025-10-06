@@ -10,10 +10,12 @@ import (
 	"github.com/temirov/ctx/internal/types"
 )
 
-func TestXMLStreamRendererOutputsSingleRoot(t *testing.T) {
+const indentSpacerValue = "  "
+
+func TestXMLStreamRendererOutputsSingleRoot(testingInstance *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	renderer := output.NewXMLStreamRenderer(&stdout, &stderr, types.CommandContent)
+	renderer := output.NewXMLStreamRenderer(&stdout, &stderr, types.CommandContent, 1)
 
 	rootPath := "/tmp/root"
 	filePath := rootPath + "/file.txt"
@@ -45,82 +47,106 @@ func TestXMLStreamRendererOutputsSingleRoot(t *testing.T) {
 	}
 
 	for _, event := range events {
-		if err := renderer.Handle(event); err != nil {
-			t.Fatalf("handle event failed: %v", err)
+		if handleError := renderer.Handle(event); handleError != nil {
+			testingInstance.Fatalf("handle event failed: %v", handleError)
+		}
+		if event.Kind == stream.EventKindTree && event.Tree != nil && event.Tree.Path == rootPath {
+			if !bytes.HasPrefix(stdout.Bytes(), []byte(xml.Header)) {
+				testingInstance.Fatalf("expected xml header at start of streamed output")
+			}
 		}
 	}
 
-	if err := renderer.Flush(); err != nil {
-		t.Fatalf("flush failed: %v", err)
+	if flushError := renderer.Flush(); flushError != nil {
+		testingInstance.Fatalf("flush failed: %v", flushError)
 	}
 
 	if !bytes.Contains(stderr.Bytes(), []byte("xml warning")) {
-		t.Fatalf("expected warning on stderr, got %q", stderr.String())
+		testingInstance.Fatalf("expected warning on stderr, got %q", stderr.String())
 	}
 
 	var decoded types.TreeOutputNode
-	if err := xml.Unmarshal(stdout.Bytes(), &decoded); err != nil {
-		t.Fatalf("failed to decode xml output: %v\noutput: %s", err, stdout.String())
+	if decodeError := xml.Unmarshal(stdout.Bytes(), &decoded); decodeError != nil {
+		testingInstance.Fatalf("failed to decode xml output: %v\noutput: %s", decodeError, stdout.String())
 	}
 
 	if decoded.Path != tree.Path {
-		t.Fatalf("expected root path %q, got %q", tree.Path, decoded.Path)
+		testingInstance.Fatalf("expected root path %q, got %q", tree.Path, decoded.Path)
 	}
 	if len(decoded.Children) != 1 {
-		t.Fatalf("expected one child, got %d", len(decoded.Children))
+		testingInstance.Fatalf("expected one child, got %d", len(decoded.Children))
 	}
 	if decoded.Children[0] == nil || decoded.Children[0].Path != filePath {
-		t.Fatalf("unexpected child node: %+v", decoded.Children[0])
+		testingInstance.Fatalf("unexpected child node: %+v", decoded.Children[0])
 	}
 }
 
-func TestXMLStreamRendererOutputsMultipleRootsAsResults(t *testing.T) {
+func TestXMLStreamRendererOutputsMultipleRootsAsResults(testingInstance *testing.T) {
 	var stdout bytes.Buffer
-	renderer := output.NewXMLStreamRenderer(&stdout, nil, types.CommandTree)
+	renderer := output.NewXMLStreamRenderer(&stdout, nil, types.CommandTree, 2)
 
 	firstPath := "/tmp/first"
 	secondPath := "/tmp/second"
 
+	firstNode := &types.TreeOutputNode{Path: firstPath, Name: "first", Type: types.NodeTypeDirectory}
+	secondNode := &types.TreeOutputNode{Path: secondPath, Name: "second", Type: types.NodeTypeDirectory}
+
+	firstEncoded, firstEncodeError := xml.MarshalIndent(firstNode, indentSpacerValue, indentSpacerValue)
+	if firstEncodeError != nil {
+		testingInstance.Fatalf("marshal first node: %v", firstEncodeError)
+	}
+	secondEncoded, secondEncodeError := xml.MarshalIndent(secondNode, indentSpacerValue, indentSpacerValue)
+	if secondEncodeError != nil {
+		testingInstance.Fatalf("marshal second node: %v", secondEncodeError)
+	}
+
 	events := []stream.Event{
 		{Kind: stream.EventKindStart, Path: firstPath},
-		{Kind: stream.EventKindTree, Path: firstPath, Tree: &types.TreeOutputNode{Path: firstPath, Name: "first", Type: types.NodeTypeDirectory}},
+		{Kind: stream.EventKindTree, Path: firstPath, Tree: firstNode},
 		{Kind: stream.EventKindDone},
 		{Kind: stream.EventKindStart, Path: secondPath},
-		{Kind: stream.EventKindTree, Path: secondPath, Tree: &types.TreeOutputNode{Path: secondPath, Name: "second", Type: types.NodeTypeDirectory}},
+		{Kind: stream.EventKindTree, Path: secondPath, Tree: secondNode},
 		{Kind: stream.EventKindDone},
 	}
 
+	header := xml.Header + "<results>\n"
+
 	for _, event := range events {
-		if err := renderer.Handle(event); err != nil {
-			t.Fatalf("handle event failed: %v", err)
+		if handleError := renderer.Handle(event); handleError != nil {
+			testingInstance.Fatalf("handle event failed: %v", handleError)
+		}
+		if event.Kind == stream.EventKindTree && event.Tree != nil && event.Tree.Path == firstPath {
+			expectedPrefix := header + string(firstEncoded) + "\n"
+			if stdout.String() != expectedPrefix {
+				testingInstance.Fatalf("unexpected streamed xml prefix: got %q, want %q", stdout.String(), expectedPrefix)
+			}
 		}
 	}
 
-	if err := renderer.Flush(); err != nil {
-		t.Fatalf("flush failed: %v", err)
+	if flushError := renderer.Flush(); flushError != nil {
+		testingInstance.Fatalf("flush failed: %v", flushError)
+	}
+
+	expectedOutput := header + string(firstEncoded) + "\n" + string(secondEncoded) + "\n</results>\n"
+	if stdout.String() != expectedOutput {
+		testingInstance.Fatalf("unexpected final xml: got %q, want %q", stdout.String(), expectedOutput)
 	}
 
 	var wrapper struct {
 		Nodes []types.TreeOutputNode `xml:"node"`
-		Items []types.TreeOutputNode `xml:"item"`
 	}
 
-	if err := xml.Unmarshal(stdout.Bytes(), &wrapper); err != nil {
-		t.Fatalf("failed to decode xml wrapper: %v\noutput: %s", err, stdout.String())
+	if decodeError := xml.Unmarshal(stdout.Bytes(), &wrapper); decodeError != nil {
+		testingInstance.Fatalf("failed to decode xml wrapper: %v\noutput: %s", decodeError, stdout.String())
 	}
 
-	nodes := wrapper.Nodes
-	if len(nodes) == 0 && len(wrapper.Items) > 0 {
-		nodes = wrapper.Items
+	if len(wrapper.Nodes) != 2 {
+		testingInstance.Fatalf("expected two nodes, got %d", len(wrapper.Nodes))
 	}
-
-	if len(nodes) != 2 {
-		t.Fatalf("expected two nodes, got %d", len(nodes))
+	if wrapper.Nodes[0].Path != firstPath {
+		testingInstance.Fatalf("expected first path %q, got %q", firstPath, wrapper.Nodes[0].Path)
 	}
-	if nodes[0].Path != firstPath {
-		t.Fatalf("expected first path %q, got %q", firstPath, nodes[0].Path)
-	}
-	if nodes[1].Path != secondPath {
-		t.Fatalf("expected second path %q, got %q", secondPath, nodes[1].Path)
+	if wrapper.Nodes[1].Path != secondPath {
+		testingInstance.Fatalf("expected second path %q, got %q", secondPath, wrapper.Nodes[1].Path)
 	}
 }

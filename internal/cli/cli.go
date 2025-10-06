@@ -417,14 +417,16 @@ func runTreeOrContentCommand(
 		return pathValidationError
 	}
 
+	totalRootPaths := len(validatedPaths)
+
 	var renderer output.StreamRenderer
 	switch format {
 	case types.FormatRaw:
 		renderer = output.NewRawStreamRenderer(os.Stdout, os.Stderr, commandName, withSummary)
 	case types.FormatJSON:
-		renderer = output.NewJSONStreamRenderer(os.Stdout, os.Stderr, commandName)
+		renderer = output.NewJSONStreamRenderer(os.Stdout, os.Stderr, commandName, totalRootPaths)
 	case types.FormatXML:
-		renderer = output.NewXMLStreamRenderer(os.Stdout, os.Stderr, commandName)
+		renderer = output.NewXMLStreamRenderer(os.Stdout, os.Stderr, commandName, totalRootPaths)
 	default:
 		return fmt.Errorf(invalidFormatMessage, format)
 	}

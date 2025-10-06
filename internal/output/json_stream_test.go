@@ -10,10 +10,12 @@ import (
 	"github.com/temirov/ctx/internal/types"
 )
 
-func TestJSONStreamRendererOutputsSingleRoot(t *testing.T) {
+const jsonIndentSpacer = "  "
+
+func TestJSONStreamRendererOutputsSingleRoot(testingInstance *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	renderer := output.NewJSONStreamRenderer(&stdout, &stderr, types.CommandContent)
+	renderer := output.NewJSONStreamRenderer(&stdout, &stderr, types.CommandContent, 1)
 
 	rootPath := "/tmp/root"
 	filePath := rootPath + "/file.txt"
@@ -45,76 +47,109 @@ func TestJSONStreamRendererOutputsSingleRoot(t *testing.T) {
 	}
 
 	for _, event := range events {
-		if err := renderer.Handle(event); err != nil {
-			t.Fatalf("handle event failed: %v", err)
+		if handleError := renderer.Handle(event); handleError != nil {
+			testingInstance.Fatalf("handle event failed: %v", handleError)
+		}
+		if event.Kind == stream.EventKindTree && event.Tree != nil && event.Tree.Path == rootPath {
+			var immediate types.TreeOutputNode
+			if decodeError := json.Unmarshal(stdout.Bytes(), &immediate); decodeError != nil {
+				testingInstance.Fatalf("failed to decode streamed json: %v\noutput: %s", decodeError, stdout.String())
+			}
+			if immediate.Path != tree.Path {
+				testingInstance.Fatalf("expected streamed path %q, got %q", tree.Path, immediate.Path)
+			}
 		}
 	}
 
-	if err := renderer.Flush(); err != nil {
-		t.Fatalf("flush failed: %v", err)
+	if flushError := renderer.Flush(); flushError != nil {
+		testingInstance.Fatalf("flush failed: %v", flushError)
 	}
 
 	if !bytes.Contains(stderr.Bytes(), []byte("json warning")) {
-		t.Fatalf("expected warning on stderr, got %q", stderr.String())
+		testingInstance.Fatalf("expected warning on stderr, got %q", stderr.String())
 	}
 
 	var decoded types.TreeOutputNode
-	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
-		t.Fatalf("failed to decode json output: %v\noutput: %s", err, stdout.String())
+	if decodeError := json.Unmarshal(stdout.Bytes(), &decoded); decodeError != nil {
+		testingInstance.Fatalf("failed to decode json output: %v\noutput: %s", decodeError, stdout.String())
 	}
 
 	if decoded.Path != tree.Path {
-		t.Fatalf("expected root path %q, got %q", tree.Path, decoded.Path)
+		testingInstance.Fatalf("expected root path %q, got %q", tree.Path, decoded.Path)
 	}
 	if decoded.TotalFiles != tree.TotalFiles {
-		t.Fatalf("expected total files %d, got %d", tree.TotalFiles, decoded.TotalFiles)
+		testingInstance.Fatalf("expected total files %d, got %d", tree.TotalFiles, decoded.TotalFiles)
 	}
 	if len(decoded.Children) != 1 {
-		t.Fatalf("expected one child, got %d", len(decoded.Children))
+		testingInstance.Fatalf("expected one child, got %d", len(decoded.Children))
 	}
 	if decoded.Children[0] == nil || decoded.Children[0].Path != filePath {
-		t.Fatalf("unexpected child node: %+v", decoded.Children[0])
+		testingInstance.Fatalf("unexpected child node: %+v", decoded.Children[0])
 	}
 }
 
-func TestJSONStreamRendererOutputsMultipleRootsAsArray(t *testing.T) {
+func TestJSONStreamRendererOutputsMultipleRootsAsArray(testingInstance *testing.T) {
 	var stdout bytes.Buffer
-	renderer := output.NewJSONStreamRenderer(&stdout, nil, types.CommandTree)
+	renderer := output.NewJSONStreamRenderer(&stdout, nil, types.CommandTree, 2)
 
 	firstPath := "/tmp/first"
 	secondPath := "/tmp/second"
 
+	firstNode := &types.TreeOutputNode{Path: firstPath, Name: "first", Type: types.NodeTypeDirectory}
+	secondNode := &types.TreeOutputNode{Path: secondPath, Name: "second", Type: types.NodeTypeDirectory}
+
+	firstEncoded, firstEncodeError := json.MarshalIndent(firstNode, jsonIndentSpacer, jsonIndentSpacer)
+	if firstEncodeError != nil {
+		testingInstance.Fatalf("marshal first node: %v", firstEncodeError)
+	}
+	secondEncoded, secondEncodeError := json.MarshalIndent(secondNode, jsonIndentSpacer, jsonIndentSpacer)
+	if secondEncodeError != nil {
+		testingInstance.Fatalf("marshal second node: %v", secondEncodeError)
+	}
+
 	events := []stream.Event{
 		{Kind: stream.EventKindStart, Path: firstPath},
-		{Kind: stream.EventKindTree, Path: firstPath, Tree: &types.TreeOutputNode{Path: firstPath, Name: "first", Type: types.NodeTypeDirectory}},
+		{Kind: stream.EventKindTree, Path: firstPath, Tree: firstNode},
 		{Kind: stream.EventKindDone},
 		{Kind: stream.EventKindStart, Path: secondPath},
-		{Kind: stream.EventKindTree, Path: secondPath, Tree: &types.TreeOutputNode{Path: secondPath, Name: "second", Type: types.NodeTypeDirectory}},
+		{Kind: stream.EventKindTree, Path: secondPath, Tree: secondNode},
 		{Kind: stream.EventKindDone},
 	}
 
+	expectedPrefix := "[\n" + string(firstEncoded)
+
 	for _, event := range events {
-		if err := renderer.Handle(event); err != nil {
-			t.Fatalf("handle event failed: %v", err)
+		if handleError := renderer.Handle(event); handleError != nil {
+			testingInstance.Fatalf("handle event failed: %v", handleError)
+		}
+		if event.Kind == stream.EventKindTree && event.Tree != nil && event.Tree.Path == firstPath {
+			if stdout.String() != expectedPrefix {
+				testingInstance.Fatalf("unexpected streamed prefix: got %q, want %q", stdout.String(), expectedPrefix)
+			}
 		}
 	}
 
-	if err := renderer.Flush(); err != nil {
-		t.Fatalf("flush failed: %v", err)
+	if flushError := renderer.Flush(); flushError != nil {
+		testingInstance.Fatalf("flush failed: %v", flushError)
+	}
+
+	expectedOutput := "[\n" + string(firstEncoded) + ",\n" + string(secondEncoded) + "\n]"
+	if stdout.String() != expectedOutput {
+		testingInstance.Fatalf("unexpected final array: got %q, want %q", stdout.String(), expectedOutput)
 	}
 
 	var decoded []types.TreeOutputNode
-	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
-		t.Fatalf("failed to decode json array: %v\noutput: %s", err, stdout.String())
+	if decodeError := json.Unmarshal(stdout.Bytes(), &decoded); decodeError != nil {
+		testingInstance.Fatalf("failed to decode json array: %v\noutput: %s", decodeError, stdout.String())
 	}
 
 	if len(decoded) != 2 {
-		t.Fatalf("expected two roots, got %d", len(decoded))
+		testingInstance.Fatalf("expected two roots, got %d", len(decoded))
 	}
 	if decoded[0].Path != firstPath {
-		t.Fatalf("expected first root path %q, got %q", firstPath, decoded[0].Path)
+		testingInstance.Fatalf("expected first root path %q, got %q", firstPath, decoded[0].Path)
 	}
 	if decoded[1].Path != secondPath {
-		t.Fatalf("expected second root path %q, got %q", secondPath, decoded[1].Path)
+		testingInstance.Fatalf("expected second root path %q, got %q", secondPath, decoded[1].Path)
 	}
 }
