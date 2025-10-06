@@ -156,16 +156,3 @@ This produces one JSON object per line, a common streaming format.
 ✅ Use `json.Encoder` with any `io.Writer`.
 ✅ Flush often if streaming over HTTP.
 ✅ For large payloads, NDJSON is simplest, but you can also build proper arrays by writing delimiters manually.
-
-### Format the output
-
-- [ ] Add carriage return after the output
-    - current behaviour: 
-    ```shell
-    </node>14:38:38 tyemirov@Vadyms-MacBook-Pro:~/Development/ctx - [summary] $ 
-    ```
-    - desired behaviour: 
-    ```shell
-    </node>
-    14:38:38 tyemirov@Vadyms-MacBook-Pro:~/Development/ctx - [summary] $ 
-    ```

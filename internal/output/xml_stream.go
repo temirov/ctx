@@ -61,7 +61,7 @@ func (renderer *xmlStreamRenderer) Flush() error {
 		renderer.wrapperOpened = false
 		return nil
 	}
-	if renderer.rootsEmitted > 0 && !renderer.headerWritten {
+	if renderer.rootsEmitted > 0 {
 		if _, err := renderer.stdout.Write([]byte("\n")); err != nil {
 			return err
 		}

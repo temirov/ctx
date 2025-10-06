@@ -133,7 +133,7 @@ func TestJSONStreamRendererOutputsMultipleRootsAsArray(testingInstance *testing.
 		testingInstance.Fatalf("flush failed: %v", flushError)
 	}
 
-	expectedOutput := "[\n" + string(firstEncoded) + ",\n" + string(secondEncoded) + "\n]"
+	expectedOutput := "[\n" + string(firstEncoded) + ",\n" + string(secondEncoded) + "\n]\n"
 	if stdout.String() != expectedOutput {
 		testingInstance.Fatalf("unexpected final array: got %q, want %q", stdout.String(), expectedOutput)
 	}

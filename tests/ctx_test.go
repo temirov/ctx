@@ -181,8 +181,9 @@ func TestContentJSONStreamingMatchesExpectedOutput(t *testing.T) {
 		t.Fatalf("RenderJSON failed: %v", err)
 	}
 
-	if stdout.String() != expected {
-		t.Fatalf("unexpected output\nexpected: %s\nactual: %s", expected, stdout.String())
+	expectedWithNewline := expected + "\n"
+	if stdout.String() != expectedWithNewline {
+		t.Fatalf("unexpected output\nexpected: %s\nactual: %s", expectedWithNewline, stdout.String())
 	}
 }
 

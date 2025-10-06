@@ -59,10 +59,16 @@ func (renderer *jsonStreamRenderer) Flush() error {
 		return nil
 	}
 	if renderer.arrayOpened {
-		if _, flushError := renderer.stdout.Write([]byte("]")); flushError != nil {
+		if _, flushError := renderer.stdout.Write([]byte("]\n")); flushError != nil {
 			return flushError
 		}
 		renderer.arrayOpened = false
+		return nil
+	}
+	if renderer.rootsEmitted > 0 {
+		if _, flushError := renderer.stdout.Write([]byte("\n")); flushError != nil {
+			return flushError
+		}
 	}
 	return nil
 }
