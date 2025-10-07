@@ -424,9 +424,9 @@ func runTreeOrContentCommand(
 	case types.FormatRaw:
 		renderer = output.NewRawStreamRenderer(os.Stdout, os.Stderr, commandName, withSummary)
 	case types.FormatJSON:
-		renderer = output.NewJSONStreamRenderer(os.Stdout, os.Stderr, commandName, totalRootPaths)
+		renderer = output.NewJSONStreamRenderer(os.Stdout, os.Stderr, commandName, totalRootPaths, withSummary, commandName == types.CommandContent)
 	case types.FormatXML:
-		renderer = output.NewXMLStreamRenderer(os.Stdout, os.Stderr, commandName, totalRootPaths)
+		renderer = output.NewXMLStreamRenderer(os.Stdout, os.Stderr, commandName, totalRootPaths, withSummary, commandName == types.CommandContent)
 	default:
 		return fmt.Errorf(invalidFormatMessage, format)
 	}
@@ -526,7 +526,6 @@ func runContentPath(
 			BinaryContent:  binaryPatterns,
 			TokenCounter:   tokenCounter,
 			TokenModel:     tokenModel,
-			IncludeSummary: withSummary,
 		}
 		return stream.StreamContent(streamCtx, options, ch)
 	}

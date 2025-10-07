@@ -987,7 +987,6 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				callers := callChains[0].Callers
 				expected := map[string]struct{}{
-					"github.com/temirov/ctx/internal/services/stream.StreamContent": {},
 					contentDataFunction: {},
 				}
 				if len(callers) != len(expected) {
@@ -1023,7 +1022,6 @@ func TestCTX(testingHandle *testing.T) {
 				}
 				callers := callChains[0].Callers
 				expected := map[string]struct{}{
-					"github.com/temirov/ctx/internal/services/stream.StreamContent": {},
 					contentDataFunction: {},
 				}
 				if len(callers) != len(expected) {

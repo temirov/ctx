@@ -2,9 +2,7 @@ package stream
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,10 +14,12 @@ import (
 )
 
 type TreeOptions struct {
-	Root           string
-	IgnorePatterns []string
-	TokenCounter   tokenizer.Counter
-	TokenModel     string
+	Root                  string
+	IgnorePatterns        []string
+	TokenCounter          tokenizer.Counter
+	TokenModel            string
+	IncludeContent        bool
+	BinaryContentPatterns []string
 }
 
 type ContentOptions struct {
@@ -28,7 +28,6 @@ type ContentOptions struct {
 	BinaryContent  []string
 	TokenCounter   tokenizer.Counter
 	TokenModel     string
-	IncludeSummary bool
 }
 
 type emitter struct {
@@ -127,6 +126,8 @@ func StreamTree(ctx context.Context, opts TreeOptions, out chan<- Event) error {
 		Warn: func(message string) {
 			emitter.warn(opts.Root, message)
 		},
+		BinaryContentPatterns: opts.BinaryContentPatterns,
+		IncludeContent:        opts.IncludeContent,
 	}
 
 	handler := func(evt commands.TreeEvent) error {
@@ -182,6 +183,22 @@ func StreamTree(ctx context.Context, opts TreeOptions, out chan<- Event) error {
 				return err
 			}
 
+			if opts.IncludeContent {
+				if err := emitter.send(Event{
+					Kind: EventKindContentChunk,
+					Path: file.Path,
+					Chunk: &ChunkEvent{
+						Path:     file.Path,
+						Index:    0,
+						Data:     file.Content,
+						Encoding: file.ContentEncoding,
+						IsFinal:  true,
+					},
+				}); err != nil {
+					return err
+				}
+			}
+
 			fileNode := &types.TreeOutputNode{
 				Path:         file.Path,
 				Name:         file.Name,
@@ -192,6 +209,7 @@ func StreamTree(ctx context.Context, opts TreeOptions, out chan<- Event) error {
 				MimeType:     file.MimeType,
 				Tokens:       file.Tokens,
 				Model:        file.Model,
+				Content:      file.Content,
 			}
 			if len(stack) == 0 {
 				// standalone file input
@@ -280,104 +298,14 @@ func StreamTree(ctx context.Context, opts TreeOptions, out chan<- Event) error {
 }
 
 func StreamContent(ctx context.Context, opts ContentOptions, out chan<- Event) error {
-	if opts.Root == "" {
-		return fmt.Errorf("stream: content root path is empty")
-	}
-
-	emitter := newEmitter(ctx, out, types.CommandContent)
-	if err := emitter.send(Event{Kind: EventKindStart, Path: opts.Root}); err != nil {
-		return err
-	}
-
-	tracker := &summaryTracker{}
-	var collected []types.FileOutput
-	var streamErr error
-
-	if info, statErr := os.Stat(opts.Root); statErr == nil && !info.IsDir() {
-		if err := emitSingleFileContent(emitter, tracker, opts, info); err != nil {
-			emitter.warn(opts.Root, err.Error())
-			emitter.send(Event{Kind: EventKindError, Path: opts.Root, Err: &ErrorEvent{Message: err.Error()}})
-			return err
-		}
-		if err := emitter.send(Event{Kind: EventKindSummary, Path: opts.Root, Summary: tracker.summary()}); err != nil {
-			return err
-		}
-		return emitter.send(Event{Kind: EventKindDone, Path: opts.Root})
-	}
-
-	visit := func(fileOut types.FileOutput) error {
-		copied := fileOut
-		collected = append(collected, copied)
-		tracker.add(copied.SizeBytes, copied.Tokens, copied.Model)
-
-		depth := directoryDepth(opts.Root, copied.Path)
-		isBinary := copied.Type == types.NodeTypeBinary
-		if err := emitter.send(Event{
-			Kind: EventKindFile,
-			Path: copied.Path,
-			File: &FileEvent{
-				Path:          copied.Path,
-				Name:          filepath.Base(copied.Path),
-				Depth:         depth,
-				SizeBytes:     copied.SizeBytes,
-				LastModified:  copied.LastModified,
-				MimeType:      copied.MimeType,
-				IsBinary:      isBinary,
-				Tokens:        copied.Tokens,
-				Model:         copied.Model,
-				Type:          copied.Type,
-				Documentation: copied.Documentation,
-			},
-		}); err != nil {
-			return err
-		}
-
-		encoding := "utf-8"
-		if isBinary {
-			if copied.Content == "" {
-				encoding = ""
-			} else {
-				encoding = "base64"
-			}
-		}
-		if err := emitter.send(Event{
-			Kind: EventKindContentChunk,
-			Path: copied.Path,
-			Chunk: &ChunkEvent{
-				Path:     copied.Path,
-				Index:    0,
-				Data:     copied.Content,
-				Encoding: encoding,
-				IsFinal:  true,
-			},
-		}); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	streamErr = commands.StreamContent(opts.Root, opts.IgnorePatterns, opts.BinaryContent, opts.TokenCounter, opts.TokenModel, visit)
-	if streamErr != nil {
-		emitter.warn(opts.Root, streamErr.Error())
-		_ = emitter.send(Event{Kind: EventKindError, Path: opts.Root, Err: &ErrorEvent{Message: streamErr.Error()}})
-		return streamErr
-	}
-
-	if len(collected) > 0 {
-		tree, err := commands.BuildContentTree(opts.Root, collected, opts.IncludeSummary, opts.TokenModel)
-		if err != nil {
-			emitter.warn(opts.Root, err.Error())
-		} else if tree != nil {
-			if err := emitter.send(Event{Kind: EventKindTree, Path: tree.Path, Tree: tree}); err != nil {
-				return err
-			}
-		}
-	}
-
-	if err := emitter.send(Event{Kind: EventKindSummary, Path: opts.Root, Summary: tracker.summary()}); err != nil {
-		return err
-	}
-	return emitter.send(Event{Kind: EventKindDone, Path: opts.Root})
+	return StreamTree(ctx, TreeOptions{
+		Root:                  opts.Root,
+		IgnorePatterns:        opts.IgnorePatterns,
+		TokenCounter:          opts.TokenCounter,
+		TokenModel:            opts.TokenModel,
+		IncludeContent:        true,
+		BinaryContentPatterns: opts.BinaryContent,
+	}, out)
 }
 
 func directoryDepth(root, path string) int {
@@ -387,81 +315,4 @@ func directoryDepth(root, path string) int {
 	}
 	separators := string(filepath.Separator)
 	return strings.Count(relative, separators)
-}
-
-func emitSingleFileContent(emitter *emitter, tracker *summaryTracker, opts ContentOptions, info os.FileInfo) error {
-	fileBytes, readErr := os.ReadFile(opts.Root)
-	if readErr != nil {
-		return readErr
-	}
-	mimeType := utils.DetectMimeType(opts.Root)
-	isBinary := utils.IsBinary(fileBytes)
-	fileType := types.NodeTypeFile
-	content := string(fileBytes)
-	encoding := "utf-8"
-	if isBinary {
-		fileType = types.NodeTypeBinary
-		relative := filepath.Base(opts.Root)
-		if utils.ShouldDisplayBinaryContentByPath(relative, opts.BinaryContent) {
-			content = base64.StdEncoding.EncodeToString(fileBytes)
-			encoding = "base64"
-		} else {
-			content = ""
-			encoding = ""
-		}
-	}
-	var tokens int
-	if opts.TokenCounter != nil && fileType != types.NodeTypeBinary {
-		countResult, tokenErr := tokenizer.CountBytes(opts.TokenCounter, fileBytes)
-		if tokenErr != nil {
-			emitter.warn(opts.Root, tokenErr.Error())
-		} else if countResult.Counted {
-			tokens = countResult.Tokens
-		}
-	}
-	tracker.add(info.Size(), tokens, opts.TokenModel)
-	fileEvent := &FileEvent{
-		Path:         opts.Root,
-		Name:         filepath.Base(opts.Root),
-		Depth:        0,
-		SizeBytes:    info.Size(),
-		LastModified: utils.FormatTimestamp(info.ModTime()),
-		MimeType:     mimeType,
-		IsBinary:     isBinary,
-		Tokens:       tokens,
-		Model:        opts.TokenModel,
-		Type:         fileType,
-	}
-	if err := emitter.send(Event{Kind: EventKindFile, Path: opts.Root, File: fileEvent}); err != nil {
-		return err
-	}
-	chunk := &ChunkEvent{
-		Path:     opts.Root,
-		Index:    0,
-		Data:     content,
-		Encoding: encoding,
-		IsFinal:  true,
-	}
-	if err := emitter.send(Event{Kind: EventKindContentChunk, Path: opts.Root, Chunk: chunk}); err != nil {
-		return err
-	}
-	fileOutput := types.FileOutput{
-		Path:         opts.Root,
-		Type:         fileType,
-		Content:      content,
-		Size:         utils.FormatFileSize(info.Size()),
-		SizeBytes:    info.Size(),
-		LastModified: utils.FormatTimestamp(info.ModTime()),
-		MimeType:     mimeType,
-		Tokens:       tokens,
-	}
-	if tokens > 0 && opts.TokenModel != "" {
-		fileOutput.Model = opts.TokenModel
-	}
-	if tree, err := commands.BuildContentTree(opts.Root, []types.FileOutput{fileOutput}, opts.IncludeSummary, opts.TokenModel); err == nil && tree != nil {
-		if err := emitter.send(Event{Kind: EventKindTree, Path: tree.Path, Tree: tree}); err != nil {
-			return err
-		}
-	}
-	return nil
 }
