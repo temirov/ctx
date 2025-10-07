@@ -1,5 +1,55 @@
 # Changelog
 
+## [v0.0.15] - 2025-10-06
+
+### Highlights
+
+* **Real-time, schema-valid streaming across all formats.** Tree and content commands now share a single streaming
+  pipeline that emits per-directory and per-file events, producing identical results for raw/JSON/XML while displaying
+  output incrementally. (3f80e9d, e858f67, 5d8895b, da3f01a)
+* **Resilient tokenizer integration.** Python helpers are autodetected via `uv`, sentencepiece models download on demand,
+  and Claude model aliases map automatically so token counting “just works” without manual setup. (6af6a24, b8a6330,
+  a7b3354, 979e156, 909039b)
+
+### Features ✨
+
+* Added automatic `uv` invocation for helper scripts, including on-demand sentencepiece downloads for Llama models and
+  self-contained Anthropic helpers. (6af6a24, b8a6330, a7b3354, 979e156)
+* Tokenizer metadata is now surfaced in both tree and content summaries, with default summaries enabled for every run.
+  (d4e42c5, 46b982f, ea3098e)
+
+### Improvements ⚙️
+
+* Unified tree/content streaming walker captures file contents, streams chunks, and keeps JSON/XML renderers in sync
+  while maintaining pretty-printed output. (3f80e9d, 5d8895b, da3f01a)
+* CLI displays streaming progress while helpers count tokens and ensures trailing newlines so prompts resume cleanly.
+  (509805a, d02f35c, e858f67)
+* Fixed double counting in summaries and guaranteed `done` events even when traversal encounters errors. (9c511ab)
+
+### Fixes 🐛
+
+* Removed spurious helper bootstrap output and normalized Anthropic payloads, preventing API failures. (7f09f1a,
+  b8f3737, 2962cf9)
+* Dropped stale llama warning suppression and ensured Anthropic helpers require a valid API key with helpful messaging.
+  (e96e07c, 9c73429)
+
+### Docs 📚
+
+* Documented tokenizer model support, uv requirements, and the need to quote shell wildcards when excluding files.
+  (663c7f9, edce64b, dee8da2)
+
+### Maintenance 🛠️
+
+* Updated the toolchain to the latest Go release. (e15aa61)
+
+### Tests ✅
+
+* Expanded streaming coverage, including helper-driven tokenization and end-to-end CLI fixtures for raw/JSON/XML output.
+  (748785c, 4b84cbb, e14ea9c)
+
+**Upgrade notes:** Ensure `uv` is on `PATH`; the CLI will fetch helper dependencies and models automatically. Provide an
+`ANTHROPIC_API_KEY` when requesting Claude token counts.
+
 ## [v0.0.14] - 2025-09-06
 
 ### Highlights
