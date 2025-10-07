@@ -284,6 +284,13 @@ func computeSummary(items []interface{}) *types.OutputSummary {
 	var totalBytes int64
 	var totalTokens int
 	var summaryModel string
+	hasFileOutputs := false
+	for _, item := range items {
+		if _, ok := item.(*types.FileOutput); ok {
+			hasFileOutputs = true
+			break
+		}
+	}
 	for _, item := range items {
 		switch outputItem := item.(type) {
 		case *types.FileOutput:
@@ -294,6 +301,9 @@ func computeSummary(items []interface{}) *types.OutputSummary {
 				summaryModel = outputItem.Model
 			}
 		case *types.TreeOutputNode:
+			if hasFileOutputs {
+				continue
+			}
 			files, bytes, tokens := summarizeTree(outputItem)
 			totalFiles += files
 			totalBytes += bytes

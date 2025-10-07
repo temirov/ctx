@@ -288,13 +288,18 @@ func StreamTree(ctx context.Context, opts TreeOptions, out chan<- Event) error {
 
 	if lastError != nil {
 		_ = emitter.send(Event{Kind: EventKindError, Path: opts.Root, Err: &ErrorEvent{Message: lastError.Error()}})
-		return lastError
 	}
 
 	if err := emitter.send(Event{Kind: EventKindSummary, Path: opts.Root, Summary: tracker.summary()}); err != nil {
 		return err
 	}
-	return emitter.send(Event{Kind: EventKindDone, Path: opts.Root})
+	if err := emitter.send(Event{Kind: EventKindDone, Path: opts.Root}); err != nil {
+		return err
+	}
+	if lastError != nil {
+		return lastError
+	}
+	return nil
 }
 
 func StreamContent(ctx context.Context, opts ContentOptions, out chan<- Event) error {
