@@ -74,6 +74,13 @@ optional global exclusion flag (`-e`/`--e`). Explicitly listed files are never f
 
 ### Binary Content Handling
 
+### Streaming Output
+
+- Commands must emit data through a shared streaming service layer.
+- The service exposes neutral events (directory enter/leave, file metadata, content chunks, summaries, warnings, errors) consumed by format renderers.
+- All renderers (raw, JSON, XML, and any future formats) are required to consume the same event feed and write schema-compliant output without buffering unrelated code paths or introducing format-specific logic in the streaming service.
+- Adding a new renderer must not require changes to the streaming service or command orchestration beyond wiring the renderer.
+
 - When the `content` command encounters a binary file, it omits the content in raw output. JSON and XML outputs include a `mimeType` field for every file. This occurs when `.ignore` contains no `[binary]` section and no legacy directives:
 
   ```

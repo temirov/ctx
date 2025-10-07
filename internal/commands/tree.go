@@ -11,101 +11,129 @@ import (
 )
 
 const (
-	// warningSkipSubdirFormat is used when a subdirectory cannot be processed.
-	warningSkipSubdirFormat = "Warning: Skipping subdirectory %s due to error: %v\n"
-	// warningStatPathFormat is used when file information cannot be retrieved.
-	warningStatPathFormat = "Warning: unable to stat %s: %v\n"
-
 	// errorAbsolutePathFormat is used when the absolute path cannot be determined.
 	errorAbsolutePathFormat = "getting absolute path for %s: %w"
 
 	// errorBuildTreeFormat is used when building the tree fails.
 	errorBuildTreeFormat = "building tree for %s: %w"
-
-	// errorReadDirectoryFormat is used when a directory cannot be read.
-	errorReadDirectoryFormat = "reading directory %s: %w"
 )
 
-// GetTreeData generates the tree structure data for a given directory.
-// It returns a slice containing a single root node representing the directory.
-// Warnings for skipped subdirectories are printed to stderr.
+// GetTreeData rewrites the directory traversal leveraging StreamTree to build structured nodes.
 func (treeBuilder *TreeBuilder) GetTreeData(rootDirectoryPath string) ([]*types.TreeOutputNode, error) {
 	absoluteRootDirPath, absolutePathError := filepath.Abs(rootDirectoryPath)
 	if absolutePathError != nil {
 		return nil, fmt.Errorf(errorAbsolutePathFormat, rootDirectoryPath, absolutePathError)
 	}
 
-	rootNode := &types.TreeOutputNode{
-		Path: absoluteRootDirPath,
-		Name: filepath.Base(absoluteRootDirPath),
-		Type: types.NodeTypeDirectory,
-	}
-	rootInfo, rootStatError := os.Stat(absoluteRootDirPath)
-	if rootStatError == nil {
-		rootNode.LastModified = utils.FormatTimestamp(rootInfo.ModTime())
+	collector := &treeCollector{
+		includeSummary: treeBuilder.IncludeSummary,
+		tokenModel:     treeBuilder.TokenModel,
 	}
 
-	children, buildError := treeBuilder.buildTreeNodes(absoluteRootDirPath, absoluteRootDirPath)
-	if buildError != nil {
-		return nil, fmt.Errorf(errorBuildTreeFormat, rootDirectoryPath, buildError)
+	options := TreeStreamOptions{
+		Root:           absoluteRootDirPath,
+		IgnorePatterns: treeBuilder.IgnorePatterns,
+		TokenCounter:   treeBuilder.TokenCounter,
+		TokenModel:     treeBuilder.TokenModel,
+		Warn: func(message string) {
+			fmt.Fprint(os.Stderr, message)
+		},
 	}
-	rootNode.Children = children
 
-	return []*types.TreeOutputNode{rootNode}, nil
+	if err := StreamTree(options, collector.handleEvent); err != nil {
+		return nil, fmt.Errorf(errorBuildTreeFormat, rootDirectoryPath, err)
+	}
+
+	if len(collector.roots) == 0 {
+		return nil, nil
+	}
+
+	return collector.roots, nil
 }
 
-// buildTreeNodes recursively builds child nodes for the directory tree.
-func (treeBuilder *TreeBuilder) buildTreeNodes(currentDirectoryPath string, rootDirectoryPath string) ([]*types.TreeOutputNode, error) {
-	var nodes []*types.TreeOutputNode
+type treeCollector struct {
+	includeSummary bool
+	tokenModel     string
+	stack          []*types.TreeOutputNode
+	roots          []*types.TreeOutputNode
+}
 
-	directoryEntries, readDirectoryError := os.ReadDir(currentDirectoryPath)
-	if readDirectoryError != nil {
-		return nil, fmt.Errorf(errorReadDirectoryFormat, currentDirectoryPath, readDirectoryError)
-	}
-
-	for _, directoryEntry := range directoryEntries {
-		childPath := filepath.Join(currentDirectoryPath, directoryEntry.Name())
-		relativeChildPath := utils.RelativePathOrSelf(childPath, rootDirectoryPath)
-		if utils.ShouldIgnoreByPath(relativeChildPath, treeBuilder.IgnorePatterns) {
-			continue
-		}
-
+func (collector *treeCollector) handleEvent(event TreeEvent) error {
+	switch event.Kind {
+	case TreeEventEnterDir:
 		node := &types.TreeOutputNode{
-			Path: childPath,
-			Name: directoryEntry.Name(),
+			Path:         event.Directory.Path,
+			Name:         event.Directory.Name,
+			Type:         types.NodeTypeDirectory,
+			LastModified: event.Directory.LastModified,
 		}
-
-		entryInfo, infoError := directoryEntry.Info()
-		if infoError != nil {
-			fmt.Fprintf(os.Stderr, warningStatPathFormat, childPath, infoError)
-		} else {
-			node.LastModified = utils.FormatTimestamp(entryInfo.ModTime())
+		if len(collector.stack) > 0 {
+			parent := collector.stack[len(collector.stack)-1]
+			parent.Children = append(parent.Children, node)
 		}
-
-		if directoryEntry.IsDir() {
-			node.Type = types.NodeTypeDirectory
-			childNodes, buildError := treeBuilder.buildTreeNodes(childPath, rootDirectoryPath)
-			if buildError != nil {
-				fmt.Fprintf(os.Stderr, warningSkipSubdirFormat, childPath, buildError)
-				node.Children = nil
-			} else {
-				node.Children = childNodes
-			}
-		} else {
-			childMimeType := utils.DetectMimeType(childPath)
-			isBinaryFile := utils.IsFileBinary(childPath)
-			if isBinaryFile {
-				node.Type = types.NodeTypeBinary
-			} else {
-				node.Type = types.NodeTypeFile
-			}
-			node.MimeType = childMimeType
-			if infoError == nil {
-				node.Size = utils.FormatFileSize(entryInfo.Size())
-			}
+		collector.stack = append(collector.stack, node)
+	case TreeEventFile:
+		node := collector.makeFileNode(event.File)
+		collector.attachNode(node)
+	case TreeEventLeaveDir:
+		if len(collector.stack) == 0 {
+			return fmt.Errorf("tree collector stack underflow")
 		}
-		nodes = append(nodes, node)
+		node := collector.stack[len(collector.stack)-1]
+		collector.stack = collector.stack[:len(collector.stack)-1]
+		if collector.includeSummary {
+			summary := event.Directory.Summary
+			applySummary(node, summary.Files, summary.Bytes, summary.Tokens, collector.tokenModel)
+		}
+		if len(collector.stack) == 0 {
+			collector.roots = append(collector.roots, node)
+		}
 	}
+	return nil
+}
 
-	return nodes, nil
+func (collector *treeCollector) attachNode(node *types.TreeOutputNode) {
+	if len(collector.stack) == 0 {
+		collector.roots = append(collector.roots, node)
+		return
+	}
+	parent := collector.stack[len(collector.stack)-1]
+	parent.Children = append(parent.Children, node)
+}
+
+func (collector *treeCollector) makeFileNode(event *TreeFileEvent) *types.TreeOutputNode {
+	node := &types.TreeOutputNode{
+		Path:         event.Path,
+		Name:         event.Name,
+		LastModified: event.LastModified,
+		SizeBytes:    event.SizeBytes,
+		Size:         utils.FormatFileSize(event.SizeBytes),
+		MimeType:     event.MimeType,
+		Tokens:       event.Tokens,
+		Model:        event.Model,
+	}
+	if event.IsBinary {
+		node.Type = types.NodeTypeBinary
+	} else {
+		node.Type = types.NodeTypeFile
+	}
+	if event.Tokens == 0 {
+		node.Model = ""
+	} else if node.Model == "" && collector.tokenModel != "" {
+		node.Model = collector.tokenModel
+	}
+	return node
+}
+
+// applySummary stores aggregate counts, bytes, and tokens on the node.
+func applySummary(node *types.TreeOutputNode, totalFiles int, totalBytes int64, totalTokens int, tokenModel string) {
+	node.TotalFiles = totalFiles
+	node.SizeBytes = totalBytes
+	node.TotalSize = utils.FormatFileSize(totalBytes)
+	node.TotalTokens = totalTokens
+	if totalTokens > 0 && tokenModel != "" {
+		node.Model = tokenModel
+	} else if totalTokens == 0 {
+		node.Model = ""
+	}
 }

@@ -2,10 +2,11 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -13,8 +14,11 @@ import (
 	"github.com/temirov/ctx/internal/config"
 	"github.com/temirov/ctx/internal/docs"
 	"github.com/temirov/ctx/internal/output"
+	"github.com/temirov/ctx/internal/services/stream"
+	"github.com/temirov/ctx/internal/tokenizer"
 	"github.com/temirov/ctx/internal/types"
 	"github.com/temirov/ctx/internal/utils"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -23,6 +27,9 @@ const (
 	noIgnoreFlagName      = "no-ignore"
 	includeGitFlagName    = "git"
 	formatFlagName        = "format"
+	summaryFlagName       = "summary"
+	tokensFlagName        = "tokens"
+	modelFlagName         = "model"
 	documentationFlagName = "doc"
 	versionFlagName       = "version"
 	versionTemplate       = "ctx version: %s\n"
@@ -82,11 +89,15 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	disableIgnoreFlagDescription    = "do not use .ignore"
 	includeGitFlagDescription       = "include git directory"
 	formatFlagDescription           = "output format"
+	summaryFlagDescription          = "include summary of resulting files"
+	tokensFlagDescription           = "include token counts"
+	modelFlagDescription            = "tokenizer model to use for token counting"
+	defaultTokenizerModelName       = "gpt-4o"
 	documentationFlagDescription    = "include documentation"
 	invalidFormatMessage            = "Invalid format value '%s'"
 	warningSkipPathFormat           = "Warning: skipping %s: %v\n"
+	warningTokenCountFormat         = "Warning: failed to count tokens for %s: %v\n"
 	workingDirectoryErrorFormat     = "unable to determine working directory: %w"
-
 	// errorAbsolutePathFormat reports failure to resolve an absolute path.
 	errorAbsolutePathFormat = "abs failed for '%s': %w"
 	// errorPathMissingFormat reports a missing path.
@@ -151,6 +162,18 @@ type pathOptions struct {
 	includeGit        bool
 }
 
+type tokenOptions struct {
+	enabled bool
+	model   string
+}
+
+func (options tokenOptions) toConfig(workingDirectory string) tokenizer.Config {
+	return tokenizer.Config{
+		Model:            options.model,
+		WorkingDirectory: workingDirectory,
+	}
+}
+
 // addPathFlags registers path-related flags on the command.
 func addPathFlags(command *cobra.Command, options *pathOptions) {
 	command.Flags().StringArrayVarP(&options.exclusionPatterns, exclusionFlagName, exclusionFlagName, nil, exclusionFlagDescription)
@@ -163,6 +186,9 @@ func addPathFlags(command *cobra.Command, options *pathOptions) {
 func createTreeCommand() *cobra.Command {
 	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
+	var summaryEnabled bool = true
+	var tokenConfiguration tokenOptions
+	tokenConfiguration.model = defaultTokenizerModelName
 
 	treeCommand := &cobra.Command{
 		Use:     treeUse,
@@ -189,12 +215,17 @@ func createTreeCommand() *cobra.Command {
 				defaultCallChainDepth,
 				outputFormatLower,
 				false,
+				summaryEnabled,
+				tokenConfiguration,
 			)
 		},
 	}
 
 	addPathFlags(treeCommand, &pathConfiguration)
 	treeCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
+	treeCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, true, summaryFlagDescription)
+	treeCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
+	treeCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
 	return treeCommand
 }
 
@@ -203,6 +234,9 @@ func createContentCommand() *cobra.Command {
 	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
 	var documentationEnabled bool
+	var summaryEnabled bool = true
+	var tokenConfiguration tokenOptions
+	tokenConfiguration.model = defaultTokenizerModelName
 
 	contentCommand := &cobra.Command{
 		Use:     contentUse,
@@ -229,6 +263,8 @@ func createContentCommand() *cobra.Command {
 				defaultCallChainDepth,
 				outputFormatLower,
 				documentationEnabled,
+				summaryEnabled,
+				tokenConfiguration,
 			)
 		},
 	}
@@ -236,6 +272,9 @@ func createContentCommand() *cobra.Command {
 	addPathFlags(contentCommand, &pathConfiguration)
 	contentCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
 	contentCommand.Flags().BoolVar(&documentationEnabled, documentationFlagName, false, documentationFlagDescription)
+	contentCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, true, summaryFlagDescription)
+	contentCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
+	contentCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
 	return contentCommand
 }
 
@@ -267,6 +306,8 @@ func createCallChainCommand() *cobra.Command {
 				callChainDepth,
 				outputFormatLower,
 				documentationEnabled,
+				false,
+				tokenOptions{},
 			)
 		},
 	}
@@ -288,6 +329,8 @@ func runTool(
 	callChainDepth int,
 	format string,
 	documentationEnabled bool,
+	summaryEnabled bool,
+	tokenConfiguration tokenOptions,
 ) error {
 	workingDirectory, workingDirectoryError := os.Getwd()
 	if workingDirectoryError != nil {
@@ -302,11 +345,22 @@ func runTool(
 		collector = createdCollector
 	}
 
+	var tokenCounter tokenizer.Counter
+	var tokenModel string
+	if tokenConfiguration.enabled {
+		createdCounter, resolvedModel, counterError := tokenizer.NewCounter(tokenConfiguration.toConfig(workingDirectory))
+		if counterError != nil {
+			return counterError
+		}
+		tokenCounter = createdCounter
+		tokenModel = resolvedModel
+	}
+
 	switch commandName {
 	case types.CommandCallChain:
 		return runCallChain(paths[0], format, callChainDepth, documentationEnabled, collector, workingDirectory)
 	case types.CommandTree, types.CommandContent:
-		return runTreeOrContentCommand(commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, collector)
+		return runTreeOrContentCommand(commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, summaryEnabled, tokenCounter, tokenModel, collector)
 	default:
 		return fmt.Errorf(unsupportedCommandMessage)
 	}
@@ -353,119 +407,174 @@ func runTreeOrContentCommand(
 	includeGit bool,
 	format string,
 	withDocumentation bool,
+	withSummary bool,
+	tokenCounter tokenizer.Counter,
+	tokenModel string,
 	collector *docs.Collector,
-) error {
+) (err error) {
 	validatedPaths, pathValidationError := resolveAndValidatePaths(paths)
 	if pathValidationError != nil {
 		return pathValidationError
 	}
 
-	var collected []interface{}
+	totalRootPaths := len(validatedPaths)
+
+	var renderer output.StreamRenderer
+	switch format {
+	case types.FormatRaw:
+		renderer = output.NewRawStreamRenderer(os.Stdout, os.Stderr, commandName, withSummary)
+	case types.FormatJSON:
+		renderer = output.NewJSONStreamRenderer(os.Stdout, os.Stderr, commandName, totalRootPaths, withSummary, commandName == types.CommandContent)
+	case types.FormatXML:
+		renderer = output.NewXMLStreamRenderer(os.Stdout, os.Stderr, commandName, totalRootPaths, withSummary, commandName == types.CommandContent)
+	default:
+		return fmt.Errorf(invalidFormatMessage, format)
+	}
+
+	defer func() {
+		if renderer == nil {
+			return
+		}
+		if flushErr := renderer.Flush(); flushErr != nil && err == nil {
+			err = flushErr
+		}
+	}()
+
+	ctx := context.Background()
+
 	for _, info := range validatedPaths {
-		if info.IsDir {
-			ignorePatternList, binaryContentPatternList, loadError := config.LoadRecursiveIgnorePatterns(info.AbsolutePath, exclusionPatterns, useGitignore, useIgnoreFile, includeGit)
-			if loadError != nil {
-				fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, loadError)
-				continue
-			}
-			if commandName == types.CommandTree {
-				treeBuilder := commands.TreeBuilder{IgnorePatterns: ignorePatternList}
-				nodes, dataError := treeBuilder.GetTreeData(info.AbsolutePath)
-				if dataError == nil && len(nodes) > 0 {
-					collected = append(collected, nodes[0])
-				}
-			} else {
-				files, dataError := commands.GetContentData(info.AbsolutePath, ignorePatternList, binaryContentPatternList)
-				if dataError == nil {
-					for index := range files {
-						collected = append(collected, &files[index])
-					}
-				}
-			}
+		var streamErr error
+		if commandName == types.CommandTree {
+			streamErr = runTreePath(ctx, renderer, info, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, tokenCounter, tokenModel)
 		} else {
-			if commandName == types.CommandTree {
-				fileInfo, statError := os.Stat(info.AbsolutePath)
-				if statError != nil {
-					fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, statError)
-					continue
-				}
-				mimeType := utils.DetectMimeType(info.AbsolutePath)
-				nodeType := types.NodeTypeFile
-				if utils.IsFileBinary(info.AbsolutePath) {
-					nodeType = types.NodeTypeBinary
-				}
-				collected = append(collected, &types.TreeOutputNode{
-					Path:         info.AbsolutePath,
-					Name:         filepath.Base(info.AbsolutePath),
-					Type:         nodeType,
-					Size:         utils.FormatFileSize(fileInfo.Size()),
-					LastModified: utils.FormatTimestamp(fileInfo.ModTime()),
-					MimeType:     mimeType,
-				})
-			} else {
-				fileInfo, statError := os.Stat(info.AbsolutePath)
-				if statError != nil {
-					fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, statError)
-					continue
-				}
-				fileBytes, fileReadError := os.ReadFile(info.AbsolutePath)
-				if fileReadError != nil {
-					fmt.Fprintf(os.Stderr, commands.WarningFileReadFormat, info.AbsolutePath, fileReadError)
-					continue
-				}
-				mimeType := utils.DetectMimeType(info.AbsolutePath)
-				fileType := types.NodeTypeFile
-				content := string(fileBytes)
-				if utils.IsBinary(fileBytes) {
-					fileType = types.NodeTypeBinary
-					content = ""
-				}
-				collected = append(collected, &types.FileOutput{
-					Path:         info.AbsolutePath,
-					Type:         fileType,
-					Content:      content,
-					Size:         utils.FormatFileSize(fileInfo.Size()),
-					LastModified: utils.FormatTimestamp(fileInfo.ModTime()),
-					MimeType:     mimeType,
-				})
-			}
+			streamErr = runContentPath(ctx, renderer, info, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, withDocumentation, withSummary, tokenCounter, tokenModel, collector)
+		}
+		if streamErr != nil && !errors.Is(streamErr, context.Canceled) {
+			fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, streamErr)
 		}
 	}
 
-	var documentationEntries []types.DocumentationEntry
-	if withDocumentation && collector != nil {
-		for _, item := range collected {
-			fileOutput, isFileOutput := item.(*types.FileOutput)
-			if isFileOutput {
-				entries, _ := collector.CollectFromFile(fileOutput.Path)
-				documentationEntries = append(documentationEntries, entries...)
-			}
+	return nil
+}
+
+func runTreePath(
+	ctx context.Context,
+	renderer output.StreamRenderer,
+	path types.ValidatedPath,
+	exclusionPatterns []string,
+	useGitignore bool,
+	useIgnoreFile bool,
+	includeGit bool,
+	tokenCounter tokenizer.Counter,
+	tokenModel string,
+) error {
+	var ignorePatterns []string
+	if path.IsDir {
+		patterns, _, loadErr := config.LoadRecursiveIgnorePatterns(path.AbsolutePath, exclusionPatterns, useGitignore, useIgnoreFile, includeGit)
+		if loadErr != nil {
+			return loadErr
 		}
-		sort.Slice(documentationEntries, func(firstEntryIndex, secondEntryIndex int) bool {
-			if documentationEntries[firstEntryIndex].Kind != documentationEntries[secondEntryIndex].Kind {
-				return documentationEntries[firstEntryIndex].Kind < documentationEntries[secondEntryIndex].Kind
-			}
-			return documentationEntries[firstEntryIndex].Name < documentationEntries[secondEntryIndex].Name
-		})
+		ignorePatterns = patterns
 	}
 
-	if format == types.FormatJSON {
-		renderedJSONOutput, renderJSONError := output.RenderJSON(documentationEntries, collected)
-		if renderJSONError != nil {
-			return renderJSONError
+	producer := func(streamCtx context.Context, ch chan<- stream.Event) error {
+		options := stream.TreeOptions{
+			Root:           path.AbsolutePath,
+			IgnorePatterns: ignorePatterns,
+			TokenCounter:   tokenCounter,
+			TokenModel:     tokenModel,
 		}
-		fmt.Println(renderedJSONOutput)
-		return nil
-	} else if format == types.FormatXML {
-		renderedXMLOutput, renderXMLError := output.RenderXML(documentationEntries, collected)
-		if renderXMLError != nil {
-			return renderXMLError
-		}
-		fmt.Println(renderedXMLOutput)
-		return nil
+		return stream.StreamTree(streamCtx, options, ch)
 	}
 
-	return output.RenderRaw(commandName, documentationEntries, collected)
+	consumer := func(event stream.Event) error {
+		return renderer.Handle(event)
+	}
+
+	return dispatchStream(ctx, producer, consumer)
+}
+
+func runContentPath(
+	ctx context.Context,
+	renderer output.StreamRenderer,
+	path types.ValidatedPath,
+	exclusionPatterns []string,
+	useGitignore bool,
+	useIgnoreFile bool,
+	includeGit bool,
+	withDocumentation bool,
+	withSummary bool,
+	tokenCounter tokenizer.Counter,
+	tokenModel string,
+	collector *docs.Collector,
+) error {
+	var ignorePatterns []string
+	var binaryPatterns []string
+	if path.IsDir {
+		patterns, binary, loadErr := config.LoadRecursiveIgnorePatterns(path.AbsolutePath, exclusionPatterns, useGitignore, useIgnoreFile, includeGit)
+		if loadErr != nil {
+			return loadErr
+		}
+		ignorePatterns = patterns
+		binaryPatterns = binary
+	}
+
+	producer := func(streamCtx context.Context, ch chan<- stream.Event) error {
+		options := stream.ContentOptions{
+			Root:           path.AbsolutePath,
+			IgnorePatterns: ignorePatterns,
+			BinaryContent:  binaryPatterns,
+			TokenCounter:   tokenCounter,
+			TokenModel:     tokenModel,
+		}
+		return stream.StreamContent(streamCtx, options, ch)
+	}
+
+	consumer := func(event stream.Event) error {
+		if withDocumentation && collector != nil && event.Kind == stream.EventKindFile && event.File != nil {
+			if entries, docErr := collector.CollectFromFile(event.File.Path); docErr == nil && len(entries) > 0 {
+				event.File.Documentation = entries
+			}
+		}
+		return renderer.Handle(event)
+	}
+
+	return dispatchStream(ctx, producer, consumer)
+}
+
+func dispatchStream(
+	ctx context.Context,
+	produce func(context.Context, chan<- stream.Event) error,
+	consume func(stream.Event) error,
+) error {
+	group, streamCtx := errgroup.WithContext(ctx)
+	events := make(chan stream.Event)
+
+	group.Go(func() error {
+		defer close(events)
+		return produce(streamCtx, events)
+	})
+
+	group.Go(func() error {
+		for {
+			select {
+			case <-streamCtx.Done():
+				return streamCtx.Err()
+			case event, ok := <-events:
+				if !ok {
+					return nil
+				}
+				if err := consume(event); err != nil {
+					return err
+				}
+			}
+		}
+	})
+
+	if err := group.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		return err
+	}
+	return nil
 }
 
 // resolveAndValidatePaths converts input paths to absolute form and validates their existence.

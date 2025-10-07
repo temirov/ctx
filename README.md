@@ -121,6 +121,9 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--no-ignore`         | tree, content      | Disable loading of `.ignore` files. |
 | `--git`               | tree, content      | Include the `.git` directory during traversal. |
 | `--format <raw|json|xml>` | all commands       | Select output format (default `json`). |
+| `--summary`           | tree, content      | Print total file count and combined size for results (enabled by default, set to `false` to disable). |
+| `--tokens`            | tree, content      | Estimate token counts for files and surface totals in summaries. |
+| `--model <name>`      | tree, content      | Select tokenizer model (default `gpt-4o`). |
 | `--doc`               | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
 | `--depth <number>`    | callchain          | Limit call graph traversal depth (default `1`). |
 | `--version`           | all commands       | Print ctx version and exit. |
@@ -153,11 +156,70 @@ ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 
 | json   | `[]TreeOutputNode`             | `[]FileOutput`                             | `CallChainOutput` |
 | xml    | `result/code/item` nodes       | `result/code/item` nodes                   | `callchains/callchain` |
 
+When `--summary` (enabled by default) is active for tree or content, raw output prepends a `Summary: …` line and shows per-directory totals inside the tree view, while JSON and XML attach `totalFiles`, `totalSize`, and `totalTokens` fields directly to directory entries. The totals are recursive: directory nodes carry the combined size, token count, and file count of everything beneath them, respecting ignore rules and explicit excludes. Pass `--summary false` to suppress these aggregates.
+
 All JSON and XML outputs include a `mimeType` field for every file. Raw output never displays MIME type information.
+
+### Token Counting
+
+Enable `--tokens` to populate a `tokens` field on files (along with a `model` that identifies the tokenizer) and a `totalTokens` aggregate on directories when summaries are included. By default ctx uses OpenAI's `gpt-4o` tokenizer via `tiktoken-go`. Switch models with `--model`; when requesting Anthropic (`claude-*`) or Llama (`llama-*`) models, ctx launches the embedded helpers with [`uv`](https://github.com/astral-sh/uv). Ensure `uv` is available on your `PATH` (or point `CTX_UV` at the executable) and Python 3.11+ will be provisioned automatically. Claude helpers call Anthropic's `messages.count_tokens` endpoint (free to use) and require `ANTHROPIC_API_KEY` to be exported. Llama helpers download a compatible SentencePiece model on demand.
+
+#### Supported models
+
+`ctx` selects the tokenizer backend based on the `--model` prefix:
+
+| Prefix | Backend | Notes |
+|--------|---------|-------|
+| `gpt-`, `text-embedding`, `davinci`, `curie`, `babbage`, `ada`, `code-` | OpenAI via `tiktoken-go` | Falls back to `cl100k_base` when an exact encoding is unavailable. |
+| `claude-` | Anthropic helper (via uv) | Requires `uv`, Python 3.11+, and `ANTHROPIC_API_KEY`; uses Anthropic's `messages.count_tokens` endpoint. Override the executable with `CTX_UV`. |
+| `llama-` | SentencePiece helper (via uv) | Requires `uv`, Python 3.11+, and will download a tokenizer model automatically (override with `CTX_SPM_MODEL`). |
+| anything else | default (`cl100k_base`) | Safe fallback when no specific tokenizer is known. |
+
+Common Claude shorthands are resolved automatically; for example `--model claude-4.5` maps to `claude-sonnet-4-5-20250929`, and `claude-4` selects `claude-sonnet-4-20250514`.
+
+Example:
+
+```bash
+ctx tree . --tokens --summary
+```
+
+The summary line now reports total tokens (and the tokenizer model when applicable) alongside file counts and sizes, and each file entry includes its estimated token usage and model in JSON and XML output.
+
+#### Testing Python helpers
+
+To exercise the embedded Python helpers, install the required packages (for example, `pip install anthropic sentencepiece`) and run:
+
+```bash
+CTX_TEST_PYTHON=python3 go test -tags python_helpers ./internal/tokenizer
+```
+
+Set `CTX_TEST_RUN_HELPERS=1` to enable the optional helper suite and `CTX_TEST_UV` to the uv executable (defaults to `uv`). Tests automatically skip when prerequisites are missing.
+
+#### Streaming pipeline
+
+Tree and content commands now emit structured events from `internal/services/stream`, and format-specific renderers in `internal/output` stream those events directly:
+
+- `--format raw` prints human-friendly lines for every directory, file, chunk, and summary as soon as the event arrives.
+- `--format json` writes newline-delimited JSON objects (one per event) that match the schema in `internal/services/stream/events.go`.
+- `--format xml` wraps the same event feed in an `<events>` envelope, emitting `<event …>` elements incrementally.
+
+Downstream tools can rebuild aggregated views (trees, summaries, token counts) by consuming the event feed, and the CLI no longer buffers entire directory trees before producing output.
+
+All renderers consume the same event stream; JSON and XML remain schema-compatible with their legacy batch outputs while raw preserves the human-readable format.
+
+Run the streaming regression tests with:
+
+```bash
+go test ./internal/services/stream ./internal/output ./internal/cli
+```
+
+These tests cover event ordering, renderer behaviour, and CLI integration to ensure events arrive in order and summaries are emitted only after all file content has streamed.
 
 ## Configuration
 
 Exclusion patterns are loaded **only** during directory traversal; explicitly listed file paths are never ignored.
+
+> ⚠️ When specifying wildcard patterns (e.g., `-e go.*`), quote them to prevent your shell from expanding the glob before `ctx` runs: `ctx content -e 'go.*'`. The CLI handles pattern matching internally and expects the literal expression.
 
 ## Binary File Handling
 
@@ -212,4 +274,3 @@ Tags that begin with `v` trigger the release workflow, which builds binaries and
 ## License
 
 ctx is released under the [MIT License](MIT-LICENSE).
-

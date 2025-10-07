@@ -14,6 +14,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/temirov/ctx/internal/commands"
+	"github.com/temirov/ctx/internal/output"
+	"github.com/temirov/ctx/internal/tokenizer"
 	appTypes "github.com/temirov/ctx/internal/types"
 	"github.com/temirov/ctx/internal/utils"
 )
@@ -53,6 +56,7 @@ const (
 	commandDirectoryRelativePath      = "cmd/ctx"
 	integrationBinaryBaseName         = "ctx_integration_binary"
 	contentDataFunction               = "github.com/temirov/ctx/internal/commands.GetContentData"
+	streamContentFunction             = "github.com/temirov/ctx/internal/commands.StreamContent"
 	runTreeOrContentCommandFunction   = "github.com/temirov/ctx/internal/cli.runTreeOrContentCommand"
 	runToolFunction                   = "github.com/temirov/ctx/internal/cli.runTool"
 	callChainAlias                    = "cc"
@@ -81,6 +85,137 @@ const (
 	nestedYamlFileName         = "nested.yml"
 	nestedTextFileName         = "keep.txt"
 )
+
+func decodeJSONRoots(t *testing.T, data string) []appTypes.TreeOutputNode {
+	t.Helper()
+	var single appTypes.TreeOutputNode
+	if err := json.Unmarshal([]byte(data), &single); err == nil && single.Path != "" {
+		return []appTypes.TreeOutputNode{single}
+	}
+	var multi []appTypes.TreeOutputNode
+	if err := json.Unmarshal([]byte(data), &multi); err == nil {
+		return multi
+	}
+	t.Fatalf("invalid JSON: %s", data)
+	return nil
+}
+
+func decodeXMLRoots(t *testing.T, data string) []appTypes.TreeOutputNode {
+	t.Helper()
+	var single appTypes.TreeOutputNode
+	if err := xml.Unmarshal([]byte(data), &single); err == nil && single.Path != "" {
+		return []appTypes.TreeOutputNode{single}
+	}
+	var wrapper struct {
+		Nodes []appTypes.TreeOutputNode `xml:"node"`
+		Items []appTypes.TreeOutputNode `xml:"item"`
+	}
+	if err := xml.Unmarshal([]byte(data), &wrapper); err == nil {
+		if len(wrapper.Nodes) > 0 {
+			return wrapper.Nodes
+		}
+		if len(wrapper.Items) > 0 {
+			return wrapper.Items
+		}
+	}
+	t.Fatalf("invalid XML: %s", data)
+	return nil
+}
+
+func flattenFileNodes(nodes []appTypes.TreeOutputNode) []appTypes.TreeOutputNode {
+	var files []appTypes.TreeOutputNode
+	var walk func(node appTypes.TreeOutputNode)
+	walk = func(node appTypes.TreeOutputNode) {
+		if node.Type == appTypes.NodeTypeFile || node.Type == appTypes.NodeTypeBinary {
+			files = append(files, node)
+		}
+		for _, child := range node.Children {
+			if child != nil {
+				walk(*child)
+			}
+		}
+	}
+	for _, node := range nodes {
+		walk(node)
+	}
+	return files
+}
+
+func TestContentJSONStreamingMatchesExpectedOutput(t *testing.T) {
+	binary := buildBinary(t)
+	workingDir := setupTestDirectory(t, map[string]string{
+		"sample.txt": "sample content",
+	})
+
+	command := exec.Command(binary, []string{appTypes.CommandContent, "--format", appTypes.FormatJSON, workingDir}...)
+	command.Dir = workingDir
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+
+	if err := command.Run(); err != nil {
+		t.Fatalf("content command failed: %v\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
+	}
+
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+
+	var collected []appTypes.FileOutput
+	if err := commands.StreamContent(workingDir, nil, nil, nil, "", func(file appTypes.FileOutput) error {
+		collected = append(collected, file)
+		return nil
+	}); err != nil {
+		t.Fatalf("StreamContent failed: %v", err)
+	}
+
+	tree, err := commands.BuildContentTree(workingDir, collected, true, "")
+	if err != nil {
+		t.Fatalf("BuildContentTree failed: %v", err)
+	}
+
+	expected, err := output.RenderJSON([]interface{}{tree})
+	if err != nil {
+		t.Fatalf("RenderJSON failed: %v", err)
+	}
+
+	expectedWithNewline := expected + "\n"
+	if stdout.String() != expectedWithNewline {
+		t.Fatalf("unexpected output\nexpected: %s\nactual: %s", expectedWithNewline, stdout.String())
+	}
+}
+
+func decodeJSONFiles(t *testing.T, data string) []appTypes.TreeOutputNode {
+	return flattenFileNodes(decodeJSONRoots(t, data))
+}
+
+func decodeXMLFiles(t *testing.T, data string) []appTypes.TreeOutputNode {
+	return flattenFileNodes(decodeXMLRoots(t, data))
+}
+
+func findNodeByName(nodes []appTypes.TreeOutputNode, name string) *appTypes.TreeOutputNode {
+	for index := range nodes {
+		if nodes[index].Name == name {
+			return &nodes[index]
+		}
+		if child := findNodeByName(childrenToSlice(nodes[index].Children), name); child != nil {
+			return child
+		}
+	}
+	return nil
+}
+
+func childrenToSlice(children []*appTypes.TreeOutputNode) []appTypes.TreeOutputNode {
+	result := make([]appTypes.TreeOutputNode, 0, len(children))
+	for _, child := range children {
+		if child != nil {
+			result = append(result, *child)
+		}
+	}
+	return result
+}
 
 // buildBinary compiles the ctx binary and returns its path.
 func buildBinary(testingHandle *testing.T) string {
@@ -275,12 +410,13 @@ func TestCTX(testingHandle *testing.T) {
 	var explicitFilePath string
 
 	testCases := []struct {
-		name          string
-		arguments     []string
-		prepare       func(*testing.T) string
-		expectError   bool
-		expectWarning bool
-		validate      func(*testing.T, string)
+		name            string
+		arguments       []string
+		prepare         func(*testing.T) string
+		expectError     bool
+		expectWarning   bool
+		requiresHelpers bool
+		validate        func(*testing.T, string)
 	}{
 		{
 			name:      "NoArgumentsDisplaysHelp",
@@ -296,15 +432,16 @@ func TestCTX(testingHandle *testing.T) {
 			name: "DocFlagCallChainRaw",
 			arguments: []string{
 				"callchain",
-				contentDataFunction,
+				streamContentFunction,
 				documentationFlag,
 				"--format",
 				"raw",
 			},
 			prepare: func(t *testing.T) string { return getModuleRoot(t) },
 			validate: func(t *testing.T, output string) {
-				if strings.Count(output, "strings.ToLower") == 0 {
-					t.Errorf("expected documentation entry for strings.ToLower")
+				if !strings.Contains(output, "package fmt") {
+					t.Logf("callchain output:\n%s", output)
+					t.Errorf("expected documentation output to include package fmt")
 				}
 			},
 		},
@@ -323,20 +460,11 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				var nodes []appTypes.TreeOutputNode
-				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				roots := decodeJSONRoots(t, output)
+				if len(roots) != 2 {
+					t.Fatalf("expected two top-level nodes, got %d", len(roots))
 				}
-				if len(nodes) != 2 {
-					t.Fatalf("expected two top‑level nodes, got %d", len(nodes))
-				}
-				var fileNode *appTypes.TreeOutputNode
-				for i := range nodes {
-					if nodes[i].Name == "fileA.txt" {
-						fileNode = &nodes[i]
-						break
-					}
-				}
+				fileNode := findNodeByName(roots, "fileA.txt")
 				if fileNode == nil || fileNode.MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s for fileA.txt", expectedTextMimeType)
 				}
@@ -373,12 +501,10 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				var files []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &files); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				roots := decodeJSONRoots(t, output)
+				files := flattenFileNodes(roots)
 				if len(files) != 2 {
-					t.Fatalf("expected two items, got %d", len(files))
+					t.Fatalf("expected two files, got %d", len(files))
 				}
 				for i := range files {
 					if files[i].MimeType != expectedTextMimeType {
@@ -413,30 +539,205 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				type resultWrapper struct {
-					Nodes []appTypes.TreeOutputNode `xml:"code>item"`
+				roots := decodeXMLRoots(t, output)
+				if len(roots) != 1 {
+					t.Fatalf("expected one top-level node, got %d", len(roots))
 				}
-				var wrapper resultWrapper
-				if err := xml.Unmarshal([]byte(output), &wrapper); err != nil {
-					t.Fatalf("invalid XML: %v\n%s", err, output)
-				}
-				if len(wrapper.Nodes) != 1 {
-					t.Fatalf("expected one top-level node, got %d", len(wrapper.Nodes))
-				}
-				if wrapper.Nodes[0].MimeType != expectedTextMimeType {
+				if roots[0].MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
-				info, err := os.Stat(wrapper.Nodes[0].Path)
+				info, err := os.Stat(roots[0].Path)
 				if err != nil {
-					t.Fatalf("stat failed for %s: %v", wrapper.Nodes[0].Path, err)
+					t.Fatalf("stat failed for %s: %v", roots[0].Path, err)
 				}
 				expectedSize := utils.FormatFileSize(info.Size())
-				if wrapper.Nodes[0].Size != expectedSize {
-					t.Fatalf("expected size %s, got %s", expectedSize, wrapper.Nodes[0].Size)
+				if roots[0].Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, roots[0].Size)
 				}
 				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
-				if wrapper.Nodes[0].LastModified != expectedTimestamp {
-					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, wrapper.Nodes[0].LastModified)
+				if roots[0].LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, roots[0].LastModified)
+				}
+			},
+		},
+		{
+			name: "TreeTokensJSON",
+			arguments: []string{
+				appTypes.CommandTree,
+				"--tokens",
+				"--model",
+				"gpt-4o",
+				"--summary",
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"token.txt": "token counting sample",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				roots := decodeJSONRoots(t, output)
+				if len(roots) != 1 {
+					t.Fatalf("expected one root, got %d", len(roots))
+				}
+				root := roots[0]
+				fileNode := findNodeByName(roots, "token.txt")
+				if fileNode == nil {
+					t.Fatalf("token file node not found")
+				}
+				contentBytes, err := os.ReadFile(fileNode.Path)
+				if err != nil {
+					t.Fatalf("failed to read token file: %v", err)
+				}
+				counter, resolvedModel, err := tokenizer.NewCounter(tokenizer.Config{Model: "gpt-4o"})
+				if err != nil {
+					t.Fatalf("NewCounter error: %v", err)
+				}
+				if resolvedModel != "gpt-4o" {
+					t.Fatalf("expected resolved model gpt-4o, got %q", resolvedModel)
+				}
+				countResult, err := tokenizer.CountBytes(counter, contentBytes)
+				if err != nil {
+					t.Fatalf("CountBytes error: %v", err)
+				}
+				if !countResult.Counted {
+					t.Fatalf("expected text content to be counted")
+				}
+				if fileNode.Tokens != countResult.Tokens {
+					t.Fatalf("expected file tokens %d, got %d", countResult.Tokens, fileNode.Tokens)
+				}
+				if root.TotalTokens != countResult.Tokens {
+					t.Fatalf("expected root tokens %d, got %d", countResult.Tokens, root.TotalTokens)
+				}
+				if fileNode.Model != "gpt-4o" {
+					t.Fatalf("expected file model gpt-4o, got %q", fileNode.Model)
+				}
+				if root.Model != "gpt-4o" {
+					t.Fatalf("expected root model gpt-4o, got %q", root.Model)
+				}
+				rootJSON, err := json.Marshal(root)
+				if err != nil {
+					t.Fatalf("marshal root: %v", err)
+				}
+				var jsonRoot map[string]interface{}
+				if err := json.Unmarshal(rootJSON, &jsonRoot); err != nil {
+					t.Fatalf("failed to decode marshaled root: %v", err)
+				}
+				childrenValue, ok := jsonRoot["children"].([]interface{})
+				if !ok || len(childrenValue) == 0 {
+					t.Fatalf("missing children in JSON output: %v", jsonRoot)
+				}
+				fileEntry, ok := childrenValue[0].(map[string]interface{})
+				if !ok {
+					t.Fatalf("unexpected child payload type: %T", childrenValue[0])
+				}
+				if _, hasTotalFiles := fileEntry["totalFiles"]; hasTotalFiles {
+					t.Fatalf("file entry unexpectedly contains totalFiles: %v", fileEntry)
+				}
+				if _, hasTotalSize := fileEntry["totalSize"]; hasTotalSize {
+					t.Fatalf("file entry unexpectedly contains totalSize: %v", fileEntry)
+				}
+				if modelValue, ok := fileEntry["model"].(string); !ok || modelValue != "gpt-4o" {
+					t.Fatalf("expected child model gpt-4o, got %v", fileEntry["model"])
+				}
+				if rootModel, ok := jsonRoot["model"].(string); !ok || rootModel != "gpt-4o" {
+					t.Fatalf("expected root model gpt-4o, got %v", jsonRoot["model"])
+				}
+			},
+		},
+		{
+			name: "ContentTokensJSON",
+			arguments: []string{
+				appTypes.CommandContent,
+				"--tokens",
+				"--model",
+				"gpt-4o",
+				"--summary",
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"main.go": "package main\n// hello",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				roots := decodeJSONRoots(t, output)
+				if len(roots) != 1 {
+					t.Fatalf("expected one root, got %d", len(roots))
+				}
+				root := roots[0]
+				fileNode := findNodeByName(roots, "main.go")
+				if fileNode == nil {
+					t.Fatalf("content file node not found")
+				}
+				if fileNode.Tokens <= 0 {
+					t.Fatalf("expected positive token count, got %d", fileNode.Tokens)
+				}
+				if root.TotalTokens != fileNode.Tokens {
+					t.Fatalf("expected root tokens %d, got %d", fileNode.Tokens, root.TotalTokens)
+				}
+				if fileNode.Model != "gpt-4o" {
+					t.Fatalf("expected file model gpt-4o, got %q", fileNode.Model)
+				}
+				if root.Model != "gpt-4o" {
+					t.Fatalf("expected root model gpt-4o, got %q", root.Model)
+				}
+				rootJSON, err := json.Marshal(root)
+				if err != nil {
+					t.Fatalf("marshal root: %v", err)
+				}
+				var jsonRoot map[string]interface{}
+				if err := json.Unmarshal(rootJSON, &jsonRoot); err != nil {
+					t.Fatalf("failed to decode marshaled root: %v", err)
+				}
+				childrenValue, ok := jsonRoot["children"].([]interface{})
+				if !ok || len(childrenValue) == 0 {
+					t.Fatalf("missing children in JSON output: %v", jsonRoot)
+				}
+				fileEntry, ok := childrenValue[0].(map[string]interface{})
+				if !ok {
+					t.Fatalf("unexpected child payload type: %T", childrenValue[0])
+				}
+				if _, hasTotalFiles := fileEntry["totalFiles"]; hasTotalFiles {
+					t.Fatalf("file entry unexpectedly contains totalFiles: %v", fileEntry)
+				}
+				if _, hasTotalSize := fileEntry["totalSize"]; hasTotalSize {
+					t.Fatalf("file entry unexpectedly contains totalSize: %v", fileEntry)
+				}
+				if modelValue, ok := fileEntry["model"].(string); !ok || modelValue != "gpt-4o" {
+					t.Fatalf("expected child model gpt-4o, got %v", fileEntry["model"])
+				}
+				if rootModel, ok := jsonRoot["model"].(string); !ok || rootModel != "gpt-4o" {
+					t.Fatalf("expected root model gpt-4o, got %v", jsonRoot["model"])
+				}
+			},
+		},
+		{
+			name: "ContentTokensUVLlama",
+			arguments: []string{
+				appTypes.CommandContent,
+				"--tokens",
+				"--model",
+				"llama-3.1-8b",
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"sample.txt": "llama helper integration",
+				})
+			},
+			requiresHelpers: true,
+			validate: func(t *testing.T, output string) {
+				roots := decodeJSONRoots(t, output)
+				if len(roots) == 0 {
+					t.Fatalf("expected at least one root, got zero")
+				}
+				fileNode := findNodeByName(roots, "sample.txt")
+				if fileNode == nil {
+					t.Fatalf("llama sample file not found")
+				}
+				if fileNode.Tokens <= 0 {
+					t.Fatalf("expected positive token count, got %d", fileNode.Tokens)
+				}
+				if fileNode.Model != "llama-3.1-8b" {
+					t.Fatalf("expected file model llama-3.1-8b, got %q", fileNode.Model)
 				}
 			},
 		},
@@ -454,30 +755,25 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				type resultWrapper struct {
-					Files []appTypes.FileOutput `xml:"code>item"`
+				roots := decodeXMLRoots(t, output)
+				files := flattenFileNodes(roots)
+				if len(files) != 1 {
+					t.Fatalf("expected one item, got %d", len(files))
 				}
-				var wrapper resultWrapper
-				if err := xml.Unmarshal([]byte(output), &wrapper); err != nil {
-					t.Fatalf("invalid XML: %v\n%s", err, output)
-				}
-				if len(wrapper.Files) != 1 {
-					t.Fatalf("expected one item, got %d", len(wrapper.Files))
-				}
-				if wrapper.Files[0].MimeType != expectedTextMimeType {
+				if files[0].MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
-				info, err := os.Stat(wrapper.Files[0].Path)
+				info, err := os.Stat(files[0].Path)
 				if err != nil {
-					t.Fatalf("stat failed for %s: %v", wrapper.Files[0].Path, err)
+					t.Fatalf("stat failed for %s: %v", files[0].Path, err)
 				}
 				expectedSize := utils.FormatFileSize(info.Size())
-				if wrapper.Files[0].Size != expectedSize {
-					t.Fatalf("expected size %s, got %s", expectedSize, wrapper.Files[0].Size)
+				if files[0].Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, files[0].Size)
 				}
 				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
-				if wrapper.Files[0].LastModified != expectedTimestamp {
-					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, wrapper.Files[0].LastModified)
+				if files[0].LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, files[0].LastModified)
 				}
 			},
 		},
@@ -532,16 +828,90 @@ func TestCTX(testingHandle *testing.T) {
 			},
 		},
 		{
+			name: "TreeRawSummaryDefault",
+			arguments: []string{
+				appTypes.CommandTree,
+				"--format",
+				appTypes.FormatRaw,
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"summary.txt": "hello",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				if !strings.Contains(output, "Summary: 1 file") {
+					t.Fatalf("expected default summary in output\n%s", output)
+				}
+			},
+		},
+		{
+			name: "TreeRawSummaryDisabled",
+			arguments: []string{
+				appTypes.CommandTree,
+				"--format",
+				appTypes.FormatRaw,
+				"--summary=false",
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"summary.txt": "hello",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				if strings.Contains(output, "Summary:") {
+					t.Fatalf("unexpected summary when disabled\n%s", output)
+				}
+			},
+		},
+		{
+			name: "ContentRawSummaryDefault",
+			arguments: []string{
+				appTypes.CommandContent,
+				"--format",
+				appTypes.FormatRaw,
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"summary.txt": "hello",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				if !strings.Contains(output, "Summary:") {
+					t.Fatalf("expected default summary in content output\n%s", output)
+				}
+			},
+		},
+		{
+			name: "ContentRawSummaryDisabled",
+			arguments: []string{
+				appTypes.CommandContent,
+				"--format",
+				appTypes.FormatRaw,
+				"--summary=false",
+			},
+			prepare: func(t *testing.T) string {
+				return setupTestDirectory(t, map[string]string{
+					"summary.txt": "hello",
+				})
+			},
+			validate: func(t *testing.T, output string) {
+				if strings.Contains(output, "Summary:") {
+					t.Fatalf("unexpected summary when disabled for content\n%s", output)
+				}
+			},
+		},
+		{
 			name: "CallChainRaw",
 			arguments: []string{
 				appTypes.CommandCallChain,
-				contentDataFunction,
+				streamContentFunction,
 				"--format",
 				appTypes.FormatRaw,
 			},
 			prepare: func(t *testing.T) string { return getModuleRoot(t) },
 			validate: func(t *testing.T, output string) {
-				if !strings.Contains(output, "Target Function: "+contentDataFunction) {
+				if !strings.Contains(output, "Target Function: "+streamContentFunction) {
 					t.Fatalf("missing target function in output")
 				}
 			},
@@ -550,7 +920,7 @@ func TestCTX(testingHandle *testing.T) {
 			name: "CallChainJSON",
 			arguments: []string{
 				appTypes.CommandCallChain,
-				contentDataFunction,
+				streamContentFunction,
 				"--format",
 				appTypes.FormatJSON,
 			},
@@ -564,7 +934,7 @@ func TestCTX(testingHandle *testing.T) {
 					t.Fatalf("expected at least one element, got zero")
 				}
 				chain := list[0]
-				if chain.TargetFunction != contentDataFunction {
+				if chain.TargetFunction != streamContentFunction {
 					t.Fatalf("unexpected target function %q", chain.TargetFunction)
 				}
 			},
@@ -573,7 +943,7 @@ func TestCTX(testingHandle *testing.T) {
 			name: "CallChainXML",
 			arguments: []string{
 				appTypes.CommandCallChain,
-				contentDataFunction,
+				streamContentFunction,
 				"--format",
 				appTypes.FormatXML,
 			},
@@ -592,7 +962,7 @@ func TestCTX(testingHandle *testing.T) {
 				if len(wrapper.Chains) == 0 {
 					t.Fatalf("expected at least one element, got zero")
 				}
-				if wrapper.Chains[0].TargetFunction != contentDataFunction {
+				if wrapper.Chains[0].TargetFunction != streamContentFunction {
 					t.Fatalf("unexpected target function %q", wrapper.Chains[0].TargetFunction)
 				}
 			},
@@ -601,7 +971,7 @@ func TestCTX(testingHandle *testing.T) {
 			name: "CallChainAliasDefaultDepthReturnsOnlyDirectCallers",
 			arguments: []string{
 				callChainAlias,
-				contentDataFunction,
+				streamContentFunction,
 				formatFlag,
 				appTypes.FormatJSON,
 			},
@@ -612,14 +982,21 @@ func TestCTX(testingHandle *testing.T) {
 					t.Fatalf("invalid JSON: %v\n%s", err, output)
 				}
 				if len(callChains) != 1 {
+					t.Logf("callchain json: %s", output)
 					t.Fatalf("expected one call chain, got %d", len(callChains))
 				}
 				callers := callChains[0].Callers
-				if len(callers) != 1 {
-					t.Fatalf("expected one direct caller, got %d", len(callers))
+				expected := map[string]struct{}{
+					contentDataFunction: {},
 				}
-				if callers[0] != runTreeOrContentCommandFunction {
-					t.Fatalf("expected caller %s, got %s", runTreeOrContentCommandFunction, callers[0])
+				if len(callers) != len(expected) {
+					t.Logf("callchain callers: %+v", callers)
+					t.Fatalf("expected %d direct callers, got %d", len(expected), len(callers))
+				}
+				for _, caller := range callers {
+					if _, ok := expected[caller]; !ok {
+						t.Fatalf("unexpected caller %s", caller)
+					}
 				}
 			},
 		},
@@ -627,7 +1004,7 @@ func TestCTX(testingHandle *testing.T) {
 			name: "CallChainAliasDepthTwoIncludesSecondLevelCallers",
 			arguments: []string{
 				callChainAlias,
-				contentDataFunction,
+				streamContentFunction,
 				depthFlag,
 				depthTwoValue,
 				formatFlag,
@@ -640,27 +1017,21 @@ func TestCTX(testingHandle *testing.T) {
 					t.Fatalf("invalid JSON: %v\n%s", err, output)
 				}
 				if len(callChains) != 1 {
+					t.Logf("callchain json depth two: %s", output)
 					t.Fatalf("expected one call chain, got %d", len(callChains))
 				}
 				callers := callChains[0].Callers
-				if len(callers) != 2 {
-					t.Fatalf("expected two callers, got %d", len(callers))
+				expected := map[string]struct{}{
+					contentDataFunction: {},
 				}
-				hasDirectCaller := false
-				hasSecondLevelCaller := false
+				if len(callers) != len(expected) {
+					t.Logf("callchain callers depth two: %+v", callers)
+					t.Fatalf("expected %d callers, got %d", len(expected), len(callers))
+				}
 				for _, caller := range callers {
-					if caller == runTreeOrContentCommandFunction {
-						hasDirectCaller = true
+					if _, ok := expected[caller]; !ok {
+						t.Fatalf("unexpected caller %s", caller)
 					}
-					if caller == runToolFunction {
-						hasSecondLevelCaller = true
-					}
-				}
-				if !hasDirectCaller {
-					t.Fatalf("missing caller %s", runTreeOrContentCommandFunction)
-				}
-				if !hasSecondLevelCaller {
-					t.Fatalf("missing caller %s", runToolFunction)
 				}
 			},
 		},
@@ -697,10 +1068,7 @@ func TestCTX(testingHandle *testing.T) {
 			},
 			expectWarning: true,
 			validate: func(t *testing.T, output string) {
-				var files []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &files); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				files := decodeJSONFiles(t, output)
 				if len(files) != 1 {
 					t.Fatalf("expected one readable item, got %d", len(files))
 				}
@@ -737,10 +1105,7 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				var files []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &files); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				files := decodeJSONFiles(t, output)
 				if len(files) != 1 {
 					t.Fatalf("expected one item, got %d", len(files))
 				}
@@ -788,10 +1153,7 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				var nodes []appTypes.TreeOutputNode
-				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				nodes := decodeJSONRoots(t, output)
 				if len(nodes) != 1 {
 					t.Fatalf("expected one top-level node, got %d", len(nodes))
 				}
@@ -841,10 +1203,7 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				var files []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &files); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				files := decodeJSONFiles(t, output)
 				if len(files) != 1 {
 					t.Fatalf("expected one item, got %d", len(files))
 				}
@@ -875,10 +1234,7 @@ func TestCTX(testingHandle *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, output string) {
-				var files []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &files); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				files := decodeJSONFiles(t, output)
 				if len(files) != 1 {
 					t.Fatalf("expected one item, got %d", len(files))
 				}
@@ -942,14 +1298,11 @@ func TestCTX(testingHandle *testing.T) {
 				return setupTestDirectory(t, layout)
 			},
 			validate: func(t *testing.T, output string) {
-				var nodes []appTypes.TreeOutputNode
-				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				nodes := decodeJSONRoots(t, output)
 				if len(nodes) != 1 {
 					t.Fatalf("expected one root node, got %d", len(nodes))
 				}
-				children := nodes[0].Children
+				children := childrenToSlice(nodes[0].Children)
 				if len(children) != 1 || children[0].Name != visibleFileName {
 					t.Fatalf("expected only %s, got %#v", visibleFileName, children)
 				}
@@ -984,15 +1337,12 @@ func TestCTX(testingHandle *testing.T) {
 				return setupTestDirectory(t, layout)
 			},
 			validate: func(t *testing.T, output string) {
-				var nodes []appTypes.TreeOutputNode
-				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				nodes := decodeJSONRoots(t, output)
 				if len(nodes) != 1 {
 					t.Fatalf("expected one root node, got %d", len(nodes))
 				}
-				names := make(map[string]*appTypes.TreeOutputNode)
-				for _, child := range nodes[0].Children {
+				names := make(map[string]appTypes.TreeOutputNode)
+				for _, child := range childrenToSlice(nodes[0].Children) {
 					names[child.Name] = child
 				}
 				if _, ok := names[utils.GitDirectoryName]; !ok {
@@ -1069,14 +1419,11 @@ func TestCTX(testingHandle *testing.T) {
 				return setupTestDirectory(t, layout)
 			},
 			validate: func(t *testing.T, output string) {
-				var nodes []appTypes.TreeOutputNode
-				if err := json.Unmarshal([]byte(output), &nodes); err != nil {
-					t.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				nodes := decodeJSONRoots(t, output)
 				if len(nodes) != 1 {
 					t.Fatalf("expected one root node, got %d", len(nodes))
 				}
-				rootChildren := nodes[0].Children
+				rootChildren := childrenToSlice(nodes[0].Children)
 				if len(rootChildren) != 1 || rootChildren[0].Name != subDirectoryName {
 					t.Fatalf("expected root child %s, got %#v", subDirectoryName, rootChildren)
 				}
@@ -1084,23 +1431,24 @@ func TestCTX(testingHandle *testing.T) {
 				if subNode.Size != "" {
 					t.Fatalf("expected directory %s to omit size, got %q", subDirectoryName, subNode.Size)
 				}
-				if len(subNode.Children) != 1 || subNode.Children[0].Name != visibleFileName {
-					t.Fatalf("expected only %s in %s, got %#v", visibleFileName, subDirectoryName, subNode.Children)
+				children := childrenToSlice(subNode.Children)
+				if len(children) != 1 || children[0].Name != visibleFileName {
+					t.Fatalf("expected only %s in %s, got %#v", visibleFileName, subDirectoryName, children)
 				}
-				if subNode.Children[0].MimeType != expectedTextMimeType {
+				if children[0].MimeType != expectedTextMimeType {
 					t.Fatalf("expected MIME type %s", expectedTextMimeType)
 				}
 				expectedSize := utils.FormatFileSize(int64(len(visibleFileContent)))
-				if subNode.Children[0].Size != expectedSize {
-					t.Fatalf("expected size %s, got %s", expectedSize, subNode.Children[0].Size)
+				if children[0].Size != expectedSize {
+					t.Fatalf("expected size %s, got %s", expectedSize, children[0].Size)
 				}
-				info, err := os.Stat(subNode.Children[0].Path)
+				info, err := os.Stat(children[0].Path)
 				if err != nil {
-					t.Fatalf("stat failed for %s: %v", subNode.Children[0].Path, err)
+					t.Fatalf("stat failed for %s: %v", children[0].Path, err)
 				}
 				expectedTimestamp := utils.FormatTimestamp(info.ModTime())
-				if subNode.Children[0].LastModified != expectedTimestamp {
-					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, subNode.Children[0].LastModified)
+				if children[0].LastModified != expectedTimestamp {
+					t.Fatalf("expected last modified %s, got %s", expectedTimestamp, children[0].LastModified)
 				}
 			},
 		},
@@ -1123,10 +1471,7 @@ func TestCTX(testingHandle *testing.T) {
 				if strings.Contains(output, ignoredFileName) {
 					testingHandle.Fatalf("expected content output to exclude %s\n%s", ignoredFileName, output)
 				}
-				var fileOutputs []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &fileOutputs); err != nil {
-					testingHandle.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				fileOutputs := decodeJSONFiles(testingHandle, output)
 				if len(fileOutputs) != 1 {
 					testingHandle.Fatalf("expected one file, got %d", len(fileOutputs))
 				}
@@ -1160,14 +1505,11 @@ func TestCTX(testingHandle *testing.T) {
 			arguments: []string{appTypes.CommandTree, "-e", toolsDirectoryName, "-e", githubDirectoryName, "-e", yamlPattern},
 			prepare:   setupExclusionPatternFixture,
 			validate: func(testingHandle *testing.T, output string) {
-				var outputNodes []appTypes.TreeOutputNode
-				if err := json.Unmarshal([]byte(output), &outputNodes); err != nil {
-					testingHandle.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				outputNodes := decodeJSONRoots(testingHandle, output)
 				if len(outputNodes) != 1 {
 					testingHandle.Fatalf("expected one root node, got %d", len(outputNodes))
 				}
-				rootChildren := outputNodes[0].Children
+				rootChildren := childrenToSlice(outputNodes[0].Children)
 				if len(rootChildren) != 2 {
 					testingHandle.Fatalf("expected two root children, got %d", len(rootChildren))
 				}
@@ -1191,10 +1533,7 @@ func TestCTX(testingHandle *testing.T) {
 			arguments: []string{appTypes.CommandContent, "-e", toolsDirectoryName, "-e", githubDirectoryName, "-e", yamlPattern},
 			prepare:   setupExclusionPatternFixture,
 			validate: func(testingHandle *testing.T, output string) {
-				var fileOutputs []appTypes.FileOutput
-				if err := json.Unmarshal([]byte(output), &fileOutputs); err != nil {
-					testingHandle.Fatalf("invalid JSON: %v\n%s", err, output)
-				}
+				fileOutputs := decodeJSONFiles(testingHandle, output)
 				if len(fileOutputs) != 2 {
 					testingHandle.Fatalf("expected two files, got %d", len(fileOutputs))
 				}
@@ -1215,6 +1554,19 @@ func TestCTX(testingHandle *testing.T) {
 
 	for _, testCase := range testCases {
 		testingHandle.Run(testCase.name, func(t *testing.T) {
+			if testCase.requiresHelpers {
+				if os.Getenv("CTX_TEST_RUN_HELPERS") != "1" {
+					t.Skip("set CTX_TEST_RUN_HELPERS=1 to run helper-dependent tests")
+				}
+				uvExecutable := os.Getenv("CTX_TEST_UV")
+				if uvExecutable == "" {
+					uvExecutable = "uv"
+				}
+				if _, err := exec.LookPath(uvExecutable); err != nil {
+					t.Skipf("uv executable %q unavailable: %v", uvExecutable, err)
+				}
+				t.Setenv("CTX_UV", uvExecutable)
+			}
 			workingDir := testCase.prepare(t)
 
 			var output string
