@@ -1,199 +1,48 @@
-// Package commands contains the core logic for data collection for each command.
 package commands
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
-	"go/ast"
-	"go/printer"
-	"go/token"
-	"os"
-	"strings"
 
+	"github.com/temirov/ctx/internal/callchain"
 	"github.com/temirov/ctx/internal/docs"
-	apptypes "github.com/temirov/ctx/internal/types"
-	"golang.org/x/tools/go/callgraph"
-	"golang.org/x/tools/go/callgraph/static"
-	"golang.org/x/tools/go/packages"
-	"golang.org/x/tools/go/ssa"
-	"golang.org/x/tools/go/ssa/ssautil"
+	"github.com/temirov/ctx/internal/types"
 )
 
 const (
-	// Error message templates used when retrieving call chain information.
-	errorFailedToLoadPackagesFormat      = "failed to load packages: %w"
-	errorEncounteredWhileLoadingPackages = "errors encountered while loading packages"
-	errorFunctionNotFoundFormat          = "target function %q not found in call graph"
-	// qualifiedNameSeparator separates elements in a fully qualified name.
-	qualifiedNameSeparator = "."
+	errorCallChainTargetNotFound = "call chain target %q not found"
 )
 
-// GetCallChainData returns call chain information up to the specified depth.
+var defaultCallChainRegistry = callchain.NewRegistry(
+	callchain.NewGoAnalyzer(),
+	callchain.NewPythonAnalyzer(),
+	callchain.NewJavaScriptAnalyzer(),
+)
+
+// GetCallChainData returns call chain information for the requested symbol.
 func GetCallChainData(
 	targetFunctionQualifiedName string,
 	callChainDepth int,
 	includeDocumentation bool,
 	documentationCollector *docs.Collector,
 	repositoryRootDirectory string,
-) (*apptypes.CallChainOutput, error) {
-	packageLoadConfiguration := &packages.Config{
-		Mode: packages.LoadAllSyntax,
-		Dir:  ".",
-		Fset: token.NewFileSet(),
+) (*types.CallChainOutput, error) {
+	if repositoryRootDirectory == "" {
+		repositoryRootDirectory = "."
 	}
-	loadedPackages, loadError := packages.Load(packageLoadConfiguration, "./...")
-	if loadError != nil {
-		return nil, fmt.Errorf(errorFailedToLoadPackagesFormat, loadError)
+	request := callchain.AnalyzerRequest{
+		TargetSymbol:            targetFunctionQualifiedName,
+		MaximumDepth:            callChainDepth,
+		IncludeDocumentation:    includeDocumentation,
+		DocumentationCollector:  documentationCollector,
+		RepositoryRootDirectory: repositoryRootDirectory,
 	}
-	if packages.PrintErrors(loadedPackages) > 0 {
-		return nil, fmt.Errorf(errorEncounteredWhileLoadingPackages)
-	}
-
-	ssaProgram, _ := ssautil.Packages(loadedPackages, ssa.BuilderMode(0))
-	ssaProgram.Build()
-
-	callGraphRoot := static.CallGraph(ssaProgram)
-	callGraphRoot.DeleteSyntheticNodes()
-
-	targetNode := selectFunctionNode(callGraphRoot, targetFunctionQualifiedName)
-	if targetNode == nil {
-		return nil, fmt.Errorf(errorFunctionNotFoundFormat, targetFunctionQualifiedName)
-	}
-
-	visitedCallers := map[*callgraph.Node]struct{}{targetNode: {}}
-	callerQueue := []*callgraph.Node{targetNode}
-	var callerNames []string
-	for depth := 0; depth < callChainDepth; depth++ {
-		var next []*callgraph.Node
-		for _, node := range callerQueue {
-			for _, inEdge := range node.In {
-				if inEdge.Caller == nil || inEdge.Caller.Func == nil {
-					continue
-				}
-				if _, seen := visitedCallers[inEdge.Caller]; seen {
-					continue
-				}
-				visitedCallers[inEdge.Caller] = struct{}{}
-				callerNames = append(callerNames, inEdge.Caller.Func.String())
-				next = append(next, inEdge.Caller)
-			}
+	result, analyzeError := defaultCallChainRegistry.Analyze(request)
+	if analyzeError != nil {
+		if errors.Is(analyzeError, callchain.ErrSymbolNotFound) {
+			return nil, fmt.Errorf(errorCallChainTargetNotFound, targetFunctionQualifiedName)
 		}
-		callerQueue = next
+		return nil, analyzeError
 	}
-
-	visitedCallees := map[*callgraph.Node]struct{}{targetNode: {}}
-	calleeQueue := []*callgraph.Node{targetNode}
-	var calleeNames []string
-	for depth := 0; depth < callChainDepth; depth++ {
-		var next []*callgraph.Node
-		for _, node := range calleeQueue {
-			for _, outEdge := range node.Out {
-				if outEdge.Callee == nil || outEdge.Callee.Func == nil {
-					continue
-				}
-				if _, seen := visitedCallees[outEdge.Callee]; seen {
-					continue
-				}
-				visitedCallees[outEdge.Callee] = struct{}{}
-				calleeNames = append(calleeNames, outEdge.Callee.Func.String())
-				next = append(next, outEdge.Callee)
-			}
-		}
-		calleeQueue = next
-	}
-
-	relevantFunctionNames := map[string]struct{}{targetNode.Func.String(): {}}
-	for _, name := range callerNames {
-		relevantFunctionNames[name] = struct{}{}
-	}
-	for _, name := range calleeNames {
-		relevantFunctionNames[name] = struct{}{}
-	}
-
-	functionSources := make(map[string]string)
-	extractedFilePaths := make(map[string]struct{})
-
-	for _, loadedPackage := range loadedPackages {
-		for _, file := range loadedPackage.Syntax {
-			ast.Inspect(file, func(node ast.Node) bool {
-				funcDecl, ok := node.(*ast.FuncDecl)
-				if !ok || funcDecl.Name == nil {
-					return true
-				}
-				qualifiedName := composeQualifiedName(loadedPackage, funcDecl)
-				if _, needed := relevantFunctionNames[qualifiedName]; !needed {
-					return true
-				}
-				var functionBuffer bytes.Buffer
-				(&printer.Config{Mode: printer.UseSpaces | printer.TabIndent, Tabwidth: 4}).
-					Fprint(&functionBuffer, packageLoadConfiguration.Fset, funcDecl)
-				functionSources[qualifiedName] = functionBuffer.String()
-				if includeDocumentation {
-					if pos := packageLoadConfiguration.Fset.File(funcDecl.Pos()); pos != nil {
-						extractedFilePaths[pos.Name()] = struct{}{}
-					}
-				}
-				return true
-			})
-		}
-	}
-
-	output := &apptypes.CallChainOutput{
-		TargetFunction: targetFunctionQualifiedName,
-		Callers:        callerNames,
-		Functions:      functionSources,
-	}
-	if len(calleeNames) > 0 {
-		output.Callees = &calleeNames
-	}
-
-	if includeDocumentation && documentationCollector != nil {
-		repoPrefix := repositoryRootDirectory + string(os.PathSeparator)
-		for filePath := range extractedFilePaths {
-			if filePath != repositoryRootDirectory && !strings.HasPrefix(filePath, repoPrefix) {
-				continue
-			}
-			entries, documentationCollectionError := documentationCollector.CollectFromFile(filePath)
-			if documentationCollectionError == nil && len(entries) > 0 {
-				output.Documentation = append(output.Documentation, entries...)
-			}
-		}
-	}
-
-	return output, nil
-}
-
-// composeQualifiedName returns the fully qualified name for a function declaration.
-func composeQualifiedName(packageData *packages.Package, functionDeclaration *ast.FuncDecl) string {
-	name := functionDeclaration.Name.Name
-	if functionDeclaration.Recv != nil && len(functionDeclaration.Recv.List) > 0 {
-		var buffer bytes.Buffer
-		printer.Fprint(&buffer, packageData.Fset, functionDeclaration.Recv.List[0].Type)
-		return packageData.PkgPath + qualifiedNameSeparator + strings.TrimSpace(buffer.String()) + qualifiedNameSeparator + name
-	}
-	return packageData.PkgPath + qualifiedNameSeparator + name
-}
-
-// selectFunctionNode finds the graph node matching the candidate function name.
-func selectFunctionNode(graph *callgraph.Graph, candidate string) *callgraph.Node {
-	short := candidate
-	if lastDotIndex := strings.LastIndex(candidate, "."); lastDotIndex >= 0 && lastDotIndex < len(candidate)-1 {
-		short = candidate[lastDotIndex+1:]
-	}
-	var best *callgraph.Node
-	for _, node := range graph.Nodes {
-		if node.Func == nil {
-			continue
-		}
-		full := node.Func.String()
-		if full == candidate {
-			return node
-		}
-		if strings.HasSuffix(full, "."+candidate) || strings.HasSuffix(full, "."+short) {
-			if best == nil || len(full) > len(best.Func.String()) {
-				best = node
-			}
-		}
-	}
-	return best
+	return result, nil
 }

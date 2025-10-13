@@ -1,86 +1,37 @@
 # Plan
 
-## CT-06 Documentation Extraction Enhancements
+## CT-07 Callchain Support For Python And JavaScript
+- Review the existing Go callchain traversal in `internal/commands/callchain.go` and wrap it in a `CallchainAnalyzer` interface keyed by language constants.
+- Extend the callchain command plumbing to resolve the target language from the requested symbol or configuration and dispatch to analyzer implementations.
+- Implement Python and JavaScript analyzers using static parsing (AST via `github.com/smacker/go-tree-sitter` or manual parsing) to build caller/callee relationships while sharing output assembly logic.
+- Update documentation collection flow so non-Go analyzers can request documentation via the shared collector.
+- Add table-driven tests covering Go, Python, and JavaScript callchain outputs alongside failure cases when a symbol is missing.
 
-- internal/docs
-  - Audit existing collectors and refactor into strategy registry keyed by language constants.
-  - Implement Python docstring parsing using a robust approach with graceful degradation when interpreter support is unavailable.
-  - Implement JavaScript documentation parsing for JSDoc-style comments with clearly documented limitations.
-  - Add new interfaces ensuring extensibility and dependency injection for testing.
+## CT-08 Unify `t` And `c` Commands
+- Inspect `internal/commands` to identify duplication between tree and content commands and extract a shared `StreamOptions` structure to consolidate logic.
+- Make the `t` alias reuse the content command path internally with a `IncludeContent` flag defaulting to false to preserve tree behavior.
+- Ensure configuration precedence (flags > local config > global config) remains intact and update CLI help text accordingly.
+- Add integration tests verifying that `ctx t` and `ctx c --content=false` share identical outputs across formats.
 
-- internal/config
-  - Extend configuration schema to include documentation language toggles if needed and ensure defaults integrate with new documentation strategies.
+## CT-09 Document Clipboard Functionality
+- Update `README.md` to describe the `--clipboard` flag, platform caveats, and configuration interaction.
+- Mirror the documentation updates in `NOTES.md` under the maintenance checklist and mark CT-09 as complete when done.
 
-- internal/utils (or new helper package)
-  - Centralize language constants and file extension maps for reuse across documentation and callchain tasks.
-
-- tests/
-  - Add table-driven tests validating documentation extraction for Go, Python, and JavaScript samples when `--doc` flag is supplied. Ensure tests cover absence of interpreter scenarios.
-
-- NOTES.md
-  - Update CT-06 status once completed with summary of decisions.
-
-## CT-07 Callchain Support for Python and JavaScript
-
-- internal/commands or new analyzer package
-  - Abstract current Go callchain analyzer and register Python/JavaScript analyzers sharing a common interface.
-  - For Python, research use of external tooling or custom static analysis; document external dependency requirements.
-  - For JavaScript, implement parser based on established libraries or static heuristics; ensure behavior documented and tested.
-
-- tests/
-  - Provide integration tests that run callchain command against fixtures for Go, Python, and JavaScript verifying expected output structure.
-
-- NOTES.md
-  - Capture research findings and mark CT-07 complete.
-
-## CT-08 Command Unification
-
-- internal/cli/cli.go and related command implementations
-  - Refactor `t` alias to delegate to content command with configurable content inclusion flag.
-  - Ensure configuration precedence (flags > local > global) continues to work for unified command.
-
-- tests/
-  - Add command-level tests verifying alias behavior and content toggling.
-
-## CT-09 Documentation Update
-
-- README.md
-  - Document clipboard functionality and any new commands or flags introduced by previous features.
-
-- tests (if applicable)
-  - Ensure no broken links or references.
-
-- NOTES.md
-  - Mark maintenance task complete after documentation changes.
-
-## CT-10 Raw Format Tree Representation
-
-- internal/output or formatting package
-  - Modify raw formatter to render ASCII tree using `|` and `├──` characters while preserving existing metadata.
-
-- tests/
-  - Add golden tests covering tree structure output for simple directories.
+## CT-10 Enhance Raw Tree Format
+- Refactor the raw formatter in `internal/output` to render ASCII tree connectors (`|`, `├──`, `└──`).
+- Preserve summary and documentation sections while updating affected tests or golden fixtures.
+- Add new tests verifying raw tree rendering for nested directories and binary entries.
 
 ## CT-11 MCP Server Mode
+- Introduce a new Cobra command flag `--mcp` (or separate subcommand) that starts an MCP server using a dedicated package under `internal/services/mcp`.
+- Implement capability advertisement and request handling with clear interfaces for future extensions.
+- Write integration-style tests that spin up the MCP server in-process and assert capability responses.
+- Document usage in README and notes.
 
-- cmd/server or new entrypoint under cmd
-  - Implement MCP server startup flagged by `--mcp` integrating with existing command architecture.
-
-- internal/server (new package)
-  - Encapsulate MCP server logic with injectable dependencies for logging and configuration.
-
-- tests/
-  - Add integration test ensuring MCP mode responds to capability advertisement.
-
-- README.md / NOTES.md
-  - Document MCP usage and mark issue complete.
-
-## CT-01 Portability of Embedded Scripts
-
-- internal/docs and NOTES.md
-  - Research embedding strategy for Python scripts when running from compiled binary; document approach and any blockers.
+## CT-01 Embedded Script Portability
+- Research current handling of Python/JS assets when compiling to a single binary and document embedding strategies (e.g., `embed` package) in `NOTES.md`.
+- Note any blockers or required tooling updates, flagging follow-up work if needed.
 
 ## CT-02 Windows Compatibility Plan
-
-- NOTES.md
-  - Detail required changes for Windows support, including path handling, clipboard dependencies, and interpreter availability.
+- Audit OS-specific behavior (path separators, clipboard dependency, config locations) and draft a remediation plan in `NOTES.md`.
+- Identify configuration or build steps needed for Windows support and capture them as actionable items.

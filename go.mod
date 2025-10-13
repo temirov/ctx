@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/pkoukk/tiktoken-go v0.1.8
+	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.19.0
 	go.uber.org/zap v1.27.0

@@ -63,6 +63,7 @@ const (
 	formatFlag                        = "--format"
 	depthFlag                         = "--depth"
 	depthTwoValue                     = "2"
+	depthThreeValue                   = "3"
 
 	usageSnippet = "Usage:\n  ctx"
 	// unknownDocumentationFlagErrorSnippet captures the error when documentation flag is unsupported.
@@ -72,32 +73,83 @@ const (
 	expectedBinaryMimeType = "image/png"
 	ignoreFileName         = ".ignore"
 	// binarySectionHeader identifies the section that lists binary content patterns in an ignore file.
-	binarySectionHeader            = "[binary]"
-	unmatchedBinaryFixtureName     = "unmatched.bin"
-	onePixelPNGBase64Content       = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
-	expectedTextMimeType           = "text/plain; charset=utf-8"
-	mimeTypeIndicator              = "Mime Type:"
-	toolsDirectoryName             = "tools"
-	githubDirectoryName            = ".github"
-	yamlRootFileName               = "config.yml"
-	yamlPattern                    = "*.yml"
-	nestedDirectoryName            = "nested"
-	nestedYamlFileName             = "nested.yml"
-	nestedTextFileName             = "keep.txt"
-	docKindModule                  = "module"
-	docKindClass                   = "class"
-	docKindMethod                  = "method"
-	docKindFunction                = "function"
-	pythonFixtureFileName          = "documentation.py"
-	pythonModuleDocstring          = "Python module overview."
-	pythonClassDocstring           = "Represents a greeter component."
-	pythonMethodDocstring          = "Delivers a greeting message."
-	pythonFunctionDocstring        = "Builds a standalone greeting."
-	pythonDocumentationFixture     = "\"\"\"" + pythonModuleDocstring + "\"\"\"\n\nclass Greeter:\n    \"\"\"" + pythonClassDocstring + "\"\"\"\n\n    def greet(self):\n        \"\"\"" + pythonMethodDocstring + "\"\"\"\n        return \"hello\"\n\n\nasync def build_greeting():\n    \"\"\"" + pythonFunctionDocstring + "\"\"\"\n    return \"hello\"\n"
-	javaScriptFixtureFileName      = "documentation.js"
-	javaScriptClassDocstring       = "Controls widget lifecycle."
-	javaScriptFunctionDocstring    = "Creates a widget instance."
-	javaScriptDocumentationFixture = "/**\n * " + javaScriptClassDocstring + "\n */\nexport class Widget {\n}\n\n/**\n * " + javaScriptFunctionDocstring + "\n */\nexport const createWidget = () => {};\n"
+	binarySectionHeader                = "[binary]"
+	unmatchedBinaryFixtureName         = "unmatched.bin"
+	onePixelPNGBase64Content           = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
+	expectedTextMimeType               = "text/plain; charset=utf-8"
+	mimeTypeIndicator                  = "Mime Type:"
+	toolsDirectoryName                 = "tools"
+	githubDirectoryName                = ".github"
+	yamlRootFileName                   = "config.yml"
+	yamlPattern                        = "*.yml"
+	nestedDirectoryName                = "nested"
+	nestedYamlFileName                 = "nested.yml"
+	nestedTextFileName                 = "keep.txt"
+	docKindModule                      = "module"
+	docKindClass                       = "class"
+	docKindMethod                      = "method"
+	docKindFunction                    = "function"
+	pythonFixtureFileName              = "documentation.py"
+	pythonModuleDocstring              = "Python module overview."
+	pythonClassDocstring               = "Represents a greeter component."
+	pythonMethodDocstring              = "Delivers a greeting message."
+	pythonFunctionDocstring            = "Builds a standalone greeting."
+	pythonDocumentationFixture         = "\"\"\"" + pythonModuleDocstring + "\"\"\"\n\nclass Greeter:\n    \"\"\"" + pythonClassDocstring + "\"\"\"\n\n    def greet(self):\n        \"\"\"" + pythonMethodDocstring + "\"\"\"\n        return \"hello\"\n\n\nasync def build_greeting():\n    \"\"\"" + pythonFunctionDocstring + "\"\"\"\n    return \"hello\"\n"
+	javaScriptFixtureFileName          = "documentation.js"
+	javaScriptClassDocstring           = "Controls widget lifecycle."
+	javaScriptFunctionDocstring        = "Creates a widget instance."
+	javaScriptDocumentationFixture     = "/**\n * " + javaScriptClassDocstring + "\n */\nexport class Widget {\n}\n\n/**\n * " + javaScriptFunctionDocstring + "\n */\nexport const createWidget = () => {};\n"
+	pythonCallchainModuleDirectoryName = "app"
+	pythonCallchainServiceFileName     = "service.py"
+	pythonCallchainConsumerFileName    = "consumer.py"
+	pythonCallchainServiceContent      = `"""Service module used in call chain tests."""
+
+def core():
+    return "core"
+
+def helper():
+    return core()
+
+class Greeter:
+    def reply(self):
+        return helper()
+
+    def greet(self):
+        return self.reply()
+
+def entry():
+    greeter = Greeter()
+    return Greeter.greet(greeter)
+`
+	pythonCallchainConsumerContent = `from app import service
+
+
+def run():
+    return service.entry()
+`
+	pythonCallchainTargetFunction          = "app.service.Greeter.reply"
+	javaScriptCallchainModuleDirectoryName = "app"
+	javaScriptCallchainServiceFileName     = "service.js"
+	javaScriptCallchainConsumerFileName    = "consumer.js"
+	javaScriptCallchainServiceContent      = `export function core() {
+    return 'core';
+}
+
+export function helper() {
+    return core();
+}
+
+export function entry() {
+    return helper();
+}
+`
+	javaScriptCallchainConsumerContent = `import { entry } from './app/service.js';
+
+export function run() {
+    return entry();
+}
+`
+	javaScriptCallchainTargetFunction = "app.service.helper"
 )
 
 func decodeJSONRoots(t *testing.T, data string) []appTypes.TreeOutputNode {
@@ -1136,6 +1188,128 @@ func TestCTX(testingHandle *testing.T) {
 					if _, ok := expected[caller]; !ok {
 						t.Fatalf("unexpected caller %s", caller)
 					}
+				}
+			},
+		},
+		{
+			name: "CallChainPythonDepthThreeIncludesCrossModuleCallersAndCallees",
+			arguments: []string{
+				appTypes.CommandCallChain,
+				pythonCallchainTargetFunction,
+				depthFlag,
+				depthThreeValue,
+				formatFlag,
+				appTypes.FormatJSON,
+			},
+			prepare: func(t *testing.T) string {
+				layout := map[string]string{
+					filepath.Join(pythonCallchainModuleDirectoryName, pythonCallchainServiceFileName): pythonCallchainServiceContent,
+					pythonCallchainConsumerFileName: pythonCallchainConsumerContent,
+				}
+				return setupTestDirectory(t, layout)
+			},
+			validate: func(t *testing.T, output string) {
+				var callChains []appTypes.CallChainOutput
+				if err := json.Unmarshal([]byte(output), &callChains); err != nil {
+					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(callChains) != 1 {
+					t.Fatalf("expected one call chain entry, got %d", len(callChains))
+				}
+				chain := callChains[0]
+				if chain.TargetFunction != pythonCallchainTargetFunction {
+					t.Fatalf("unexpected target %s", chain.TargetFunction)
+				}
+				expectedCallers := map[string]struct{}{
+					"app.service.Greeter.greet": {},
+					"app.service.entry":         {},
+					"consumer.run":              {},
+				}
+				if len(chain.Callers) != len(expectedCallers) {
+					t.Fatalf("expected %d callers, got %d: %+v", len(expectedCallers), len(chain.Callers), chain.Callers)
+				}
+				for _, caller := range chain.Callers {
+					if _, ok := expectedCallers[caller]; !ok {
+						t.Fatalf("unexpected caller %s", caller)
+					}
+				}
+				if chain.Callees == nil {
+					t.Fatalf("expected callees in output")
+				}
+				expectedCallees := map[string]struct{}{
+					"app.service.core":   {},
+					"app.service.helper": {},
+				}
+				if len(*chain.Callees) != len(expectedCallees) {
+					t.Fatalf("expected %d callees, got %d: %+v", len(expectedCallees), len(*chain.Callees), *chain.Callees)
+				}
+				for _, callee := range *chain.Callees {
+					if _, ok := expectedCallees[callee]; !ok {
+						t.Fatalf("unexpected callee %s", callee)
+					}
+				}
+				if len(chain.Functions) != len(expectedCallers)+len(expectedCallees)+1 {
+					t.Fatalf("expected %d functions, got %d", len(expectedCallers)+len(expectedCallees)+1, len(chain.Functions))
+				}
+			},
+		},
+		{
+			name: "CallChainJavaScriptDepthTwoResolvesCrossFileCallers",
+			arguments: []string{
+				appTypes.CommandCallChain,
+				javaScriptCallchainTargetFunction,
+				depthFlag,
+				depthTwoValue,
+				formatFlag,
+				appTypes.FormatJSON,
+			},
+			prepare: func(t *testing.T) string {
+				layout := map[string]string{
+					filepath.Join(javaScriptCallchainModuleDirectoryName, javaScriptCallchainServiceFileName): javaScriptCallchainServiceContent,
+					javaScriptCallchainConsumerFileName: javaScriptCallchainConsumerContent,
+				}
+				return setupTestDirectory(t, layout)
+			},
+			validate: func(t *testing.T, output string) {
+				var callChains []appTypes.CallChainOutput
+				if err := json.Unmarshal([]byte(output), &callChains); err != nil {
+					t.Fatalf("invalid JSON: %v\n%s", err, output)
+				}
+				if len(callChains) != 1 {
+					t.Fatalf("expected one call chain entry, got %d", len(callChains))
+				}
+				chain := callChains[0]
+				if chain.TargetFunction != javaScriptCallchainTargetFunction {
+					t.Fatalf("unexpected target %s", chain.TargetFunction)
+				}
+				expectedCallers := map[string]struct{}{
+					"app.service.entry": {},
+					"consumer.run":      {},
+				}
+				if len(chain.Callers) != len(expectedCallers) {
+					t.Fatalf("expected %d callers, got %d: %+v", len(expectedCallers), len(chain.Callers), chain.Callers)
+				}
+				for _, caller := range chain.Callers {
+					if _, ok := expectedCallers[caller]; !ok {
+						t.Fatalf("unexpected caller %s", caller)
+					}
+				}
+				if chain.Callees == nil {
+					t.Fatalf("expected callees in output")
+				}
+				expectedCallees := map[string]struct{}{
+					"app.service.core": {},
+				}
+				if len(*chain.Callees) != len(expectedCallees) {
+					t.Fatalf("expected %d callees, got %d: %+v", len(expectedCallees), len(*chain.Callees), *chain.Callees)
+				}
+				for _, callee := range *chain.Callees {
+					if _, ok := expectedCallees[callee]; !ok {
+						t.Fatalf("unexpected callee %s", callee)
+					}
+				}
+				if len(chain.Functions) != len(expectedCallers)+len(expectedCallees)+1 {
+					t.Fatalf("expected %d functions, got %d", len(expectedCallers)+len(expectedCallees)+1, len(chain.Functions))
 				}
 			},
 		},
