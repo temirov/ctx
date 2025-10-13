@@ -138,20 +138,24 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
       But this requires branching per OS and ensuring the utilities are present.
   ````
 
-- [X] [CT-04] allow for a configuration file config.yaml either locally or under ~/.ctx. Define the defaults and read them in the following priority: CLI flags (P0) -> local config (P1) -> global config (P2)
-- [X] [CT-05] allow generation of the configuration file (local and global) with --init <local|global>, local by default, --force to overwrite the existing config.yaml, otherwise if the file exists then the program exits with an error
-- [ ] [CT-06] consider retrieving Python and JS code documentation when --doc flag is passed and teh code is in either JS or Python. Research if there is a standardized model of Python and JS party packages' documentation that can be employed.
-- [ ] [CT-07] consider supporting a callchain for Python and JS. Research if there are either Go or native callchain detection functionality
+- [X] [CT-04] Allow for a configuration file config.yaml either locally or under ~/.ctx. Define the defaults and read them in the following priority: CLI flags (P0) -> local config (P1) -> global config (P2)
+- [X] [CT-05] Allow generation of the configuration file (local and global) with --init <local|global>, local by default, --force to overwrite the existing config.yaml, otherwise if the file exists then the program exits with an error
+- [ ] [CT-06] Consider retrieving Python and JS code documentation when --doc flag is passed and teh code is in either JS or Python. Research if there is a standardized model of Python and JS party packages' documentation that can be employed.
+- [ ] [CT-07] Consider supporting a callchain for Python and JS. Research if there are either Go or native callchain detection functionality
+- [ ] [CT-11] Add an MCP server and advertise program capabilities. use --mcp flag to run the program as an MCP server
 
 ### Improvements
 
 - [ ] [CT-08] Unify t and c commands and there is only difference which is the content of the files on the backend. make t an internal alis to c command with the flag --content false
+- [ ] [CT-10] Change raw format to include graphic represwentation, similar to trre command of | and ├── characters to demonstrate the tree structure
 
 ### Maintenance
 
+- [ ] [CT-09] Document copy to clipboard functionality in the README.md
+
 ### Portability
 
-- [ ] [CT-01] Consider how would the compiled Go executable run python scripts? Do we need to embed and recreate them at the runtime?
-- [ ] [CT-02] Check OS specific assumptions. Can we run the compiled version of this app on Windows? Prepare a plan of what needs to change to be able to run it on Windows.
+- [ ] [CT-01] Consider how would the compiled Go executable run python scripts? Do we need to embed and recreate them at the runtime? Reflect the considerations in the NOTES.md under the respective items
+- [ ] [CT-02] Check OS specific assumptions. Can we run the compiled version of this app on Windows? Prepare a plan of what needs to change to be able to run it on Windows. Reflect the considerations in the NOTES.md under the respective items
 
 ## BugFixes
