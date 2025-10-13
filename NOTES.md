@@ -147,7 +147,7 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 
 ### Improvements
 
-- [ ] [CT-08] Unify t and c commands and there is only difference which is the content of the files on the backend. make t an internal alis to c command with the flag --content false
+- [ ] [CT-08] Unify internal implementatiopn of the `t` and `c` commands as their only difference is the content of the files on the backend. make t an internal alis to c command with the flag --content false
 - [ ] [CT-10] Change raw format to include graphic represwentation, similar to trre command of | and ├── characters to demonstrate the tree structure
 
 ### Maintenance
