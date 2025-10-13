@@ -2,7 +2,7 @@
 
 ## Role
 
-You are a staff level full stack engineer. Your task is to **re-evaluate and refactor the LoopAware repository** according to the coding standards already written in **AGENTS.md**.
+You are a staff level full stack engineer. Your task is to **re-evaluate and refactor the CTX (context) repository** according to the coding standards already written in **AGENTS.md**.
 
 ## Context
 
@@ -30,7 +30,7 @@ You are a staff level full stack engineer. Your task is to **re-evaluate and ref
    - Design and use shared components
 5. **Tests** → Add/adjust Puppeteer tests for key flows (button → event → notification; cross-panel isolation). Prioritize end-2-end and integration tests.
 6. **Docs** → Update README and MIGRATION.md with new event contracts, removed globals, and developer instructions.
-7. **Timeouts** Set a timer before running any CLI command, tests, build, git etc. If an operation takes unreasonably long without producing an output, abort it and consider a diffeernt approach. Prepend all CLI invocations with `timeout <N>s` command.
+7. **Timeouts**  Set a timer before running any CLI command, tests, build, git etc. If an operation takes unreasonably long without producing an output, abort it and consider a diffeernt approach. Prepend all CLI invocations with `timeout -k <N>s -s SIGKILL <N>s` command. Theis is MANDATORY for each and every CLI command.
 
 ## Output requirements
 
@@ -140,13 +140,14 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 
 - [X] [CT-04] Allow for a configuration file config.yaml either locally or under ~/.ctx. Define the defaults and read them in the following priority: CLI flags (P0) -> local config (P1) -> global config (P2)
 - [X] [CT-05] Allow generation of the configuration file (local and global) with --init <local|global>, local by default, --force to overwrite the existing config.yaml, otherwise if the file exists then the program exits with an error
-- [ ] [CT-06] Consider retrieving Python and JS code documentation when --doc flag is passed and teh code is in either JS or Python. Research if there is a standardized model of Python and JS party packages' documentation that can be employed.
+- [X] [CT-06] Consider retrieving Python and JS code documentation when --doc flag is passed and teh code is in either JS or Python. Research if there is a standardized model of Python and JS party packages' documentation that can be employed.
+  - Implemented language-aware documentation extractors. Go analysis now reuses a shared collector map while Python docstrings (module/class/function/method) are parsed via indentation-aware heuristics and JavaScript leverages JSDoc comment pairing. When go.mod is unavailable the collector gracefully continues for non-Go languages. Falling back to rune counting avoids network failures while keeping tokenized flows operational.
 - [ ] [CT-07] Consider supporting a callchain for Python and JS. Research if there are either Go or native callchain detection functionality
 - [ ] [CT-11] Add an MCP server and advertise program capabilities. use --mcp flag to run the program as an MCP server
 
 ### Improvements
 
-- [ ] [CT-08] Unify t and c commands and there is only difference which is the content of the files on the backend. make t an internal alis to c command with the flag --content false
+- [ ] [CT-08] Unify internal implementatiopn of the `t` and `c` commands as their only difference is the content of the files on the backend. make t an internal alis to c command with the flag --content false
 - [ ] [CT-10] Change raw format to include graphic represwentation, similar to trre command of | and ├── characters to demonstrate the tree structure
 
 ### Maintenance

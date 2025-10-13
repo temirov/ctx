@@ -72,18 +72,32 @@ const (
 	expectedBinaryMimeType = "image/png"
 	ignoreFileName         = ".ignore"
 	// binarySectionHeader identifies the section that lists binary content patterns in an ignore file.
-	binarySectionHeader        = "[binary]"
-	unmatchedBinaryFixtureName = "unmatched.bin"
-	onePixelPNGBase64Content   = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
-	expectedTextMimeType       = "text/plain; charset=utf-8"
-	mimeTypeIndicator          = "Mime Type:"
-	toolsDirectoryName         = "tools"
-	githubDirectoryName        = ".github"
-	yamlRootFileName           = "config.yml"
-	yamlPattern                = "*.yml"
-	nestedDirectoryName        = "nested"
-	nestedYamlFileName         = "nested.yml"
-	nestedTextFileName         = "keep.txt"
+	binarySectionHeader            = "[binary]"
+	unmatchedBinaryFixtureName     = "unmatched.bin"
+	onePixelPNGBase64Content       = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
+	expectedTextMimeType           = "text/plain; charset=utf-8"
+	mimeTypeIndicator              = "Mime Type:"
+	toolsDirectoryName             = "tools"
+	githubDirectoryName            = ".github"
+	yamlRootFileName               = "config.yml"
+	yamlPattern                    = "*.yml"
+	nestedDirectoryName            = "nested"
+	nestedYamlFileName             = "nested.yml"
+	nestedTextFileName             = "keep.txt"
+	docKindModule                  = "module"
+	docKindClass                   = "class"
+	docKindMethod                  = "method"
+	docKindFunction                = "function"
+	pythonFixtureFileName          = "documentation.py"
+	pythonModuleDocstring          = "Python module overview."
+	pythonClassDocstring           = "Represents a greeter component."
+	pythonMethodDocstring          = "Delivers a greeting message."
+	pythonFunctionDocstring        = "Builds a standalone greeting."
+	pythonDocumentationFixture     = "\"\"\"" + pythonModuleDocstring + "\"\"\"\n\nclass Greeter:\n    \"\"\"" + pythonClassDocstring + "\"\"\"\n\n    def greet(self):\n        \"\"\"" + pythonMethodDocstring + "\"\"\"\n        return \"hello\"\n\n\nasync def build_greeting():\n    \"\"\"" + pythonFunctionDocstring + "\"\"\"\n    return \"hello\"\n"
+	javaScriptFixtureFileName      = "documentation.js"
+	javaScriptClassDocstring       = "Controls widget lifecycle."
+	javaScriptFunctionDocstring    = "Creates a widget instance."
+	javaScriptDocumentationFixture = "/**\n * " + javaScriptClassDocstring + "\n */\nexport class Widget {\n}\n\n/**\n * " + javaScriptFunctionDocstring + "\n */\nexport const createWidget = () => {};\n"
 )
 
 func decodeJSONRoots(t *testing.T, data string) []appTypes.TreeOutputNode {
@@ -521,6 +535,96 @@ func TestCTX(testingHandle *testing.T) {
 					expectedTimestamp := utils.FormatTimestamp(info.ModTime())
 					if files[i].LastModified != expectedTimestamp {
 						t.Fatalf("expected last modified %s for %s, got %s", expectedTimestamp, files[i].Path, files[i].LastModified)
+					}
+				}
+			},
+		},
+		{
+			name: "PythonDocumentationExtraction",
+			arguments: []string{
+				appTypes.CommandContent,
+				documentationFlag,
+				"--format",
+				appTypes.FormatJSON,
+				".",
+			},
+			prepare: func(testingHandle *testing.T) string {
+				return setupTestDirectory(testingHandle, map[string]string{
+					pythonFixtureFileName: pythonDocumentationFixture,
+				})
+			},
+			validate: func(testingHandle *testing.T, output string) {
+				files := decodeJSONFiles(testingHandle, output)
+				if len(files) != 1 {
+					testingHandle.Fatalf("expected one file node, got %d", len(files))
+				}
+				documentationByName := map[string]appTypes.DocumentationEntry{}
+				for _, entry := range files[0].Documentation {
+					documentationByName[entry.Name] = entry
+				}
+				expected := map[string]struct {
+					text string
+					kind string
+				}{
+					"documentation":                {text: pythonModuleDocstring, kind: docKindModule},
+					"documentation.Greeter":        {text: pythonClassDocstring, kind: docKindClass},
+					"documentation.Greeter.greet":  {text: pythonMethodDocstring, kind: docKindMethod},
+					"documentation.build_greeting": {text: pythonFunctionDocstring, kind: docKindFunction},
+				}
+				for name, expectation := range expected {
+					entry, ok := documentationByName[name]
+					if !ok {
+						testingHandle.Fatalf("missing documentation entry %s", name)
+					}
+					if entry.Doc != expectation.text {
+						testingHandle.Fatalf("unexpected documentation for %s: %q", name, entry.Doc)
+					}
+					if entry.Kind != expectation.kind {
+						testingHandle.Fatalf("unexpected kind for %s: %s", name, entry.Kind)
+					}
+				}
+			},
+		},
+		{
+			name: "JavaScriptDocumentationExtraction",
+			arguments: []string{
+				appTypes.CommandContent,
+				documentationFlag,
+				"--format",
+				appTypes.FormatJSON,
+				".",
+			},
+			prepare: func(testingHandle *testing.T) string {
+				return setupTestDirectory(testingHandle, map[string]string{
+					javaScriptFixtureFileName: javaScriptDocumentationFixture,
+				})
+			},
+			validate: func(testingHandle *testing.T, output string) {
+				files := decodeJSONFiles(testingHandle, output)
+				if len(files) != 1 {
+					testingHandle.Fatalf("expected one file node, got %d", len(files))
+				}
+				documentationByName := map[string]appTypes.DocumentationEntry{}
+				for _, entry := range files[0].Documentation {
+					documentationByName[entry.Name] = entry
+				}
+				expected := map[string]struct {
+					text string
+					kind string
+				}{
+					"documentation.Widget":       {text: javaScriptClassDocstring, kind: docKindClass},
+					"documentation.createWidget": {text: javaScriptFunctionDocstring, kind: docKindFunction},
+				}
+				for name, expectation := range expected {
+					entry, ok := documentationByName[name]
+					if !ok {
+						testingHandle.Fatalf("missing documentation entry %s", name)
+					}
+					if entry.Doc != expectation.text {
+						testingHandle.Fatalf("unexpected documentation for %s: %q", name, entry.Doc)
+					}
+					if entry.Kind != expectation.kind {
+						testingHandle.Fatalf("unexpected kind for %s: %s", name, entry.Kind)
 					}
 				}
 			},
