@@ -221,6 +221,9 @@ func collectPythonCalls(functionNode *sitter.Node, content []byte) []string {
 		if current == nil {
 			return
 		}
+		if current != functionNode && current.Type() == pythonFunctionNodeType {
+			return
+		}
 		if current.Type() == pythonCallNodeType {
 			targetNode := current.ChildByFieldName(pythonCallFunctionField)
 			if targetNode != nil {

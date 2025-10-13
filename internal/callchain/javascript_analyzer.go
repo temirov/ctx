@@ -27,6 +27,15 @@ const (
 	javaScriptUnresolvedSymbolFormat = "%w: javascript symbol %s"
 )
 
+var javaScriptNestedCallableNodeTypes = map[string]struct{}{
+	"function_declaration": {},
+	"method_definition":    {},
+	"generator_function":   {},
+	"function":             {},
+	"function_expression":  {},
+	"arrow_function":       {},
+}
+
 type javaScriptAnalyzer struct {
 	parser *sitter.Parser
 }
@@ -239,6 +248,11 @@ func collectJavaScriptCalls(node *sitter.Node, content []byte) []string {
 	walk = func(current *sitter.Node) {
 		if current == nil {
 			return
+		}
+		if current != node {
+			if _, isCallable := javaScriptNestedCallableNodeTypes[current.Type()]; isCallable {
+				return
+			}
 		}
 		if current.Type() == javaScriptCallExpressionType {
 			targetNode := current.ChildByFieldName(javaScriptFunctionField)
