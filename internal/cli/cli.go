@@ -2,9 +2,11 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +16,7 @@ import (
 	"github.com/temirov/ctx/internal/config"
 	"github.com/temirov/ctx/internal/docs"
 	"github.com/temirov/ctx/internal/output"
+	"github.com/temirov/ctx/internal/services/clipboard"
 	"github.com/temirov/ctx/internal/services/stream"
 	"github.com/temirov/ctx/internal/tokenizer"
 	"github.com/temirov/ctx/internal/types"
@@ -40,6 +43,14 @@ const (
 It renders directory trees, shows file content, and analyzes call chains.
 Use --format to select raw, json, or xml output. Use --doc to include documentation for supported commands, and --version to print the application version.`
 	versionFlagDescription    = "display application version"
+	clipboardFlagName         = "clipboard"
+	clipboardFlagDescription  = "copy command output to the system clipboard"
+	configFlagName            = "config"
+	configFlagDescription     = "path to an application configuration file"
+	initFlagName              = "init"
+	initFlagDescription       = "generate a configuration file (local or global)"
+	forceFlagName             = "force"
+	forceFlagDescription      = "overwrite configuration if it already exists"
 	treeUse                   = "tree [paths...]"
 	contentUse                = "content [paths...]"
 	callchainUse              = "callchain <function>"
@@ -105,7 +116,11 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	// errorStatFormat reports failure to retrieve file statistics.
 	errorStatFormat = "stat failed for '%s': %w"
 	// errorNoValidPaths indicates that all paths are invalid.
-	errorNoValidPaths = "no valid paths"
+	errorNoValidPaths              = "no valid paths"
+	clipboardCopyErrorFormat       = "failed to copy output to clipboard: %w"
+	clipboardServiceMissingMessage = "clipboard functionality requested but unavailable"
+	configurationLoadErrorFormat   = "failed to load configuration: %w"
+	configurationInitSuccessFormat = "configuration written to %s\n"
 )
 
 // isSupportedFormat reports whether the provided format is recognized.
@@ -120,13 +135,19 @@ func isSupportedFormat(format string) bool {
 
 // Execute runs the ctx application.
 func Execute() error {
-	rootCommand := createRootCommand()
+	rootCommand := createRootCommand(clipboard.NewService())
 	return rootCommand.Execute()
 }
 
 // createRootCommand builds the root Cobra command.
-func createRootCommand() *cobra.Command {
+func createRootCommand(clipboardProvider clipboard.Copier) *cobra.Command {
 	var showVersion bool
+	var clipboardEnabled bool
+	var explicitConfigPath string
+	var initTarget string
+	var forceInit bool
+	var applicationConfig config.ApplicationConfiguration
+	var configurationLoaded bool
 
 	rootCommand := &cobra.Command{
 		Use:          rootUse,
@@ -136,18 +157,58 @@ func createRootCommand() *cobra.Command {
 		RunE: func(command *cobra.Command, arguments []string) error {
 			return command.Help()
 		},
-		PersistentPreRun: func(command *cobra.Command, arguments []string) {
+		PersistentPreRunE: func(command *cobra.Command, arguments []string) error {
 			if showVersion {
 				fmt.Printf(versionTemplate, utils.GetApplicationVersion())
 				os.Exit(0)
 			}
+			if configurationLoaded {
+				return nil
+			}
+			workingDirectory, workingDirectoryError := os.Getwd()
+			if workingDirectoryError != nil {
+				return fmt.Errorf(workingDirectoryErrorFormat, workingDirectoryError)
+			}
+			if command.InheritedFlags().Changed(initFlagName) {
+				target := config.InitTarget(initTarget)
+				if target == "" {
+					target = config.InitTargetLocal
+				}
+				initializedPath, initError := config.InitializeConfiguration(config.InitOptions{
+					Target:           target,
+					Force:            forceInit,
+					WorkingDirectory: workingDirectory,
+				})
+				if initError != nil {
+					return initError
+				}
+				fmt.Fprintf(command.OutOrStdout(), configurationInitSuccessFormat, initializedPath)
+				os.Exit(0)
+			}
+			loadedConfiguration, loadError := config.LoadApplicationConfiguration(config.LoadOptions{
+				WorkingDirectory: workingDirectory,
+				ExplicitFilePath: explicitConfigPath,
+			})
+			if loadError != nil {
+				return fmt.Errorf(configurationLoadErrorFormat, loadError)
+			}
+			applicationConfig = loadedConfiguration
+			configurationLoaded = true
+			return nil
 		},
 	}
 	rootCommand.PersistentFlags().BoolVar(&showVersion, versionFlagName, false, versionFlagDescription)
+	rootCommand.PersistentFlags().BoolVar(&clipboardEnabled, clipboardFlagName, false, clipboardFlagDescription)
+	rootCommand.PersistentFlags().StringVar(&explicitConfigPath, configFlagName, "", configFlagDescription)
+	rootCommand.PersistentFlags().StringVar(&initTarget, initFlagName, "", initFlagDescription)
+	if initFlag := rootCommand.PersistentFlags().Lookup(initFlagName); initFlag != nil {
+		initFlag.NoOptDefVal = string(config.InitTargetLocal)
+	}
+	rootCommand.PersistentFlags().BoolVar(&forceInit, forceFlagName, false, forceFlagDescription)
 	rootCommand.AddCommand(
-		createTreeCommand(),
-		createContentCommand(),
-		createCallChainCommand(),
+		createTreeCommand(clipboardProvider, &clipboardEnabled, &applicationConfig),
+		createContentCommand(clipboardProvider, &clipboardEnabled, &applicationConfig),
+		createCallChainCommand(clipboardProvider, &clipboardEnabled, &applicationConfig),
 	)
 	rootCommand.InitDefaultHelpCmd()
 	rootCommand.InitDefaultCompletionCmd()
@@ -183,7 +244,7 @@ func addPathFlags(command *cobra.Command, options *pathOptions) {
 }
 
 // createTreeCommand returns the tree subcommand.
-func createTreeCommand() *cobra.Command {
+func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
 	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
 	var summaryEnabled bool = true
@@ -198,12 +259,19 @@ func createTreeCommand() *cobra.Command {
 		Example: treeUsageExample,
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(command *cobra.Command, arguments []string) error {
+			if applicationConfig != nil {
+				applyStreamConfiguration(command, applicationConfig.Tree, &pathConfiguration, &outputFormat, nil, &summaryEnabled, &tokenConfiguration)
+			}
 			if len(arguments) == 0 {
 				arguments = []string{defaultPath}
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
 			if !isSupportedFormat(outputFormatLower) {
 				return fmt.Errorf(invalidFormatMessage, outputFormatLower)
+			}
+			clipboardEnabledForCommand := clipboardFlag != nil && *clipboardFlag
+			if applicationConfig != nil {
+				clipboardEnabledForCommand = resolveClipboardDefault(command, clipboardEnabledForCommand, applicationConfig.Tree.Clipboard)
 			}
 			return runTool(
 				types.CommandTree,
@@ -217,6 +285,10 @@ func createTreeCommand() *cobra.Command {
 				false,
 				summaryEnabled,
 				tokenConfiguration,
+				os.Stdout,
+				os.Stderr,
+				clipboardEnabledForCommand,
+				clipboardProvider,
 			)
 		},
 	}
@@ -230,7 +302,7 @@ func createTreeCommand() *cobra.Command {
 }
 
 // createContentCommand returns the content subcommand.
-func createContentCommand() *cobra.Command {
+func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
 	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
 	var documentationEnabled bool
@@ -246,12 +318,19 @@ func createContentCommand() *cobra.Command {
 		Example: contentUsageExample,
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(command *cobra.Command, arguments []string) error {
+			if applicationConfig != nil {
+				applyStreamConfiguration(command, applicationConfig.Content, &pathConfiguration, &outputFormat, &documentationEnabled, &summaryEnabled, &tokenConfiguration)
+			}
 			if len(arguments) == 0 {
 				arguments = []string{defaultPath}
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
 			if !isSupportedFormat(outputFormatLower) {
 				return fmt.Errorf(invalidFormatMessage, outputFormatLower)
+			}
+			clipboardEnabledForCommand := clipboardFlag != nil && *clipboardFlag
+			if applicationConfig != nil {
+				clipboardEnabledForCommand = resolveClipboardDefault(command, clipboardEnabledForCommand, applicationConfig.Content.Clipboard)
 			}
 			return runTool(
 				types.CommandContent,
@@ -265,6 +344,10 @@ func createContentCommand() *cobra.Command {
 				documentationEnabled,
 				summaryEnabled,
 				tokenConfiguration,
+				os.Stdout,
+				os.Stderr,
+				clipboardEnabledForCommand,
+				clipboardProvider,
 			)
 		},
 	}
@@ -279,7 +362,7 @@ func createContentCommand() *cobra.Command {
 }
 
 // createCallChainCommand returns the callchain subcommand.
-func createCallChainCommand() *cobra.Command {
+func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
 	var outputFormat string = types.FormatJSON
 	var documentationEnabled bool
 	var callChainDepth int = defaultCallChainDepth
@@ -292,9 +375,16 @@ func createCallChainCommand() *cobra.Command {
 		Example: callchainUsageExample,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, arguments []string) error {
+			if applicationConfig != nil {
+				applyCallChainConfiguration(command, applicationConfig.CallChain, &outputFormat, &callChainDepth, &documentationEnabled)
+			}
 			outputFormatLower := strings.ToLower(outputFormat)
 			if !isSupportedFormat(outputFormatLower) {
 				return fmt.Errorf(invalidFormatMessage, outputFormatLower)
+			}
+			clipboardEnabledForCommand := clipboardFlag != nil && *clipboardFlag
+			if applicationConfig != nil {
+				clipboardEnabledForCommand = resolveClipboardDefault(command, clipboardEnabledForCommand, applicationConfig.CallChain.Clipboard)
 			}
 			return runTool(
 				types.CommandCallChain,
@@ -308,6 +398,10 @@ func createCallChainCommand() *cobra.Command {
 				documentationEnabled,
 				false,
 				tokenOptions{},
+				os.Stdout,
+				os.Stderr,
+				clipboardEnabledForCommand,
+				clipboardProvider,
 			)
 		},
 	}
@@ -331,6 +425,10 @@ func runTool(
 	documentationEnabled bool,
 	summaryEnabled bool,
 	tokenConfiguration tokenOptions,
+	outputWriter io.Writer,
+	errorWriter io.Writer,
+	clipboardEnabled bool,
+	clipboardProvider clipboard.Copier,
 ) error {
 	workingDirectory, workingDirectoryError := os.Getwd()
 	if workingDirectoryError != nil {
@@ -356,14 +454,42 @@ func runTool(
 		tokenModel = resolvedModel
 	}
 
+	if outputWriter == nil {
+		outputWriter = os.Stdout
+	}
+	if errorWriter == nil {
+		errorWriter = os.Stderr
+	}
+
+	var clipboardBuffer *bytes.Buffer
+	if clipboardEnabled {
+		if clipboardProvider == nil {
+			return errors.New(clipboardServiceMissingMessage)
+		}
+		clipboardBuffer = &bytes.Buffer{}
+		outputWriter = io.MultiWriter(outputWriter, clipboardBuffer)
+	}
+
 	switch commandName {
 	case types.CommandCallChain:
-		return runCallChain(paths[0], format, callChainDepth, documentationEnabled, collector, workingDirectory)
+		if err := runCallChain(paths[0], format, callChainDepth, documentationEnabled, collector, workingDirectory, outputWriter); err != nil {
+			return err
+		}
 	case types.CommandTree, types.CommandContent:
-		return runTreeOrContentCommand(commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, summaryEnabled, tokenCounter, tokenModel, collector)
+		if err := runTreeOrContentCommand(commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, summaryEnabled, tokenCounter, tokenModel, collector, outputWriter, errorWriter); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf(unsupportedCommandMessage)
 	}
+
+	if clipboardEnabled && clipboardBuffer != nil {
+		if copyErr := clipboardProvider.Copy(clipboardBuffer.String()); copyErr != nil {
+			return fmt.Errorf(clipboardCopyErrorFormat, copyErr)
+		}
+	}
+
+	return nil
 }
 
 // runCallChain processes the callchain command for the specified target and depth.
@@ -374,25 +500,29 @@ func runCallChain(
 	withDocumentation bool,
 	collector *docs.Collector,
 	moduleRoot string,
+	outputWriter io.Writer,
 ) error {
 	callChainData, callChainDataError := commands.GetCallChainData(target, callChainDepth, withDocumentation, collector, moduleRoot)
 	if callChainDataError != nil {
 		return callChainDataError
+	}
+	if outputWriter == nil {
+		outputWriter = os.Stdout
 	}
 	if format == types.FormatJSON {
 		renderedCallChainJSONOutput, renderCallChainJSONError := output.RenderCallChainJSON(callChainData)
 		if renderCallChainJSONError != nil {
 			return renderCallChainJSONError
 		}
-		fmt.Println(renderedCallChainJSONOutput)
+		fmt.Fprintln(outputWriter, renderedCallChainJSONOutput)
 	} else if format == types.FormatXML {
 		renderedCallChainXMLOutput, renderCallChainXMLError := output.RenderCallChainXML(callChainData)
 		if renderCallChainXMLError != nil {
 			return renderCallChainXMLError
 		}
-		fmt.Println(renderedCallChainXMLOutput)
+		fmt.Fprintln(outputWriter, renderedCallChainXMLOutput)
 	} else {
-		fmt.Println(output.RenderCallChainRaw(callChainData))
+		fmt.Fprintln(outputWriter, output.RenderCallChainRaw(callChainData))
 	}
 	return nil
 }
@@ -411,6 +541,8 @@ func runTreeOrContentCommand(
 	tokenCounter tokenizer.Counter,
 	tokenModel string,
 	collector *docs.Collector,
+	outputWriter io.Writer,
+	errorWriter io.Writer,
 ) (err error) {
 	validatedPaths, pathValidationError := resolveAndValidatePaths(paths)
 	if pathValidationError != nil {
@@ -422,11 +554,11 @@ func runTreeOrContentCommand(
 	var renderer output.StreamRenderer
 	switch format {
 	case types.FormatRaw:
-		renderer = output.NewRawStreamRenderer(os.Stdout, os.Stderr, commandName, withSummary)
+		renderer = output.NewRawStreamRenderer(outputWriter, errorWriter, commandName, withSummary)
 	case types.FormatJSON:
-		renderer = output.NewJSONStreamRenderer(os.Stdout, os.Stderr, commandName, totalRootPaths, withSummary, commandName == types.CommandContent)
+		renderer = output.NewJSONStreamRenderer(outputWriter, errorWriter, commandName, totalRootPaths, withSummary, commandName == types.CommandContent)
 	case types.FormatXML:
-		renderer = output.NewXMLStreamRenderer(os.Stdout, os.Stderr, commandName, totalRootPaths, withSummary, commandName == types.CommandContent)
+		renderer = output.NewXMLStreamRenderer(outputWriter, errorWriter, commandName, totalRootPaths, withSummary, commandName == types.CommandContent)
 	default:
 		return fmt.Errorf(invalidFormatMessage, format)
 	}
@@ -450,7 +582,9 @@ func runTreeOrContentCommand(
 			streamErr = runContentPath(ctx, renderer, info, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, withDocumentation, withSummary, tokenCounter, tokenModel, collector)
 		}
 		if streamErr != nil && !errors.Is(streamErr, context.Canceled) {
-			fmt.Fprintf(os.Stderr, warningSkipPathFormat, info.AbsolutePath, streamErr)
+			if errorWriter != nil {
+				fmt.Fprintf(errorWriter, warningSkipPathFormat, info.AbsolutePath, streamErr)
+			}
 		}
 	}
 
@@ -575,6 +709,83 @@ func dispatchStream(
 		return err
 	}
 	return nil
+}
+
+func applyStreamConfiguration(
+	command *cobra.Command,
+	configuration config.StreamCommandConfiguration,
+	paths *pathOptions,
+	outputFormat *string,
+	documentationEnabled *bool,
+	summaryEnabled *bool,
+	tokens *tokenOptions,
+) {
+	if command == nil {
+		return
+	}
+	if configuration.Format != "" && outputFormat != nil && !command.Flags().Changed(formatFlagName) {
+		*outputFormat = configuration.Format
+	}
+	if configuration.Summary != nil && summaryEnabled != nil && !command.Flags().Changed(summaryFlagName) {
+		*summaryEnabled = *configuration.Summary
+	}
+	if configuration.Documentation != nil && documentationEnabled != nil && !command.Flags().Changed(documentationFlagName) {
+		*documentationEnabled = *configuration.Documentation
+	}
+	if tokens != nil {
+		if configuration.Tokens.Enabled != nil && !command.Flags().Changed(tokensFlagName) {
+			tokens.enabled = *configuration.Tokens.Enabled
+		}
+		if configuration.Tokens.Model != "" && !command.Flags().Changed(modelFlagName) {
+			tokens.model = configuration.Tokens.Model
+		}
+	}
+	if paths != nil {
+		if len(configuration.Paths.Exclude) > 0 && !command.Flags().Changed(exclusionFlagName) {
+			paths.exclusionPatterns = append([]string{}, configuration.Paths.Exclude...)
+		}
+		if configuration.Paths.UseGitignore != nil && !command.Flags().Changed(noGitignoreFlagName) {
+			paths.disableGitignore = !*configuration.Paths.UseGitignore
+		}
+		if configuration.Paths.UseIgnoreFile != nil && !command.Flags().Changed(noIgnoreFlagName) {
+			paths.disableIgnoreFile = !*configuration.Paths.UseIgnoreFile
+		}
+		if configuration.Paths.IncludeGit != nil && !command.Flags().Changed(includeGitFlagName) {
+			paths.includeGit = *configuration.Paths.IncludeGit
+		}
+	}
+}
+
+func applyCallChainConfiguration(
+	command *cobra.Command,
+	configuration config.CallChainConfiguration,
+	outputFormat *string,
+	depth *int,
+	documentationEnabled *bool,
+) {
+	if command == nil {
+		return
+	}
+	if configuration.Format != "" && outputFormat != nil && !command.Flags().Changed(formatFlagName) {
+		*outputFormat = configuration.Format
+	}
+	if configuration.Depth != nil && depth != nil && !command.Flags().Changed(callChainDepthFlagName) {
+		*depth = *configuration.Depth
+	}
+	if configuration.Documentation != nil && documentationEnabled != nil && !command.Flags().Changed(documentationFlagName) {
+		*documentationEnabled = *configuration.Documentation
+	}
+}
+
+func resolveClipboardDefault(command *cobra.Command, cliValue bool, configurationValue *bool) bool {
+	if command == nil || configurationValue == nil {
+		return cliValue
+	}
+	inherited := command.InheritedFlags()
+	if inherited != nil && inherited.Changed(clipboardFlagName) {
+		return cliValue
+	}
+	return *configurationValue
 }
 
 // resolveAndValidatePaths converts input paths to absolute form and validates their existence.
