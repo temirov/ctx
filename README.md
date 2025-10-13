@@ -2,7 +2,7 @@
 
 [![GitHub release](https://img.shields.io/github/release/temirov/ctx.svg)](https://github.com/temirov/ctx/releases)
 
-Ctx is a command-line tool written in Go that displays a directory tree view, outputs file contents for specified
+`ctx` is a command-line tool written in Go that displays a directory tree view, outputs file contents for specified
 files and directories, or analyzes the call chain for a given function in the repository. It supports exclusion patterns
 via .ignore and .gitignore files within each directory, an optional global exclusion flag, configurable output formats,
 and **optional embedded documentation** for referenced packages and symbols.
