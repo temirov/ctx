@@ -13,25 +13,25 @@ Install and try ctx's core features: directory trees, file contents with optiona
 
 1. Install:
 
-   ```bash
+   ```shell
    go install github.com/temirov/ctx@latest
    ```
 
 2. Show a directory tree:
 
-   ```bash
+   ```shell
    ctx tree . --format raw
    ```
 
 3. View file content with docs:
 
-   ```bash
+   ```shell
    ctx content main.go --doc
    ```
 
 4. Analyze a call chain:
 
-   ```bash
+   ```shell
    ctx callchain github.com/temirov/ctx/internal/commands.GetContentData
    ```
 
@@ -69,7 +69,7 @@ Install and try ctx's core features: directory trees, file contents with optiona
     - *Depth control (`--depth`):* Limits traversal of callers and callees. The default depth is `1`, which yields only
       direct callers and callees. For example:
 
-      ```bash
+      ```shell
       ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2
       ```
 - **Exclusion Patterns (for `tree` and `content`):**
@@ -98,19 +98,19 @@ Pre-built binaries are available on the
 2. Add `$GOBIN` (or `$GOPATH/bin`) to your `PATH`.
 3. Run:
 
-   ```bash
+   ```shell
    go install github.com/temirov/ctx@latest
    ```
 
 4. Verify:
 
-   ```bash
+   ```shell
    ctx --help
    ```
 
 ## Usage
 
-```bash
+```shell
 ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 ```
 
@@ -134,19 +134,19 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 
 Display a raw tree view excluding `dist` folders:
 
-```bash
+```shell
 ctx tree projectA projectB -e dist --format raw
 ```
 
 Output file contents with embedded docs (JSON by default):
 
-```bash
+```shell
 ctx content main.go pkg --doc
 ```
 
 Analyze the call chain for a function in XML including docs:
 
-```bash
+```shell
 ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 --doc --format xml
 ```
 
@@ -181,7 +181,7 @@ Common Claude shorthands are resolved automatically; for example `--model claude
 
 Example:
 
-```bash
+```shell
 ctx tree . --tokens --summary
 ```
 
@@ -191,7 +191,7 @@ The summary line now reports total tokens (and the tokenizer model when applicab
 
 To exercise the embedded Python helpers, install the required packages (for example, `pip install anthropic sentencepiece`) and run:
 
-```bash
+```shell
 CTX_TEST_PYTHON=python3 go test -tags python_helpers ./internal/tokenizer
 ```
 
@@ -211,7 +211,7 @@ All renderers consume the same event stream; JSON and XML remain schema-compatib
 
 Run the streaming regression tests with:
 
-```bash
+```shell
 go test ./internal/services/stream ./internal/output ./internal/cli
 ```
 
@@ -231,7 +231,7 @@ When a binary file is encountered, `ctx` omits its content in raw output. JSON a
 # .ignore
 ```
 
-```bash
+```shell
 ctx content image.png --format raw
 File: image.png
 (binary content omitted)
@@ -245,7 +245,7 @@ To include binary data, add a `[binary]` section to `.ignore` and list matching 
 image.png
 ```
 
-```bash
+```shell
 ctx content .
 [
   {
@@ -265,7 +265,7 @@ To publish a new version:
 2. Commit the change.
 3. Tag the commit and push both the branch and tag:
 
-   ```bash
+   ```shell
    git tag vX.Y.Z
    git push origin master
    git push origin vX.Y.Z
