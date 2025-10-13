@@ -140,7 +140,8 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 
 - [X] [CT-04] Allow for a configuration file config.yaml either locally or under ~/.ctx. Define the defaults and read them in the following priority: CLI flags (P0) -> local config (P1) -> global config (P2)
 - [X] [CT-05] Allow generation of the configuration file (local and global) with --init <local|global>, local by default, --force to overwrite the existing config.yaml, otherwise if the file exists then the program exits with an error
-- [ ] [CT-06] Consider retrieving Python and JS code documentation when --doc flag is passed and teh code is in either JS or Python. Research if there is a standardized model of Python and JS party packages' documentation that can be employed.
+- [X] [CT-06] Consider retrieving Python and JS code documentation when --doc flag is passed and teh code is in either JS or Python. Research if there is a standardized model of Python and JS party packages' documentation that can be employed.
+  - Implemented language-aware documentation extractors. Go analysis now reuses a shared collector map while Python docstrings (module/class/function/method) are parsed via indentation-aware heuristics and JavaScript leverages JSDoc comment pairing. When go.mod is unavailable the collector gracefully continues for non-Go languages. Falling back to rune counting avoids network failures while keeping tokenized flows operational.
 - [ ] [CT-07] Consider supporting a callchain for Python and JS. Research if there are either Go or native callchain detection functionality
 - [ ] [CT-11] Add an MCP server and advertise program capabilities. use --mcp flag to run the program as an MCP server
 

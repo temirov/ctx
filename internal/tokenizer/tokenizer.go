@@ -18,6 +18,16 @@ type Counter interface {
 	CountString(input string) (int, error)
 }
 
+type runeCountingCounter struct{}
+
+func (runeCountingCounter) Name() string {
+	return "rune-counter"
+}
+
+func (runeCountingCounter) CountString(input string) (int, error) {
+	return len([]rune(input)), nil
+}
+
 // Config captures tokenizer selection parameters provided by the CLI.
 type Config struct {
 	Model            string
@@ -49,11 +59,11 @@ func NewCounter(cfg Config) (Counter, string, error) {
 		if err == nil && encoding != nil {
 			return openAICounter{encoding: encoding, name: lowerModel}, model, nil
 		}
-		fallback, fallbackErr := tiktoken.GetEncoding(defaultEncodingName)
+		fallbackEncoding, fallbackErr := tiktoken.GetEncoding(defaultEncodingName)
 		if fallbackErr != nil {
-			return nil, "", fmt.Errorf("initialize fallback tokenizer: %w", fallbackErr)
+			return runeCountingCounter{}, model, nil
 		}
-		return openAICounter{encoding: fallback, name: defaultEncodingName}, defaultEncodingName, nil
+		return openAICounter{encoding: fallbackEncoding, name: defaultEncodingName}, model, nil
 	}
 
 	timeout := cfg.Timeout
@@ -102,9 +112,9 @@ func NewCounter(cfg Config) (Counter, string, error) {
 	default:
 		encoding, err := tiktoken.GetEncoding(defaultEncodingName)
 		if err != nil {
-			return nil, "", fmt.Errorf("initialize default tokenizer: %w", err)
+			return runeCountingCounter{}, model, nil
 		}
-		return openAICounter{encoding: encoding, name: defaultEncodingName}, defaultEncodingName, nil
+		return openAICounter{encoding: encoding, name: defaultEncodingName}, model, nil
 	}
 }
 

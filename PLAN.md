@@ -1,45 +1,86 @@
 # Plan
 
-- PLAN.md
-  - Summarize sequential work for CT issues; update as tasks complete.
-
-- internal/cli/cli.go
-  - Introduce configuration loading via Viper honoring priority CLI > local config > global config for shared options (format, summary, tokens, doc, clipboard, init mode).
-  - Add persistent flags and initialization flow for --config, --init, --force, --clipboard, and ensure tree alias reuses content logic with content toggle per CT-08.
-  - Refactor command execution to inject clipboard copier interface for CT-03 and route tree alias through unified content command implementation.
-  - Ensure command constructors validate config during PreRunE and propagate context for OS portability (CT-01, CT-02 planning outputs).
-
-- internal/config
-  - Define configuration struct with serialization/deserialization helpers, defaults, merge logic, and YAML read/write utilities for CT-04 and CT-05.
-  - Implement path resolution helpers for local (~/.ctx) and project-level config discovery plus init command support with overwrite logic respecting --force.
-
-- internal/output
-  - Extend stream renderers to support tee-ing into clipboard buffers while maintaining existing stdout/stderr behavior.
-  - Provide helpers to capture final output strings for clipboard copy without altering streaming semantics.
-
-- internal/utils
-  - Add constants for new flag names, config filenames, directory names, and clipboard error messages.
-  - Introduce OS abstraction utilities for portability planning (CT-01/CT-02) such as runtime detection and script execution helpers.
+## CT-06 Documentation Extraction Enhancements
 
 - internal/docs
-  - Extend Collector with language-aware strategy registry supporting Go, Python (PEP 257 docstrings via embedded python AST helper), and JavaScript (JSDoc comment extraction) when --doc is requested per CT-06.
-  - Abstract documentation loaders behind interface for easier extension and testing; add caching and error reporting improvements.
+  - Audit existing collectors and refactor into strategy registry keyed by language constants.
+  - Implement Python docstring parsing using a robust approach with graceful degradation when interpreter support is unavailable.
+  - Implement JavaScript documentation parsing for JSDoc-style comments with clearly documented limitations.
+  - Add new interfaces ensuring extensibility and dependency injection for testing.
 
-- internal/commands
-  - Generalize callchain functionality through pluggable analyzers so Python and JavaScript call graphs can be produced (CT-07) via delegated services.
-  - Align tree/content command implementation to reuse unified pipeline that toggles content inclusion, matching CT-08.
+- internal/config
+  - Extend configuration schema to include documentation language toggles if needed and ensure defaults integrate with new documentation strategies.
 
-- internal/services (new/expanded packages)
-  - Add clipboard service encapsulating github.com/atotto/clipboard with injectable interface for testing (CT-03).
-  - Provide language-specific analyzers for Python/JavaScript leveraging external interpreters while documenting requirements (CT-01/CT-02).
+- internal/utils (or new helper package)
+  - Centralize language constants and file extension maps for reuse across documentation and callchain tasks.
 
 - tests/
-  - Add or expand integration tests covering new flags (--clipboard, --config precedence, --init), documentation extraction for Go/Python/JS, and multi-language callchain support.
-  - Ensure tests remain table-driven and validate behavior, not implementation; add fixtures for Python/JS sources.
+  - Add table-driven tests validating documentation extraction for Go, Python, and JavaScript samples when `--doc` flag is supplied. Ensure tests cover absence of interpreter scenarios.
+
+- NOTES.md
+  - Update CT-06 status once completed with summary of decisions.
+
+## CT-07 Callchain Support for Python and JavaScript
+
+- internal/commands or new analyzer package
+  - Abstract current Go callchain analyzer and register Python/JavaScript analyzers sharing a common interface.
+  - For Python, research use of external tooling or custom static analysis; document external dependency requirements.
+  - For JavaScript, implement parser based on established libraries or static heuristics; ensure behavior documented and tested.
+
+- tests/
+  - Provide integration tests that run callchain command against fixtures for Go, Python, and JavaScript verifying expected output structure.
+
+- NOTES.md
+  - Capture research findings and mark CT-07 complete.
+
+## CT-08 Command Unification
+
+- internal/cli/cli.go and related command implementations
+  - Refactor `t` alias to delegate to content command with configurable content inclusion flag.
+  - Ensure configuration precedence (flags > local > global) continues to work for unified command.
+
+- tests/
+  - Add command-level tests verifying alias behavior and content toggling.
+
+## CT-09 Documentation Update
+
+- README.md
+  - Document clipboard functionality and any new commands or flags introduced by previous features.
+
+- tests (if applicable)
+  - Ensure no broken links or references.
+
+- NOTES.md
+  - Mark maintenance task complete after documentation changes.
+
+## CT-10 Raw Format Tree Representation
+
+- internal/output or formatting package
+  - Modify raw formatter to render ASCII tree using `|` and `├──` characters while preserving existing metadata.
+
+- tests/
+  - Add golden tests covering tree structure output for simple directories.
+
+## CT-11 MCP Server Mode
+
+- cmd/server or new entrypoint under cmd
+  - Implement MCP server startup flagged by `--mcp` integrating with existing command architecture.
+
+- internal/server (new package)
+  - Encapsulate MCP server logic with injectable dependencies for logging and configuration.
+
+- tests/
+  - Add integration test ensuring MCP mode responds to capability advertisement.
 
 - README.md / NOTES.md
-  - Document new flags, configuration workflow, clipboard behavior, multi-language doc/callchain capabilities, and cross-platform considerations. Update NOTES issue checklist as tasks complete.
+  - Document MCP usage and mark issue complete.
 
-- Additional artifacts
-  - Introduce fixture directories under tests for Python/JS samples supporting new features while avoiding duplication.
-  - Provide internal design documentation (doc.go or package comments) as needed for new packages or refactors.
+## CT-01 Portability of Embedded Scripts
+
+- internal/docs and NOTES.md
+  - Research embedding strategy for Python scripts when running from compiled binary; document approach and any blockers.
+
+## CT-02 Windows Compatibility Plan
+
+- NOTES.md
+  - Detail required changes for Windows support, including path handling, clipboard dependencies, and interpreter availability.
