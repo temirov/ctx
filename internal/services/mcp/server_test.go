@@ -33,6 +33,7 @@ func TestServerExecutesCommand(t *testing.T) {
 			{Name: "sample", Description: "Sample command"},
 		},
 		Executors:       executors,
+		RootDirectory:   "/tmp/project",
 		ShutdownTimeout: time.Second,
 	})
 
@@ -92,7 +93,8 @@ func TestServerHandlesUnknownCommand(t *testing.T) {
 	t.Parallel()
 
 	server := NewServer(Config{
-		Address: "127.0.0.1:0",
+		Address:       "127.0.0.1:0",
+		RootDirectory: "/tmp/project",
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -140,8 +142,9 @@ func TestServerPropagatesExecutorStatus(t *testing.T) {
 		}),
 	}
 	server := NewServer(Config{
-		Address:   "127.0.0.1:0",
-		Executors: executors,
+		Address:       "127.0.0.1:0",
+		Executors:     executors,
+		RootDirectory: "/tmp/project",
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -188,5 +191,60 @@ func waitForAddress(t *testing.T, addressChan <-chan string) string {
 	case <-time.After(3 * time.Second):
 		t.Fatalf("server address not received")
 		return ""
+	}
+}
+
+func TestServerEnvironmentEndpoint(t *testing.T) {
+	t.Parallel()
+
+	const expectedRoot = "/tmp/project"
+	server := NewServer(Config{
+		Address:       "127.0.0.1:0",
+		RootDirectory: expectedRoot,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addressChan := make(chan string, 1)
+	done := make(chan error, 1)
+
+	go func() {
+		done <- server.Run(ctx, func(address string) {
+			addressChan <- address
+		})
+	}()
+
+	address := waitForAddress(t, addressChan)
+
+	client := http.Client{Timeout: 2 * time.Second}
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+"/environment", nil)
+	if requestErr != nil {
+		t.Fatalf("create request: %v", requestErr)
+	}
+
+	response, responseErr := client.Do(request)
+	if responseErr != nil {
+		t.Fatalf("execute request: %v", responseErr)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status code: %d", response.StatusCode)
+	}
+
+	var payload struct {
+		RootDirectory string `json:"rootDirectory"`
+	}
+	if decodeErr := json.NewDecoder(response.Body).Decode(&payload); decodeErr != nil {
+		t.Fatalf("decode response: %v", decodeErr)
+	}
+	if payload.RootDirectory != expectedRoot {
+		t.Fatalf("unexpected root directory: %s", payload.RootDirectory)
+	}
+
+	cancel()
+	if runErr := <-done; runErr != nil {
+		t.Fatalf("server shutdown: %v", runErr)
 	}
 }

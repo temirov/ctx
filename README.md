@@ -230,6 +230,17 @@ Set `"documentation": true` when calling the `content` command to include
 documented symbols for Go, JavaScript, and Python files in the JSON response.
 MCP endpoints always emit JSON; requests for other output formats are ignored.
 
+Agents should resolve all paths relative to the server's working directory.
+Query `/environment` to retrieve that directory before issuing command
+requests:
+
+```shell
+curl http://127.0.0.1:45873/environment
+```
+
+Only absolute paths (or relative paths resolved against the reported root)
+should be passed to MCP commands.
+
 Press `Ctrl+C` (or send `SIGTERM`) in the terminal that launched `ctx --mcp` to
 shut the server down. The process waits up to five seconds for in-flight
 requests to complete before exiting.

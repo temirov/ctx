@@ -847,10 +847,16 @@ func startMCPServer(parent context.Context, output io.Writer) error {
 		writer = os.Stdout
 	}
 
+	workingDirectory, workingDirectoryError := os.Getwd()
+	if workingDirectoryError != nil {
+		return fmt.Errorf(workingDirectoryErrorFormat, workingDirectoryError)
+	}
+
 	server := mcp.NewServer(mcp.Config{
 		Address:         mcpListenAddress,
 		Capabilities:    mcpCapabilities(),
 		Executors:       mcpCommandExecutors(),
+		RootDirectory:   workingDirectory,
 		ShutdownTimeout: mcpShutdownTimeout,
 	})
 

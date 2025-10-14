@@ -57,7 +57,8 @@ func TestStartMCPServerServesCapabilities(t *testing.T) {
 			}
 
 			var body struct {
-				Capabilities []mcp.Capability `json:"capabilities"`
+				Capabilities  []mcp.Capability `json:"capabilities"`
+				RootDirectory string           `json:"rootDirectory"`
 			}
 			if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 				t.Fatalf("decode body: %v", err)
@@ -73,6 +74,14 @@ func TestStartMCPServerServesCapabilities(t *testing.T) {
 				if payload != capability {
 					t.Fatalf("capability %d mismatch: got %+v, want %+v", index, payload, capability)
 				}
+			}
+
+			workingDirectory, workingDirectoryError := os.Getwd()
+			if workingDirectoryError != nil {
+				t.Fatalf("get working directory: %v", workingDirectoryError)
+			}
+			if body.RootDirectory != workingDirectory {
+				t.Fatalf("unexpected root directory: %s", body.RootDirectory)
 			}
 
 			cancel()
@@ -150,6 +159,59 @@ func TestStartMCPServerExecutesTreeCommand(t *testing.T) {
 	}
 	if len(body.Warnings) != 0 {
 		t.Fatalf("unexpected warnings: %+v", body.Warnings)
+	}
+
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("server shutdown error: %v", err)
+	}
+}
+
+func TestStartMCPServerReportsEnvironment(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var buffer bytes.Buffer
+	done := make(chan error, 1)
+
+	go func() {
+		done <- startMCPServer(ctx, &buffer)
+	}()
+
+	address := waitForMCPAddress(t, &buffer)
+
+	client := http.Client{Timeout: 2 * time.Second}
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+"/environment", nil)
+	if requestErr != nil {
+		t.Fatalf("create request: %v", requestErr)
+	}
+
+	response, responseErr := client.Do(request)
+	if responseErr != nil {
+		t.Fatalf("execute request: %v", responseErr)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status code: %d", response.StatusCode)
+	}
+
+	var payload struct {
+		RootDirectory string `json:"rootDirectory"`
+	}
+	if decodeErr := json.NewDecoder(response.Body).Decode(&payload); decodeErr != nil {
+		t.Fatalf("decode response: %v", decodeErr)
+	}
+
+	workingDirectory, workingDirectoryError := os.Getwd()
+	if workingDirectoryError != nil {
+		t.Fatalf("get working directory: %v", workingDirectoryError)
+	}
+
+	if payload.RootDirectory != workingDirectory {
+		t.Fatalf("unexpected root directory: %s", payload.RootDirectory)
 	}
 
 	cancel()

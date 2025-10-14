@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ const (
 	capabilitiesPath        = "/capabilities"
 	rootPath                = "/"
 	commandsPrefix          = "/commands/"
+	environmentPath         = "/environment"
 	errorFieldName          = "error"
 	errorCommandNotFound    = "command not found"
 )
@@ -92,6 +94,7 @@ type Config struct {
 	Address         string
 	Capabilities    []Capability
 	Executors       map[string]CommandExecutor
+	RootDirectory   string
 	ShutdownTimeout time.Duration
 }
 
@@ -115,6 +118,11 @@ func NewServer(config Config) Server {
 	if normalized.Executors == nil {
 		normalized.Executors = map[string]CommandExecutor{}
 	}
+	if normalized.RootDirectory == "" {
+		if workingDirectory, workingDirectoryErr := os.Getwd(); workingDirectoryErr == nil {
+			normalized.RootDirectory = workingDirectory
+		}
+	}
 	return Server{config: normalized}
 }
 
@@ -131,6 +139,7 @@ func (server Server) Run(ctx context.Context, notify func(string)) error {
 	router.HandleFunc(capabilitiesPath, server.handleCapabilities)
 	router.HandleFunc(rootPath, server.handleRoot)
 	router.HandleFunc(commandsPrefix, server.handleCommand)
+	router.HandleFunc(environmentPath, server.handleEnvironment)
 
 	httpServer := &http.Server{Handler: router}
 	group, groupCtx := errgroup.WithContext(ctx)
@@ -167,8 +176,12 @@ func (server Server) handleCapabilities(writer http.ResponseWriter, request *htt
 		return
 	}
 	payload := struct {
-		Capabilities []Capability `json:"capabilities"`
-	}{Capabilities: server.config.Capabilities}
+		Capabilities  []Capability `json:"capabilities"`
+		RootDirectory string       `json:"rootDirectory"`
+	}{
+		Capabilities:  server.config.Capabilities,
+		RootDirectory: server.config.RootDirectory,
+	}
 	server.writeJSON(writer, http.StatusOK, payload)
 }
 
@@ -178,6 +191,19 @@ func (server Server) handleRoot(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 	writer.WriteHeader(http.StatusOK)
+}
+
+func (server Server) handleEnvironment(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		writer.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	payload := struct {
+		RootDirectory string `json:"rootDirectory"`
+	}{
+		RootDirectory: server.config.RootDirectory,
+	}
+	server.writeJSON(writer, http.StatusOK, payload)
 }
 
 func (server Server) handleCommand(writer http.ResponseWriter, request *http.Request) {
