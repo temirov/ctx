@@ -207,12 +207,12 @@ curl http://127.0.0.1:45873/capabilities | jq
 ```
 
 Invoke commands by POSTing JSON payloads to `/commands/<name>`. The body mirrors
-the corresponding CLI flags. For example, request a JSON tree without summaries:
+the corresponding CLI flags. For example, request a tree without summaries:
 
 ```shell
 curl -X POST http://127.0.0.1:45873/commands/tree \
   -H 'Content-Type: application/json' \
-  -d '{"paths":["."],"format":"json","summary":false}'
+  -d '{"paths":["."],"summary":false}'
 ```
 
 Successful responses echo the rendered output, the chosen format, and any
@@ -228,8 +228,7 @@ warnings emitted during processing:
 
 Set `"documentation": true` when calling the `content` command to include
 documented symbols for Go, JavaScript, and Python files in the JSON response.
-MCP endpoints always emit JSON; requests for other formats are rejected with
-`400 Bad Request`.
+MCP endpoints always emit JSON; requests for other output formats are ignored.
 
 Press `Ctrl+C` (or send `SIGTERM`) in the terminal that launched `ctx --mcp` to
 shut the server down. The process waits up to five seconds for in-flight

@@ -18,7 +18,6 @@ type streamRequestCommon struct {
 	UseGitignore   *bool                `json:"useGitignore"`
 	UseIgnoreFile  *bool                `json:"useIgnoreFile"`
 	IncludeGit     *bool                `json:"includeGit"`
-	Format         string               `json:"format"`
 	Summary        *bool                `json:"summary"`
 	IncludeContent *bool                `json:"includeContent"`
 	Documentation  *bool                `json:"documentation"`
@@ -56,7 +55,6 @@ type streamExecutionParameters struct {
 type callChainRequest struct {
 	Target        string `json:"target"`
 	Depth         *int   `json:"depth"`
-	Format        string `json:"format"`
 	Documentation *bool  `json:"documentation"`
 }
 
@@ -115,10 +113,6 @@ func executeCallChainCommand(commandContext context.Context, request mcp.Command
 	if target == "" {
 		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("target is required"))
 	}
-	requestedFormat := strings.ToLower(strings.TrimSpace(payload.Format))
-	if requestedFormat != "" && requestedFormat != types.FormatJSON {
-		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("mcp only supports json format"))
-	}
 	format := types.FormatJSON
 	depth := defaultCallChainDepth
 	if payload.Depth != nil {
@@ -173,10 +167,6 @@ func parseStreamRequest(payload json.RawMessage, defaults streamConfigurationDef
 		return streamExecutionParameters{}, fmt.Errorf("documentation is not supported for %s", defaults.commandName)
 	}
 	paths := sanitizePaths(requestBody.Paths)
-	requestedFormat := strings.ToLower(strings.TrimSpace(requestBody.Format))
-	if requestedFormat != "" && requestedFormat != types.FormatJSON {
-		return streamExecutionParameters{}, fmt.Errorf("mcp only supports json format")
-	}
 	useGitignore := resolveBoolean(requestBody.UseGitignore, true)
 	useIgnoreFile := resolveBoolean(requestBody.UseIgnoreFile, true)
 	includeGit := resolveBoolean(requestBody.IncludeGit, false)

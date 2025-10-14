@@ -179,53 +179,6 @@ import "net/http"
 func UseMethod() string {
 	return http.MethodGet
 }
-
-func TestStartMCPServerRejectsNonJSONFormat(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var buffer bytes.Buffer
-	done := make(chan error, 1)
-
-	go func() {
-		done <- startMCPServer(ctx, &buffer)
-	}()
-
-	address := waitForMCPAddress(t, &buffer)
-
-	client := http.Client{Timeout: 2 * time.Second}
-	requestBody := bytes.NewBufferString("{\"paths\":[\".\"],\"format\":\"raw\"}")
-	request, requestErr := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+address+"/commands/tree", requestBody)
-	if requestErr != nil {
-		t.Fatalf("create request: %v", requestErr)
-	}
-	request.Header.Set("Content-Type", "application/json")
-
-	response, responseErr := client.Do(request)
-	if responseErr != nil {
-		t.Fatalf("execute request: %v", responseErr)
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, response.StatusCode)
-	}
-
-	var payload map[string]string
-	if decodeErr := json.NewDecoder(response.Body).Decode(&payload); decodeErr != nil {
-		t.Fatalf("decode response: %v", decodeErr)
-	}
-	if payload["error"] != "mcp only supports json format" {
-		t.Fatalf("unexpected error message: %s", payload["error"])
-	}
-
-	cancel()
-	if err := <-done; err != nil {
-		t.Fatalf("server shutdown error: %v", err)
-	}
-}
 `
 	if writeErr := os.WriteFile(goFilePath, []byte(goSource), 0o600); writeErr != nil {
 		t.Fatalf("write go file: %v", writeErr)
@@ -267,7 +220,7 @@ def greet(name):
 	address := waitForMCPAddress(t, &buffer)
 
 	client := http.Client{Timeout: 5 * time.Second}
-	requestBody := bytes.NewBufferString(fmt.Sprintf(`{"paths":["%s"],"format":"json","summary":false,"documentation":true}`, temporaryDirectory))
+	requestBody := bytes.NewBufferString(fmt.Sprintf(`{"paths":["%s"],"summary":false,"documentation":true}`, temporaryDirectory))
 	request, requestErr := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+address+"/commands/content", requestBody)
 	if requestErr != nil {
 		t.Fatalf("create request: %v", requestErr)
