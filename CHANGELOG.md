@@ -1,5 +1,40 @@
 # Changelog
 
+## [v0.1.0] - 2025-10-14
+
+### Highlights
+
+* **Run ctx as an MCP server with JSON endpoints.** The CLI now exposes tree, content, and callchain commands over HTTP with structured capability metadata and an environment probe, ready for orchestrators. (615e90e, 245efa5, 9a6a099, ba36898, daec63f)
+* **Cross-language callchain analysis with documentation harvesting.** Go, Python, and JavaScript analyzers collaborate with a new collector to surface external docs alongside call graphs. (cc2fc6f, 2d6c9c5, 47d0498)
+
+### Features ✨
+
+* Introduced the `--mcp` flag to launch an MCP server that accepts JSON payloads, dispatches built-in commands, and returns normalized responses with warning streams. (615e90e, 245efa5, 9a6a099)
+* Added configuration bootstrap and discovery: `--init` scaffolds local or global config, `--force` handles overwrites, and `--config` loads per-command defaults via Viper. (5e9f0d9, f95f300)
+* Enabled multi-language documentation extraction so content listings can enrich files with Go, Python, and JavaScript API references. (2d6c9c5)
+* Registered language-specific callchain analyzers and a dispatcher to resolve symbols across Go, Python, and JavaScript projects. (cc2fc6f)
+
+### Improvements ⚙️
+
+* Unified tree and content streaming through a shared event dispatcher to keep raw, JSON, and XML outputs synchronized. (f95f300)
+* Hardened MCP command handling by enforcing JSON formats and per-command defaults for inputs and warnings. (9a6a099, 245efa5)
+* Added a clipboard service abstraction so `--clipboard` copies output without leaking platform specifics. (f95f300)
+* Fell back to rune-based counting when tokenizer models are unavailable, while reporting the requested model name. (2d6c9c5)
+
+### Fixes 🐛
+
+* Blocked nested call capture in Python and JavaScript analyzers to remove duplicate edges from call graphs. (47d0498)
+
+### Docs 📚
+
+* Expanded MCP documentation with local server workflows, Claude and Codex integration notes, and JSON contract details. (69165c4, 2530046, c620c45)
+* Captured future roadmap and portability notes for CT-01 and CT-02 scenarios. (2d59656, cc7a681, 76fef18)
+* Refined README formatting and release linkage for improved navigation. (527ad95, b0272f8, 446e414)
+
+### Testing ✅
+
+* Added an end-to-end MCP test suite that provisions sample projects and verifies command execution over HTTP. (ecdacec)
+
 ## [v0.0.15] - 2025-10-06
 
 ### Highlights
