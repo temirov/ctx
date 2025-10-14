@@ -37,6 +37,12 @@ jobs:
       - name: CheckoutCode
         uses: actions/checkout@v4
 
+      - name: InstallWindowsToolchain
+        if: matrix.runner == 'windows-latest'
+        shell: pwsh
+        run: |
+          choco install --no-progress mingw
+
       - name: SetupGoEnvironment
         uses: actions/setup-go@v5
         with:
