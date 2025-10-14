@@ -298,6 +298,7 @@ func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, 
 				clipboardEnabledForCommand = resolveClipboardDefault(command, clipboardEnabledForCommand, applicationConfig.Tree.Clipboard)
 			}
 			return runTool(
+				command.Context(),
 				types.CommandTree,
 				arguments,
 				pathConfiguration.exclusionPatterns,
@@ -360,6 +361,7 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 				clipboardEnabledForCommand = resolveClipboardDefault(command, clipboardEnabledForCommand, applicationConfig.Content.Clipboard)
 			}
 			return runTool(
+				command.Context(),
 				types.CommandContent,
 				arguments,
 				pathConfiguration.exclusionPatterns,
@@ -416,6 +418,7 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 				clipboardEnabledForCommand = resolveClipboardDefault(command, clipboardEnabledForCommand, applicationConfig.CallChain.Clipboard)
 			}
 			return runTool(
+				command.Context(),
 				types.CommandCallChain,
 				[]string{arguments[0]},
 				nil,
@@ -444,6 +447,7 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 
 // runTool executes the command with the provided configuration including call chain depth.
 func runTool(
+	commandContext context.Context,
 	commandName string,
 	paths []string,
 	exclusionPatterns []string,
@@ -461,6 +465,9 @@ func runTool(
 	clipboardEnabled bool,
 	clipboardProvider clipboard.Copier,
 ) error {
+	if commandContext == nil {
+		commandContext = context.Background()
+	}
 	workingDirectory, workingDirectoryError := os.Getwd()
 	if workingDirectoryError != nil {
 		return fmt.Errorf(workingDirectoryErrorFormat, workingDirectoryError)
@@ -507,7 +514,7 @@ func runTool(
 			return err
 		}
 	case types.CommandTree, types.CommandContent:
-		if err := runStreamCommand(commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, summaryEnabled, includeContent, tokenCounter, tokenModel, collector, outputWriter, errorWriter); err != nil {
+		if err := runStreamCommand(commandContext, commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, summaryEnabled, includeContent, tokenCounter, tokenModel, collector, outputWriter, errorWriter); err != nil {
 			return err
 		}
 	default:
@@ -560,6 +567,7 @@ func runCallChain(
 
 // runStreamCommand executes tree or content commands for the given paths.
 func runStreamCommand(
+	commandContext context.Context,
 	commandName string,
 	paths []string,
 	exclusionPatterns []string,
@@ -576,6 +584,9 @@ func runStreamCommand(
 	outputWriter io.Writer,
 	errorWriter io.Writer,
 ) (err error) {
+	if commandContext == nil {
+		commandContext = context.Background()
+	}
 	validatedPaths, pathValidationError := resolveAndValidatePaths(paths)
 	if pathValidationError != nil {
 		return pathValidationError
@@ -611,10 +622,8 @@ func runStreamCommand(
 		}
 	}()
 
-	ctx := context.Background()
-
 	for _, info := range validatedPaths {
-		streamErr := runStreamPath(ctx, renderer, info, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, includeContent, withDocumentation, tokenCounter, tokenModel, collector)
+		streamErr := runStreamPath(commandContext, renderer, info, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, includeContent, withDocumentation, tokenCounter, tokenModel, collector)
 		if streamErr != nil && !errors.Is(streamErr, context.Canceled) {
 			if errorWriter != nil {
 				fmt.Fprintf(errorWriter, warningSkipPathFormat, info.AbsolutePath, streamErr)
@@ -823,9 +832,18 @@ func resolveAndValidatePaths(inputs []string) ([]types.ValidatedPath, error) {
 
 func mcpCapabilities() []mcp.Capability {
 	return []mcp.Capability{
-		{Name: types.CommandTree, Description: treeShortDescription},
-		{Name: types.CommandContent, Description: contentShortDescription},
-		{Name: types.CommandCallChain, Description: callchainShortDescription},
+		{
+			Name:        types.CommandTree,
+			Description: "Display directory tree as JSON. Paths must be absolute or resolved relative to the reported root directory. Flags: summary (bool), exclude (string[]), includeContent (bool), useGitignore (bool), useIgnore (bool), tokens (bool), model (string), includeGit (bool).",
+		},
+		{
+			Name:        types.CommandContent,
+			Description: "Show file contents as JSON. Paths must be absolute or resolved relative to the reported root directory. Flags: summary (bool), documentation (bool), includeContent (bool), exclude (string[]), useGitignore (bool), useIgnore (bool), tokens (bool), model (string), includeGit (bool).",
+		},
+		{
+			Name:        types.CommandCallChain,
+			Description: "Analyze Go/Python/JavaScript call chains as JSON. Target must be fully qualified or resolvable in the project. Flags: depth (int), documentation (bool).",
+		},
 	}
 }
 
@@ -838,9 +856,16 @@ func startMCPServer(parent context.Context, output io.Writer) error {
 		writer = os.Stdout
 	}
 
+	workingDirectory, workingDirectoryError := os.Getwd()
+	if workingDirectoryError != nil {
+		return fmt.Errorf(workingDirectoryErrorFormat, workingDirectoryError)
+	}
+
 	server := mcp.NewServer(mcp.Config{
 		Address:         mcpListenAddress,
 		Capabilities:    mcpCapabilities(),
+		Executors:       mcpCommandExecutors(),
+		RootDirectory:   workingDirectory,
 		ShutdownTimeout: mcpShutdownTimeout,
 	})
 

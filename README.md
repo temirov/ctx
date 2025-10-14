@@ -192,19 +192,96 @@ curl http://127.0.0.1:45873/capabilities | jq
   "capabilities": [
     {
       "name": "tree",
-      "description": "display directory tree (t)"
+      "description": "Display directory tree as JSON. Paths must be absolute or resolved relative to the reported root directory. Flags: summary (bool), exclude (string[]), includeContent (bool), useGitignore (bool), useIgnore (bool), tokens (bool), model (string), includeGit (bool)."
     },
     {
       "name": "content",
-      "description": "show file contents (c)"
+      "description": "Show file contents as JSON. Paths must be absolute or resolved relative to the reported root directory. Flags: summary (bool), documentation (bool), includeContent (bool), exclude (string[]), useGitignore (bool), useIgnore (bool), tokens (bool), model (string), includeGit (bool)."
     },
     {
       "name": "callchain",
-      "description": "analyze call chains (cc)"
+      "description": "Analyze Go/Python/JavaScript call chains as JSON. Target must be fully qualified or resolvable in the project. Flags: depth (int), documentation (bool)."
     }
   ]
 }
 ```
+
+Invoke commands by POSTing JSON payloads to `/commands/<name>`. The body mirrors
+the corresponding CLI flags. For example, request a tree without summaries:
+
+```shell
+curl -X POST http://127.0.0.1:45873/commands/tree \
+  -H 'Content-Type: application/json' \
+  -d '{"paths":["."],"summary":false}'
+```
+
+Successful responses echo the rendered output, the chosen format, and any
+warnings emitted during processing:
+
+```json
+{
+  "output": "{\"path\":\".\",\"name\":\".\",\"type\":\"directory\",\"children\":[],\"totalFiles\":0,\"totalSize\":\"0b\"}\n",
+  "format": "json",
+  "warnings": []
+}
+```
+
+Set `"documentation": true` when calling the `content` command to include
+documented symbols for Go, JavaScript, and Python files in the JSON response.
+MCP endpoints always emit JSON; requests for other output formats are ignored.
+
+Agents should resolve all paths relative to the server's working directory.
+Query `/environment` to retrieve that directory before issuing command
+requests:
+
+```shell
+curl http://127.0.0.1:45873/environment
+```
+
+Only absolute paths (or relative paths resolved against the reported root)
+should be passed to MCP commands.
+
+#### Registering MCP clients
+
+Start the server inside the project you want to expose:
+
+```shell
+ctx --mcp
+```
+
+The examples below assume `/Users/alex/src/project` is the root returned by
+`/environment` and that `ctx` is on your `$PATH`.
+
+**Claude Desktop** (macOS/Windows): edit
+`~/Library/Application Support/Claude/claude_desktop_config.json` and add an
+entry under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "ctx": {
+      "command": "/usr/local/bin/ctx",
+      "args": ["--mcp"],
+      "cwd": "/Users/alex/src/project"
+    }
+  }
+}
+```
+
+Restart Claude Desktop and the assistant will discover the `ctx` capabilities.
+
+**Codex CLI**: register the server so Codex can proxy requests through MCP:
+
+```shell
+codex servers add ctx \
+  --command /usr/local/bin/ctx \
+  --args --mcp \
+  --cwd /Users/alex/src/project
+```
+
+List registered servers with `codex servers list` and remove them with
+`codex servers remove <name>`. Consult the Codex MCP documentation if your
+installation uses a different configuration path.
 
 Press `Ctrl+C` (or send `SIGTERM`) in the terminal that launched `ctx --mcp` to
 shut the server down. The process waits up to five seconds for in-flight

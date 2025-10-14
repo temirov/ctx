@@ -145,6 +145,7 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 - [X] [CT-07] Consider supporting a callchain for Python and JS. Research if there are either Go or native callchain detection functionality
   - Added registry-driven call chain analyzers for Go, Python, and JavaScript using tree-sitter based parsing, depth-limited traversal, and graceful fallback when no Go module is present.
 - [X] [CT-11] Add an MCP server and advertise program capabilities. use --mcp flag to run the program as an MCP server
+- [X] [CT-13] Extend MCP mode so HTTP clients can execute tree/content/callchain with documentation support, including repositories outside the working directory.
 
 ### Improvements
 
