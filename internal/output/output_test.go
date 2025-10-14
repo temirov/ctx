@@ -64,6 +64,75 @@ func TestRenderCallChainRaw(testingInstance *testing.T) {
 	}
 }
 
+func TestWriteTreeRawRendersConnectors(testingInstance *testing.T) {
+	testingInstance.Parallel()
+
+	rootPath := "/tmp/project"
+	readmePath := rootPath + "/README.md"
+	docsPath := rootPath + "/docs"
+	indexPath := docsPath + "/index.md"
+
+	testCases := []struct {
+		name            string
+		node            *types.TreeOutputNode
+		includeSummary  bool
+		expectedOutputs []string
+	}{
+		{
+			name: "directory with nested file",
+			node: &types.TreeOutputNode{
+				Path: rootPath,
+				Name: "project",
+				Type: types.NodeTypeDirectory,
+				Children: []*types.TreeOutputNode{
+					{
+						Path: readmePath,
+						Name: "README.md",
+						Type: types.NodeTypeFile,
+					},
+					{
+						Path: docsPath,
+						Name: "docs",
+						Type: types.NodeTypeDirectory,
+						Children: []*types.TreeOutputNode{
+							{
+								Path: indexPath,
+								Name: "index.md",
+								Type: types.NodeTypeFile,
+							},
+						},
+					},
+				},
+			},
+			includeSummary: true,
+			expectedOutputs: []string{
+				rootPath,
+				"├── [File] " + readmePath,
+				"└── " + docsPath,
+				"    └── [File] " + indexPath,
+				"Summary: 2 files",
+				"    Summary: 1 file",
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		testingInstance.Run(testCase.name, func(testingInstance *testing.T) {
+			testingInstance.Parallel()
+
+			var buffer bytes.Buffer
+			output.WriteTreeRaw(&buffer, testCase.node, testCase.includeSummary)
+			rendered := buffer.String()
+			for _, expected := range testCase.expectedOutputs {
+				if !strings.Contains(rendered, expected) {
+					testingInstance.Fatalf("expected %q in output: %s", expected, rendered)
+				}
+			}
+		})
+	}
+}
+
 // jsonExpected defines the expected JSON rendering.
 var jsonExpected = "{\n" +
 	"  \"path\": \"file.txt\",\n" +

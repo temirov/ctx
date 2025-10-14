@@ -117,19 +117,28 @@ func TestRunTreeRawStreamingOutputsSummaryAfterFiles(t *testing.T) {
 		t.Fatalf("expected nested file in output")
 	}
 
+	if !strings.Contains(outputText, "├──") {
+		t.Fatalf("expected tree branch connector in output")
+	}
+	if !strings.Contains(outputText, "└──") {
+		t.Fatalf("expected tree leaf connector in output")
+	}
+
+	nestedDirIndex := strings.Index(outputText, nestedDir)
+	if nestedDirIndex == -1 {
+		t.Fatalf("expected nested directory entry in output")
+	}
 	nestedFileIndex := strings.Index(outputText, nestedFile)
-	nestedSummaryKey := fmt.Sprintf("  Summary: 1 file, %s", utils.FormatFileSize(3))
+	nestedSummaryKey := fmt.Sprintf("Summary: 1 file, %s", utils.FormatFileSize(3))
 	nestedSummaryIndex := strings.Index(outputText, nestedSummaryKey)
 	if nestedSummaryIndex == -1 {
 		t.Fatalf("expected nested summary line in output")
 	}
-	if nestedSummaryIndex < nestedFileIndex {
-		t.Fatalf("nested summary appeared before nested file")
+	if !(nestedDirIndex < nestedSummaryIndex && nestedSummaryIndex < nestedFileIndex) {
+		t.Fatalf("nested summary ordering incorrect: %s", outputText)
 	}
 
-	globalSummary := "Summary: 2 files"
-	globalIndex := strings.LastIndex(outputText, globalSummary)
-	if globalIndex == -1 {
+	if !strings.Contains(outputText, "Summary: 2 files") {
 		t.Fatalf("expected global summary in output")
 	}
 }

@@ -129,6 +129,13 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--doc`               | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
 | `--depth <number>`    | callchain          | Limit call graph traversal depth (default `1`). |
 | `--version`           | all commands       | Print ctx version and exit. |
+| `--clipboard`         | tree, content, callchain | Copy command output to the system clipboard after rendering completes. |
+| `--mcp`               | root command       | Run an HTTP server that publishes ctx capabilities for MCP clients. |
+
+When `--clipboard` is active the command writes its output to the terminal
+and copies the same text into the system clipboard. If clipboard integration
+is requested but not supported on the current platform, the command fails with
+an explanatory error.
 
 ### Examples
 
@@ -149,6 +156,17 @@ Analyze the call chain for a function in XML including docs:
 ```shell
 ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 --doc --format xml
 ```
+
+### MCP Server Mode
+
+Run the tool as an MCP server that advertises supported commands and formats:
+
+```shell
+ctx --mcp
+```
+
+The server listens on an ephemeral local address and prints the bound host and
+port. Clients can retrieve the advertised capabilities at `/capabilities`.
 
 ## Output Formats
 

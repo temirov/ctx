@@ -144,20 +144,27 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
   - Implemented language-aware documentation extractors. Go analysis now reuses a shared collector map while Python docstrings (module/class/function/method) are parsed via indentation-aware heuristics and JavaScript leverages JSDoc comment pairing. When go.mod is unavailable the collector gracefully continues for non-Go languages. Falling back to rune counting avoids network failures while keeping tokenized flows operational.
 - [X] [CT-07] Consider supporting a callchain for Python and JS. Research if there are either Go or native callchain detection functionality
   - Added registry-driven call chain analyzers for Go, Python, and JavaScript using tree-sitter based parsing, depth-limited traversal, and graceful fallback when no Go module is present.
-- [ ] [CT-11] Add an MCP server and advertise program capabilities. use --mcp flag to run the program as an MCP server
+- [X] [CT-11] Add an MCP server and advertise program capabilities. use --mcp flag to run the program as an MCP server
 
 ### Improvements
 
 - [X] [CT-08] Unify internal implementatiopn of the `t` and `c` commands as their only difference is the content of the files on the backend. make t an internal alis to c command with the flag --content false
-- [ ] [CT-10] Change raw format to include graphic represwentation, similar to trre command of | and ├── characters to demonstrate the tree structure
+- [X] [CT-10] Change raw format to include graphic represwentation, similar to trre command of | and ├── characters to demonstrate the tree structure
 
 ### Maintenance
 
-- [ ] [CT-09] Document copy to clipboard functionality in the README.md
+- [X] [CT-09] Document copy to clipboard functionality in the README.md
 
 ### Portability
 
-- [ ] [CT-01] Consider how would the compiled Go executable run python scripts? Do we need to embed and recreate them at the runtime? Reflect the considerations in the NOTES.md under the respective items
-- [ ] [CT-02] Check OS specific assumptions. Can we run the compiled version of this app on Windows? Prepare a plan of what needs to change to be able to run it on Windows. Reflect the considerations in the NOTES.md under the respective items
+- [X] [CT-01] Consider how would the compiled Go executable run python scripts? Do we need to embed and recreate them at the runtime? Reflect the considerations in the NOTES.md under the respective items
+  - Tokenizer helpers for Anthropic and LLaMA models live under `internal/tokenizer/helpers` and are embedded via `//go:embed`.
+  - At runtime `materializeHelperScripts` writes the embedded helpers to a temporary directory before invoking them with `uv run`.
+  - Shipping a single binary therefore only requires bundling the Go executable; the Python code and shell entry points are reproduced automatically, while the environment must provide `uv` and its dependencies.
+- [X] [CT-02] Check OS specific assumptions. Can we run the compiled version of this app on Windows? Prepare a plan of what needs to change to be able to run it on Windows. Reflect the considerations in the NOTES.md under the respective items
+  - Path handling already relies on `filepath` so tree traversal and config resolution adapt to Windows path separators.
+  - Clipboard support uses `github.com/atotto/clipboard`, which wraps the Win32 API and does not require shell utilities.
+  - Token counters depend on the `uv` executable; Windows builds must bundle or document `uv.exe` (or set `CTX_UV`) and ensure Python dependencies install through uv.
+  - MCP server uses `signal.NotifyContext` for shutdown; confirm Windows builds observe `SIGINT`/`SIGTERM` and extend coverage with CI jobs on Windows to validate end-to-end flows.
 
 ## BugFixes
