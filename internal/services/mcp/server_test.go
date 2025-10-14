@@ -1,107 +1,192 @@
-package mcp_test
+package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
-
-	"github.com/temirov/ctx/internal/services/mcp"
 )
 
-func TestServerRunExposesCapabilities(t *testing.T) {
+func TestServerExecutesCommand(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
-		name         string
-		config       mcp.Config
-		expectedCaps []mcp.Capability
-	}{
-		{
-			name: "single capability",
-			config: mcp.Config{
-				Capabilities: []mcp.Capability{
-					{Name: "tree", Description: "List directories"},
-				},
-				Address: "127.0.0.1:0",
-			},
-			expectedCaps: []mcp.Capability{{Name: "tree", Description: "List directories"}},
+	responseBody := CommandResponse{
+		Output:   "executed",
+		Format:   "json",
+		Warnings: []string{"notice"},
+	}
+	executors := map[string]CommandExecutor{
+		"sample": CommandExecutorFunc(func(_ context.Context, request CommandRequest) (CommandResponse, error) {
+			expectedPayload := `{"value":42}`
+			if string(request.Payload) != expectedPayload {
+				return CommandResponse{}, NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("unexpected payload: %s", string(request.Payload)))
+			}
+			return responseBody, nil
+		}),
+	}
+	server := NewServer(Config{
+		Address: "127.0.0.1:0",
+		Capabilities: []Capability{
+			{Name: "sample", Description: "Sample command"},
 		},
-		{
-			name: "multiple capabilities",
-			config: mcp.Config{
-				Capabilities: []mcp.Capability{
-					{Name: "content", Description: "Show file content"},
-					{Name: "callchain", Description: "Inspect call relationships"},
-				},
-			},
-			expectedCaps: []mcp.Capability{
-				{Name: "content", Description: "Show file content"},
-				{Name: "callchain", Description: "Inspect call relationships"},
-			},
-		},
+		Executors:       executors,
+		ShutdownTimeout: time.Second,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addressChan := make(chan string, 1)
+	done := make(chan error, 1)
+
+	go func() {
+		done <- server.Run(ctx, func(address string) {
+			addressChan <- address
+		})
+	}()
+
+	address := waitForAddress(t, addressChan)
+
+	client := http.Client{Timeout: 2 * time.Second}
+	requestBody := bytes.NewBufferString(`{"value":42}`)
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+address+"/commands/sample", requestBody)
+	if requestErr != nil {
+		t.Fatalf("create request: %v", requestErr)
 	}
 
-	for _, testCase := range testCases {
-		testCase := testCase
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
+	response, responseErr := client.Do(request)
+	if responseErr != nil {
+		t.Fatalf("execute request: %v", responseErr)
+	}
+	defer response.Body.Close()
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status code: %d", response.StatusCode)
+	}
 
-			server := mcp.NewServer(testCase.config)
-			addressCh := make(chan string, 1)
-			errorCh := make(chan error, 1)
+	var decoded CommandResponse
+	if decodeErr := json.NewDecoder(response.Body).Decode(&decoded); decodeErr != nil {
+		t.Fatalf("decode response: %v", decodeErr)
+	}
 
-			go func() {
-				errorCh <- server.Run(ctx, func(address string) {
-					addressCh <- address
-				})
-			}()
+	if decoded.Output != responseBody.Output {
+		t.Fatalf("unexpected output: %s", decoded.Output)
+	}
+	if decoded.Format != responseBody.Format {
+		t.Fatalf("unexpected format: %s", decoded.Format)
+	}
+	if len(decoded.Warnings) != len(responseBody.Warnings) || decoded.Warnings[0] != responseBody.Warnings[0] {
+		t.Fatalf("unexpected warnings: %+v", decoded.Warnings)
+	}
 
-			select {
-			case address := <-addressCh:
-				client := http.Client{Timeout: 2 * time.Second}
-				request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+"/capabilities", nil)
-				if err != nil {
-					t.Fatalf("new request: %v", err)
-				}
-				response, err := client.Do(request)
-				if err != nil {
-					t.Fatalf("perform request: %v", err)
-				}
-				defer response.Body.Close()
+	cancel()
+	if runErr := <-done; runErr != nil {
+		t.Fatalf("server shutdown: %v", runErr)
+	}
+}
 
-				if response.StatusCode != http.StatusOK {
-					t.Fatalf("unexpected status: %d", response.StatusCode)
-				}
+func TestServerHandlesUnknownCommand(t *testing.T) {
+	t.Parallel()
 
-				var body struct {
-					Capabilities []mcp.Capability `json:"capabilities"`
-				}
-				if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-					t.Fatalf("decode response: %v", err)
-				}
+	server := NewServer(Config{
+		Address: "127.0.0.1:0",
+	})
 
-				if len(body.Capabilities) != len(testCase.expectedCaps) {
-					t.Fatalf("expected %d capabilities, got %d", len(testCase.expectedCaps), len(body.Capabilities))
-				}
-				for index, capability := range body.Capabilities {
-					expected := testCase.expectedCaps[index]
-					if capability != expected {
-						t.Fatalf("capability %d mismatch: got %+v, want %+v", index, capability, expected)
-					}
-				}
-			case <-time.After(2 * time.Second):
-				t.Fatalf("server did not start")
-			}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-			cancel()
-			if err := <-errorCh; err != nil {
-				t.Fatalf("server error: %v", err)
-			}
+	addressChan := make(chan string, 1)
+	done := make(chan error, 1)
+
+	go func() {
+		done <- server.Run(ctx, func(address string) {
+			addressChan <- address
 		})
+	}()
+
+	address := waitForAddress(t, addressChan)
+
+	client := http.Client{Timeout: 2 * time.Second}
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+address+"/commands/missing", http.NoBody)
+	if requestErr != nil {
+		t.Fatalf("create request: %v", requestErr)
+	}
+
+	response, responseErr := client.Do(request)
+	if responseErr != nil {
+		t.Fatalf("execute request: %v", responseErr)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("unexpected status code: %d", response.StatusCode)
+	}
+
+	cancel()
+	if runErr := <-done; runErr != nil {
+		t.Fatalf("server shutdown: %v", runErr)
+	}
+}
+
+func TestServerPropagatesExecutorStatus(t *testing.T) {
+	t.Parallel()
+
+	executors := map[string]CommandExecutor{
+		"fail": CommandExecutorFunc(func(_ context.Context, _ CommandRequest) (CommandResponse, error) {
+			return CommandResponse{}, NewCommandExecutionError(http.StatusTeapot, fmt.Errorf("custom failure"))
+		}),
+	}
+	server := NewServer(Config{
+		Address:   "127.0.0.1:0",
+		Executors: executors,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addressChan := make(chan string, 1)
+	done := make(chan error, 1)
+
+	go func() {
+		done <- server.Run(ctx, func(address string) {
+			addressChan <- address
+		})
+	}()
+
+	address := waitForAddress(t, addressChan)
+
+	client := http.Client{Timeout: 2 * time.Second}
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+address+"/commands/fail", http.NoBody)
+	if requestErr != nil {
+		t.Fatalf("create request: %v", requestErr)
+	}
+
+	response, responseErr := client.Do(request)
+	if responseErr != nil {
+		t.Fatalf("execute request: %v", responseErr)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusTeapot {
+		t.Fatalf("unexpected status code: %d", response.StatusCode)
+	}
+
+	cancel()
+	if runErr := <-done; runErr != nil {
+		t.Fatalf("server shutdown: %v", runErr)
+	}
+}
+
+func waitForAddress(t *testing.T, addressChan <-chan string) string {
+	t.Helper()
+	select {
+	case address := <-addressChan:
+		return address
+	case <-time.After(3 * time.Second):
+		t.Fatalf("server address not received")
+		return ""
 	}
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -84,6 +85,7 @@ func TestRunTreeRawStreamingOutputsSummaryAfterFiles(t *testing.T) {
 
 	outputText := captureStdout(t, func() {
 		if err := runStreamCommand(
+			context.Background(),
 			types.CommandTree,
 			[]string{tempDir},
 			nil,
@@ -152,6 +154,7 @@ func TestRunContentRawStreamingStreamsBeforeSummary(t *testing.T) {
 
 	outputText := captureStdout(t, func() {
 		if err := runStreamCommand(
+			context.Background(),
 			types.CommandContent,
 			[]string{tempDir},
 			nil,
@@ -222,6 +225,7 @@ func TestRunToolCopiesOutputToClipboard(t *testing.T) {
 			stub := &clipboardStub{errorToReturn: testCase.clipboardError}
 			var outputBuffer bytes.Buffer
 			executionError := runTool(
+				context.Background(),
 				types.CommandContent,
 				[]string{tempDir},
 				nil,
