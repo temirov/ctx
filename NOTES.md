@@ -154,6 +154,7 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 ### Maintenance
 
 - [X] [CT-09] Document copy to clipboard functionality in the README.md
+- [ ] [CT-12] Document MCP usage with examples
 
 ### Portability
 
