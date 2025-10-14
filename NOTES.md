@@ -74,8 +74,7 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 
 ### Features
 
-- [X] [CT-03] Add an ability to copy the output into the cliboard. Consider specifics of different OSs. add a flag to copy to clipboard --cliboard.
-
+  - [X] [CT-03] Add an ability to copy the output into the cliboard. Consider specifics of different OSs. add a flag to copy to clipboard --cliboard.
     ````markdown
         The most practical way is to use an existing cross-platform library rather than shelling out to `pbcopy` (macOS) / `xclip` (Linux) / `clip` (Windows) yourself. The most widely used one is:
 
@@ -137,7 +136,17 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 
         But this requires branching per OS and ensuring the utilities are present.
     ````
-    - [ ] [CT-16] Add an ability to retrieve package documentation from the GitHub.
+
+  - [X] [CT-04] Allow for a configuration file config.yaml either locally or under ~/.ctx. Define the defaults and read them in the following priority: CLI flags (P0) -> local config (P1) -> global config (P2)
+  - [X] [CT-05] Allow generation of the configuration file (local and global) with --init <local|global>, local by default, --force to overwrite the existing config.yaml, otherwise if the file exists then the program exits with an error
+  - [X] [CT-06] Consider retrieving Python and JS code documentation when --doc flag is passed and teh code is in either JS or Python. Research if there is a standardized model of Python and JS party packages' documentation that can be employed.
+    - Implemented language-aware documentation extractors. Go analysis now reuses a shared collector map while Python docstrings (module/class/function/method) are parsed via indentation-aware heuristics and JavaScript leverages JSDoc comment pairing. When go.mod is unavailable the collector gracefully continues for non-Go languages. Falling back to rune counting avoids network failures while keeping tokenized flows operational.
+  - [X] [CT-07] Consider supporting a callchain for Python and JS. Research if there are either Go or native callchain detection functionality
+    - Added registry-driven call chain analyzers for Go, Python, and JavaScript using tree-sitter based parsing, depth-limited traversal, and graceful fallback when no Go module is present.
+  - [X] [CT-11] Add an MCP server and advertise program capabilities. use --mcp flag to run the program as an MCP server
+  - [X] [CT-13] Extend MCP mode so HTTP clients can execute tree/content/callchain with documentation support, including repositories outside the working directory.
+  - [X] [CT-15] Ensure MCP callchain analyzers and releases run with CGO enabled across CI and packaging.
+  - [ ] [CT-16] Add an ability to retrieve package documentation from the GitHub.
       1. Analyze the code of @tools/gh_to_doc
       2. Add integration tests for verification. Use the following targets for tests
           2a. [jspreadsheet documentation](https://github.com/jspreadsheet/ce/blob/master/docs/jspreadsheet/docs/editors.md)
@@ -150,16 +159,6 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
         6a. Full test coverage
         6b. MCP advertisement
         6c. Readme documentation
-
-  - [X] [CT-04] Allow for a configuration file config.yaml either locally or under ~/.ctx. Define the defaults and read them in the following priority: CLI flags (P0) -> local config (P1) -> global config (P2)
-  - [X] [CT-05] Allow generation of the configuration file (local and global) with --init <local|global>, local by default, --force to overwrite the existing config.yaml, otherwise if the file exists then the program exits with an error
-  - [X] [CT-06] Consider retrieving Python and JS code documentation when --doc flag is passed and teh code is in either JS or Python. Research if there is a standardized model of Python and JS party packages' documentation that can be employed.
-    - Implemented language-aware documentation extractors. Go analysis now reuses a shared collector map while Python docstrings (module/class/function/method) are parsed via indentation-aware heuristics and JavaScript leverages JSDoc comment pairing. When go.mod is unavailable the collector gracefully continues for non-Go languages. Falling back to rune counting avoids network failures while keeping tokenized flows operational.
-  - [X] [CT-07] Consider supporting a callchain for Python and JS. Research if there are either Go or native callchain detection functionality
-    - Added registry-driven call chain analyzers for Go, Python, and JavaScript using tree-sitter based parsing, depth-limited traversal, and graceful fallback when no Go module is present.
-- [X] [CT-11] Add an MCP server and advertise program capabilities. use --mcp flag to run the program as an MCP server
-- [X] [CT-13] Extend MCP mode so HTTP clients can execute tree/content/callchain with documentation support, including repositories outside the working directory.
-- [X] [CT-15] Ensure MCP callchain analyzers and releases run with CGO enabled across CI and packaging.
 
 ### Improvements
 
