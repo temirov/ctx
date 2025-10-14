@@ -241,6 +241,48 @@ curl http://127.0.0.1:45873/environment
 Only absolute paths (or relative paths resolved against the reported root)
 should be passed to MCP commands.
 
+#### Registering MCP clients
+
+Start the server inside the project you want to expose:
+
+```shell
+ctx --mcp
+```
+
+The examples below assume `/Users/alex/src/project` is the root returned by
+`/environment` and that `ctx` is on your `$PATH`.
+
+**Claude Desktop** (macOS/Windows): edit
+`~/Library/Application Support/Claude/claude_desktop_config.json` and add an
+entry under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "ctx": {
+      "command": "/usr/local/bin/ctx",
+      "args": ["--mcp"],
+      "cwd": "/Users/alex/src/project"
+    }
+  }
+}
+```
+
+Restart Claude Desktop and the assistant will discover the `ctx` capabilities.
+
+**Codex CLI**: register the server so Codex can proxy requests through MCP:
+
+```shell
+codex servers add ctx \
+  --command /usr/local/bin/ctx \
+  --args --mcp \
+  --cwd /Users/alex/src/project
+```
+
+List registered servers with `codex servers list` and remove them with
+`codex servers remove <name>`. Consult the Codex MCP documentation if your
+installation uses a different configuration path.
+
 Press `Ctrl+C` (or send `SIGTERM`) in the terminal that launched `ctx --mcp` to
 shut the server down. The process waits up to five seconds for in-flight
 requests to complete before exiting.
