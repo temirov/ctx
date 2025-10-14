@@ -157,6 +157,10 @@ Analyze the call chain for a function in XML including docs:
 ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 --doc --format xml
 ```
 
+> ℹ️ Python and JavaScript call-chain analyzers rely on tree-sitter bindings
+> and therefore require CGO. If `CGO_ENABLED=0`, only Go call-chain analysis is
+> available.
+
 ### MCP Server Mode
 
 `ctx` can expose its capabilities over HTTP for Model Context Protocol (MCP)
