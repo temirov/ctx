@@ -137,8 +137,19 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 
         But this requires branching per OS and ensuring the utilities are present.
     ````
-    - [ ] Add an ability to retrieve package documentation from the GitHub.
-    1. Analyze the code of @tools/gh_
+    - [ ] [CT-16] Add an ability to retrieve package documentation from the GitHub.
+      1. Analyze the code of @tools/gh_to_doc
+      2. Add integration tests for verification. Use the following targets for tests
+          2a. [jspreadsheet documentation](https://github.com/jspreadsheet/ce/blob/master/docs/jspreadsheet/docs/editors.md)
+          2b. [marked.js documentation](https://github.com/markedjs/marked/tree/master/docs)
+          2c. [beer.css documentation](https://github.com/beercss/beercss/tree/main/docs)
+      3. Ensure that the documentation was fully extracted
+      4. Plan to integrate a new command doc or d for short to retrieve the documentation
+      5. Plan to extennd --doc flag to incorporate <full|relevant> portion of github documentation
+      6. Carefully orchestrate the implementation
+        6a. Full test coverage
+        6b. MCP advertisement
+        6c. Readme documentation
 
   - [X] [CT-04] Allow for a configuration file config.yaml either locally or under ~/.ctx. Define the defaults and read them in the following priority: CLI flags (P0) -> local config (P1) -> global config (P2)
   - [X] [CT-05] Allow generation of the configuration file (local and global) with --init <local|global>, local by default, --force to overwrite the existing config.yaml, otherwise if the file exists then the program exits with an error
