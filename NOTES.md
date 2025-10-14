@@ -154,7 +154,8 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 ### Maintenance
 
 - [X] [CT-09] Document copy to clipboard functionality in the README.md
-- [ ] [CT-12] Document MCP usage with examples
+- [X] [CT-12] Document MCP usage with examples
+  - README now walks through starting `ctx --mcp`, checking the health endpoint, and querying `/capabilities` with `curl`.
 
 ### Portability
 
