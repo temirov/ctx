@@ -159,14 +159,56 @@ ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 
 
 ### MCP Server Mode
 
-Run the tool as an MCP server that advertises supported commands and formats:
+`ctx` can expose its capabilities over HTTP for Model Context Protocol (MCP)
+clients. The root command owns the `--mcp` flag; combine it with any other flag
+or configuration you normally use with `ctx`:
 
 ```shell
 ctx --mcp
 ```
 
-The server listens on an ephemeral local address and prints the bound host and
-port. Clients can retrieve the advertised capabilities at `/capabilities`.
+When the server starts it binds to an ephemeral loopback address and prints the
+endpoint so clients know where to connect:
+
+```text
+MCP server listening on http://127.0.0.1:45873
+```
+
+The root path responds with `200 OK` and acts as a basic health check:
+
+```shell
+curl --head http://127.0.0.1:45873/
+```
+
+Query `/capabilities` to retrieve the advertised commands. The response lists
+the command name and the same short description shown in the CLI help output:
+
+```shell
+curl http://127.0.0.1:45873/capabilities | jq
+```
+
+```json
+{
+  "capabilities": [
+    {
+      "name": "tree",
+      "description": "display directory tree (t)"
+    },
+    {
+      "name": "content",
+      "description": "show file contents (c)"
+    },
+    {
+      "name": "callchain",
+      "description": "analyze call chains (cc)"
+    }
+  ]
+}
+```
+
+Press `Ctrl+C` (or send `SIGTERM`) in the terminal that launched `ctx --mcp` to
+shut the server down. The process waits up to five seconds for in-flight
+requests to complete before exiting.
 
 ## Output Formats
 
