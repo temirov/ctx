@@ -34,6 +34,7 @@ const (
 	tokensFlagName        = "tokens"
 	modelFlagName         = "model"
 	documentationFlagName = "doc"
+	contentFlagName       = "content"
 	versionFlagName       = "version"
 	versionTemplate       = "ctx version: %s\n"
 	defaultPath           = "."
@@ -105,6 +106,7 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	modelFlagDescription            = "tokenizer model to use for token counting"
 	defaultTokenizerModelName       = "gpt-4o"
 	documentationFlagDescription    = "include documentation"
+	contentFlagDescription          = "include file content in output"
 	invalidFormatMessage            = "Invalid format value '%s'"
 	warningSkipPathFormat           = "Warning: skipping %s: %v\n"
 	warningTokenCountFormat         = "Warning: failed to count tokens for %s: %v\n"
@@ -250,6 +252,7 @@ func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, 
 	var summaryEnabled bool = true
 	var tokenConfiguration tokenOptions
 	tokenConfiguration.model = defaultTokenizerModelName
+	var includeContent bool
 
 	treeCommand := &cobra.Command{
 		Use:     treeUse,
@@ -260,7 +263,7 @@ func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, 
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(command *cobra.Command, arguments []string) error {
 			if applicationConfig != nil {
-				applyStreamConfiguration(command, applicationConfig.Tree, &pathConfiguration, &outputFormat, nil, &summaryEnabled, &tokenConfiguration)
+				applyStreamConfiguration(command, applicationConfig.Tree, &pathConfiguration, &outputFormat, nil, &summaryEnabled, &includeContent, &tokenConfiguration)
 			}
 			if len(arguments) == 0 {
 				arguments = []string{defaultPath}
@@ -284,6 +287,7 @@ func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, 
 				outputFormatLower,
 				false,
 				summaryEnabled,
+				includeContent,
 				tokenConfiguration,
 				os.Stdout,
 				os.Stderr,
@@ -298,6 +302,7 @@ func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, 
 	treeCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, true, summaryFlagDescription)
 	treeCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
 	treeCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
+	treeCommand.Flags().BoolVar(&includeContent, contentFlagName, false, contentFlagDescription)
 	return treeCommand
 }
 
@@ -309,6 +314,7 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 	var summaryEnabled bool = true
 	var tokenConfiguration tokenOptions
 	tokenConfiguration.model = defaultTokenizerModelName
+	includeContent := true
 
 	contentCommand := &cobra.Command{
 		Use:     contentUse,
@@ -319,7 +325,7 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(command *cobra.Command, arguments []string) error {
 			if applicationConfig != nil {
-				applyStreamConfiguration(command, applicationConfig.Content, &pathConfiguration, &outputFormat, &documentationEnabled, &summaryEnabled, &tokenConfiguration)
+				applyStreamConfiguration(command, applicationConfig.Content, &pathConfiguration, &outputFormat, &documentationEnabled, &summaryEnabled, &includeContent, &tokenConfiguration)
 			}
 			if len(arguments) == 0 {
 				arguments = []string{defaultPath}
@@ -343,6 +349,7 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 				outputFormatLower,
 				documentationEnabled,
 				summaryEnabled,
+				includeContent,
 				tokenConfiguration,
 				os.Stdout,
 				os.Stderr,
@@ -358,6 +365,7 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 	contentCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, true, summaryFlagDescription)
 	contentCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
 	contentCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
+	contentCommand.Flags().BoolVar(&includeContent, contentFlagName, true, contentFlagDescription)
 	return contentCommand
 }
 
@@ -397,6 +405,7 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 				outputFormatLower,
 				documentationEnabled,
 				false,
+				false,
 				tokenOptions{},
 				os.Stdout,
 				os.Stderr,
@@ -424,6 +433,7 @@ func runTool(
 	format string,
 	documentationEnabled bool,
 	summaryEnabled bool,
+	includeContent bool,
 	tokenConfiguration tokenOptions,
 	outputWriter io.Writer,
 	errorWriter io.Writer,
@@ -476,7 +486,7 @@ func runTool(
 			return err
 		}
 	case types.CommandTree, types.CommandContent:
-		if err := runTreeOrContentCommand(commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, summaryEnabled, tokenCounter, tokenModel, collector, outputWriter, errorWriter); err != nil {
+		if err := runStreamCommand(commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, documentationEnabled, summaryEnabled, includeContent, tokenCounter, tokenModel, collector, outputWriter, errorWriter); err != nil {
 			return err
 		}
 	default:
@@ -527,8 +537,8 @@ func runCallChain(
 	return nil
 }
 
-// runTreeOrContentCommand executes tree or content commands for the given paths.
-func runTreeOrContentCommand(
+// runStreamCommand executes tree or content commands for the given paths.
+func runStreamCommand(
 	commandName string,
 	paths []string,
 	exclusionPatterns []string,
@@ -538,6 +548,7 @@ func runTreeOrContentCommand(
 	format string,
 	withDocumentation bool,
 	withSummary bool,
+	includeContent bool,
 	tokenCounter tokenizer.Counter,
 	tokenModel string,
 	collector *docs.Collector,
@@ -551,14 +562,21 @@ func runTreeOrContentCommand(
 
 	totalRootPaths := len(validatedPaths)
 
+	renderCommandName := commandName
+	if includeContent {
+		renderCommandName = types.CommandContent
+	} else {
+		renderCommandName = types.CommandTree
+	}
+
 	var renderer output.StreamRenderer
 	switch format {
 	case types.FormatRaw:
-		renderer = output.NewRawStreamRenderer(outputWriter, errorWriter, commandName, withSummary)
+		renderer = output.NewRawStreamRenderer(outputWriter, errorWriter, renderCommandName, withSummary)
 	case types.FormatJSON:
-		renderer = output.NewJSONStreamRenderer(outputWriter, errorWriter, commandName, totalRootPaths, withSummary, commandName == types.CommandContent)
+		renderer = output.NewJSONStreamRenderer(outputWriter, errorWriter, renderCommandName, totalRootPaths, withSummary, includeContent)
 	case types.FormatXML:
-		renderer = output.NewXMLStreamRenderer(outputWriter, errorWriter, commandName, totalRootPaths, withSummary, commandName == types.CommandContent)
+		renderer = output.NewXMLStreamRenderer(outputWriter, errorWriter, renderCommandName, totalRootPaths, withSummary, includeContent)
 	default:
 		return fmt.Errorf(invalidFormatMessage, format)
 	}
@@ -575,12 +593,7 @@ func runTreeOrContentCommand(
 	ctx := context.Background()
 
 	for _, info := range validatedPaths {
-		var streamErr error
-		if commandName == types.CommandTree {
-			streamErr = runTreePath(ctx, renderer, info, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, tokenCounter, tokenModel)
-		} else {
-			streamErr = runContentPath(ctx, renderer, info, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, withDocumentation, withSummary, tokenCounter, tokenModel, collector)
-		}
+		streamErr := runStreamPath(ctx, renderer, info, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, includeContent, withDocumentation, tokenCounter, tokenModel, collector)
 		if streamErr != nil && !errors.Is(streamErr, context.Canceled) {
 			if errorWriter != nil {
 				fmt.Fprintf(errorWriter, warningSkipPathFormat, info.AbsolutePath, streamErr)
@@ -591,7 +604,7 @@ func runTreeOrContentCommand(
 	return nil
 }
 
-func runTreePath(
+func runStreamPath(
 	ctx context.Context,
 	renderer output.StreamRenderer,
 	path types.ValidatedPath,
@@ -599,45 +612,8 @@ func runTreePath(
 	useGitignore bool,
 	useIgnoreFile bool,
 	includeGit bool,
-	tokenCounter tokenizer.Counter,
-	tokenModel string,
-) error {
-	var ignorePatterns []string
-	if path.IsDir {
-		patterns, _, loadErr := config.LoadRecursiveIgnorePatterns(path.AbsolutePath, exclusionPatterns, useGitignore, useIgnoreFile, includeGit)
-		if loadErr != nil {
-			return loadErr
-		}
-		ignorePatterns = patterns
-	}
-
-	producer := func(streamCtx context.Context, ch chan<- stream.Event) error {
-		options := stream.TreeOptions{
-			Root:           path.AbsolutePath,
-			IgnorePatterns: ignorePatterns,
-			TokenCounter:   tokenCounter,
-			TokenModel:     tokenModel,
-		}
-		return stream.StreamTree(streamCtx, options, ch)
-	}
-
-	consumer := func(event stream.Event) error {
-		return renderer.Handle(event)
-	}
-
-	return dispatchStream(ctx, producer, consumer)
-}
-
-func runContentPath(
-	ctx context.Context,
-	renderer output.StreamRenderer,
-	path types.ValidatedPath,
-	exclusionPatterns []string,
-	useGitignore bool,
-	useIgnoreFile bool,
-	includeGit bool,
+	includeContent bool,
 	withDocumentation bool,
-	withSummary bool,
 	tokenCounter tokenizer.Counter,
 	tokenModel string,
 	collector *docs.Collector,
@@ -650,18 +626,21 @@ func runContentPath(
 			return loadErr
 		}
 		ignorePatterns = patterns
-		binaryPatterns = binary
+		if includeContent {
+			binaryPatterns = binary
+		}
 	}
 
 	producer := func(streamCtx context.Context, ch chan<- stream.Event) error {
-		options := stream.ContentOptions{
-			Root:           path.AbsolutePath,
-			IgnorePatterns: ignorePatterns,
-			BinaryContent:  binaryPatterns,
-			TokenCounter:   tokenCounter,
-			TokenModel:     tokenModel,
+		options := stream.TreeOptions{
+			Root:                  path.AbsolutePath,
+			IgnorePatterns:        ignorePatterns,
+			TokenCounter:          tokenCounter,
+			TokenModel:            tokenModel,
+			IncludeContent:        includeContent,
+			BinaryContentPatterns: binaryPatterns,
 		}
-		return stream.StreamContent(streamCtx, options, ch)
+		return stream.StreamTree(streamCtx, options, ch)
 	}
 
 	consumer := func(event stream.Event) error {
@@ -718,6 +697,7 @@ func applyStreamConfiguration(
 	outputFormat *string,
 	documentationEnabled *bool,
 	summaryEnabled *bool,
+	includeContent *bool,
 	tokens *tokenOptions,
 ) {
 	if command == nil {
@@ -731,6 +711,9 @@ func applyStreamConfiguration(
 	}
 	if configuration.Documentation != nil && documentationEnabled != nil && !command.Flags().Changed(documentationFlagName) {
 		*documentationEnabled = *configuration.Documentation
+	}
+	if configuration.IncludeContent != nil && includeContent != nil && !command.Flags().Changed(contentFlagName) {
+		*includeContent = *configuration.IncludeContent
 	}
 	if tokens != nil {
 		if configuration.Tokens.Enabled != nil && !command.Flags().Changed(tokensFlagName) {

@@ -20,6 +20,7 @@ const (
 	defaultConfigurationTemplate = `tree:
   format: json
   summary: true
+  content: false
   tokens:
     enabled: false
     model: gpt-4o
@@ -31,6 +32,7 @@ const (
 content:
   format: json
   summary: true
+  content: true
   documentation: false
   tokens:
     enabled: false

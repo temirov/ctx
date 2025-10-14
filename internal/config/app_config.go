@@ -25,12 +25,13 @@ type ApplicationConfiguration struct {
 
 // StreamCommandConfiguration defines options shared by tree and content commands.
 type StreamCommandConfiguration struct {
-	Format        string             `mapstructure:"format"`
-	Summary       *bool              `mapstructure:"summary"`
-	Documentation *bool              `mapstructure:"documentation"`
-	Tokens        TokenConfiguration `mapstructure:"tokens"`
-	Paths         PathConfiguration  `mapstructure:"paths"`
-	Clipboard     *bool              `mapstructure:"clipboard"`
+	Format         string             `mapstructure:"format"`
+	Summary        *bool              `mapstructure:"summary"`
+	Documentation  *bool              `mapstructure:"documentation"`
+	IncludeContent *bool              `mapstructure:"content"`
+	Tokens         TokenConfiguration `mapstructure:"tokens"`
+	Paths          PathConfiguration  `mapstructure:"paths"`
+	Clipboard      *bool              `mapstructure:"clipboard"`
 }
 
 // TokenConfiguration controls token counting defaults.
@@ -161,6 +162,9 @@ func (config StreamCommandConfiguration) merge(override StreamCommandConfigurati
 	}
 	if override.Documentation != nil {
 		result.Documentation = cloneBool(override.Documentation)
+	}
+	if override.IncludeContent != nil {
+		result.IncludeContent = cloneBool(override.IncludeContent)
 	}
 	result.Tokens = result.Tokens.merge(override.Tokens)
 	result.Paths = result.Paths.merge(override.Paths)

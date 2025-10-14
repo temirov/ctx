@@ -57,7 +57,7 @@ const (
 	integrationBinaryBaseName         = "ctx_integration_binary"
 	contentDataFunction               = "github.com/temirov/ctx/internal/commands.GetContentData"
 	streamContentFunction             = "github.com/temirov/ctx/internal/commands.StreamContent"
-	runTreeOrContentCommandFunction   = "github.com/temirov/ctx/internal/cli.runTreeOrContentCommand"
+	runStreamCommandFunction          = "github.com/temirov/ctx/internal/cli.runStreamCommand"
 	runToolFunction                   = "github.com/temirov/ctx/internal/cli.runTool"
 	callChainAlias                    = "cc"
 	formatFlag                        = "--format"
@@ -250,6 +250,30 @@ func TestContentJSONStreamingMatchesExpectedOutput(t *testing.T) {
 	expectedWithNewline := expected + "\n"
 	if stdout.String() != expectedWithNewline {
 		t.Fatalf("unexpected output\nexpected: %s\nactual: %s", expectedWithNewline, stdout.String())
+	}
+}
+
+func TestTreeMatchesContentWithoutContentAcrossFormats(t *testing.T) {
+	binary := buildBinary(t)
+	workingDir := setupTestDirectory(t, map[string]string{
+		"main.go":          "package main\nfunc main() {}\n",
+		"nested/readme.md": "# Nested\n",
+	})
+
+	formats := []string{appTypes.FormatRaw, appTypes.FormatJSON, appTypes.FormatXML}
+	for _, format := range formats {
+		format := format
+		t.Run(format, func(t *testing.T) {
+			treeArgs := []string{appTypes.CommandTree, "--format", format, workingDir}
+			contentArgs := []string{appTypes.CommandContent, "--format", format, "--content=false", workingDir}
+
+			treeOutput := runCommand(t, binary, treeArgs, workingDir)
+			contentOutput := runCommand(t, binary, contentArgs, workingDir)
+
+			if treeOutput != contentOutput {
+				t.Fatalf("expected identical output for tree and content --content=false\nTree:\n%s\nContent:\n%s", treeOutput, contentOutput)
+			}
+		})
 	}
 }
 

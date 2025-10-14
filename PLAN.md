@@ -7,9 +7,9 @@
 - Update documentation collection flow so non-Go analyzers can request documentation via the shared collector.
 - Add table-driven tests covering Go, Python, and JavaScript callchain outputs alongside failure cases when a symbol is missing.
 
-## CT-08 Unify `t` And `c` Commands
+## CT-08 Unify `t` And `c` Commands *(Completed)*
 - Inspect `internal/commands` to identify duplication between tree and content commands and extract a shared `StreamOptions` structure to consolidate logic.
-- Make the `t` alias reuse the content command path internally with a `IncludeContent` flag defaulting to false to preserve tree behavior.
+- Make the `t` alias reuse the content command path internally with an `IncludeContent` flag defaulting to false to preserve tree behavior.
 - Ensure configuration precedence (flags > local config > global config) remains intact and update CLI help text accordingly.
 - Add integration tests verifying that `ctx t` and `ctx c --content=false` share identical outputs across formats.
 
