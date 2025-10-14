@@ -3,7 +3,6 @@ package output
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/temirov/ctx/internal/services/stream"
 	"github.com/temirov/ctx/internal/types"
@@ -73,8 +72,8 @@ func (renderer *rawStreamRenderer) Handle(event stream.Event) error {
 	case stream.EventKindSummary:
 		renderer.summary.add(event.Summary)
 	case stream.EventKindTree:
-		if renderer.command == types.CommandContent && event.Tree != nil {
-			renderer.trees = append(renderer.trees, event.Tree)
+		if event.Tree != nil {
+			renderer.trees = append(renderer.trees, cloneTreeNode(event.Tree))
 		}
 	}
 	return nil
@@ -92,9 +91,13 @@ func (renderer *rawStreamRenderer) Flush() error {
 		fmt.Fprintln(renderer.stdout)
 	}
 
-	if renderer.command == types.CommandContent && renderer.stdout != nil {
-		for _, node := range renderer.trees {
-			fmt.Fprintf(renderer.stdout, "\n--- Directory Tree: %s ---\n", node.Path)
+	if renderer.stdout != nil && len(renderer.trees) > 0 {
+		for index, node := range renderer.trees {
+			if renderer.command == types.CommandContent {
+				fmt.Fprintf(renderer.stdout, "\n--- Directory Tree: %s ---\n", node.Path)
+			} else if index > 0 {
+				fmt.Fprintln(renderer.stdout)
+			}
 			WriteTreeRaw(renderer.stdout, node, renderer.includeSummary)
 		}
 	}
@@ -103,28 +106,12 @@ func (renderer *rawStreamRenderer) Flush() error {
 }
 
 func (renderer *rawStreamRenderer) handleDirectory(directory *stream.DirectoryEvent) {
-	if renderer.stdout == nil || renderer.command != types.CommandTree || directory == nil {
+	if renderer.stdout == nil || directory == nil {
 		return
 	}
-	prefix := strings.Repeat("  ", directory.Depth)
-	if directory.Phase == stream.DirectoryEnter {
-		fmt.Fprintf(renderer.stdout, "%s%s\n", prefix, directory.Path)
+	if renderer.command == types.CommandTree {
 		return
 	}
-	if !renderer.includeSummary || directory.Summary == nil {
-		return
-	}
-	label := "files"
-	count := directory.Summary.Files
-	if count == 1 {
-		label = "file"
-	}
-	size := utils.FormatFileSize(directory.Summary.Bytes)
-	extra := ""
-	if directory.Summary.Tokens > 0 {
-		extra = fmt.Sprintf(", %d tokens", directory.Summary.Tokens)
-	}
-	fmt.Fprintf(renderer.stdout, "%s  Summary: %d %s, %s%s\n", prefix, count, label, size, extra)
 }
 
 func (renderer *rawStreamRenderer) handleFile(file *stream.FileEvent) {
@@ -133,8 +120,6 @@ func (renderer *rawStreamRenderer) handleFile(file *stream.FileEvent) {
 	}
 
 	switch renderer.command {
-	case types.CommandTree:
-		renderer.printTreeFile(file)
 	case types.CommandContent:
 		renderer.printContentHeader(file)
 	}
@@ -162,19 +147,6 @@ func (renderer *rawStreamRenderer) handleChunk(chunk *stream.ChunkEvent) {
 		fmt.Fprintln(renderer.stdout, separatorLine)
 		delete(renderer.pending, chunk.Path)
 	}
-}
-
-func (renderer *rawStreamRenderer) printTreeFile(file *stream.FileEvent) {
-	prefix := strings.Repeat("  ", file.Depth)
-	if file.IsBinary {
-		fmt.Fprintf(renderer.stdout, binaryTreeFormat, prefix, file.Path, mimeTypeLabel, file.MimeType)
-		return
-	}
-	if file.Tokens > 0 {
-		fmt.Fprintf(renderer.stdout, "%s[File] %s (%d tokens)\n", prefix, file.Path, file.Tokens)
-		return
-	}
-	fmt.Fprintf(renderer.stdout, "%s[File] %s\n", prefix, file.Path)
 }
 
 func (renderer *rawStreamRenderer) printContentHeader(file *stream.FileEvent) {

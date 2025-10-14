@@ -31,6 +31,11 @@ const (
 	binaryNodeFormat     = "[Binary] %s (%s%s)\n"
 	binaryTreeFormat     = "%s[Binary] %s (%s%s)\n"
 
+	treeBranchConnector = "├── "
+	treeLastConnector   = "└── "
+	treeBranchPadding   = "│   "
+	treeLastPadding     = "    "
+
 	// filePrefix is the key prefix used when deduplicating file outputs.
 	filePrefix = "file:"
 	// nodePrefix is the key prefix used when deduplicating tree nodes.
@@ -230,7 +235,7 @@ func RenderRaw(commandName string, collected []interface{}, includeSummary bool)
 					fmt.Printf(binaryNodeFormat, outputItem.Path, mimeTypeLabel, outputItem.MimeType)
 				} else {
 					fmt.Printf("\n--- Directory Tree: %s ---\n", outputItem.Path)
-					writeTree(os.Stdout, outputItem, "", includeSummary)
+					renderTreeNode(os.Stdout, outputItem, "", includeSummary, true, true)
 				}
 			}
 		case *types.CallChainOutput:
@@ -344,48 +349,80 @@ func summarizeTree(node *types.TreeOutputNode) (int, int64, int) {
 }
 
 // writeTree recursively prints a directory tree to the provided writer.
-func writeTree(writer io.Writer, node *types.TreeOutputNode, prefix string, includeSummary bool) {
+func directorySummaryLine(node *types.TreeOutputNode, includeSummary bool) string {
+	if !includeSummary || node == nil || node.Type != types.NodeTypeDirectory {
+		return ""
+	}
+	label := "files"
+	count := node.TotalFiles
+	size := node.TotalSize
+	tokens := node.TotalTokens
+	if count == 0 || size == "" || tokens == 0 {
+		files, bytes, countedTokens := summarizeTree(node)
+		if count == 0 {
+			count = files
+		}
+		if size == "" {
+			size = utils.FormatFileSize(bytes)
+		}
+		if tokens == 0 {
+			tokens = countedTokens
+		}
+	}
+	if count == 1 {
+		label = "file"
+	}
+	tokenSuffix := ""
+	if tokens > 0 {
+		tokenSuffix = fmt.Sprintf(", %d tokens", tokens)
+	}
+	return fmt.Sprintf("Summary: %d %s, %s%s", count, label, size, tokenSuffix)
+}
+
+func treeNodeLinePrefix(prefix string, isRoot bool, isLast bool) (string, string) {
+	if isRoot {
+		return "", ""
+	}
+	connector := treeBranchConnector
+	childPrefix := prefix + treeBranchPadding
+	if isLast {
+		connector = treeLastConnector
+		childPrefix = prefix + treeLastPadding
+	}
+	return prefix + connector, childPrefix
+}
+
+func renderTreeNode(writer io.Writer, node *types.TreeOutputNode, prefix string, includeSummary bool, isRoot bool, isLast bool) {
+	if node == nil {
+		return
+	}
+	linePrefix, childPrefix := treeNodeLinePrefix(prefix, isRoot, isLast)
 	switch node.Type {
 	case types.NodeTypeFile:
 		if node.Tokens > 0 {
-			fmt.Fprintf(writer, "%s[File] %s (%d tokens)\n", prefix, node.Path, node.Tokens)
+			fmt.Fprintf(writer, "%s[File] %s (%d tokens)\n", linePrefix, node.Path, node.Tokens)
 		} else {
-			fmt.Fprintf(writer, "%s[File] %s\n", prefix, node.Path)
+			fmt.Fprintf(writer, "%s[File] %s\n", linePrefix, node.Path)
 		}
 		return
 	case types.NodeTypeBinary:
-		fmt.Fprintf(writer, binaryTreeFormat, prefix, node.Path, mimeTypeLabel, node.MimeType)
+		fmt.Fprintf(writer, binaryTreeFormat, linePrefix, node.Path, mimeTypeLabel, node.MimeType)
 		return
 	}
-	fmt.Fprintf(writer, "%s%s\n", prefix, node.Path)
-	if includeSummary {
-		label := "files"
-		count := node.TotalFiles
-		size := node.TotalSize
-		tokens := node.TotalTokens
-		if count == 0 || size == "" || tokens == 0 {
-			files, bytes, countedTokens := summarizeTree(node)
-			if count == 0 {
-				count = files
-			}
-			if size == "" {
-				size = utils.FormatFileSize(bytes)
-			}
-			if tokens == 0 {
-				tokens = countedTokens
-			}
+	fmt.Fprintf(writer, "%s%s\n", linePrefix, node.Path)
+	summaryLine := directorySummaryLine(node, includeSummary)
+	if summaryLine != "" {
+		if isRoot {
+			fmt.Fprintf(writer, "%s\n", summaryLine)
+		} else {
+			fmt.Fprintf(writer, "%s%s\n", childPrefix, summaryLine)
 		}
-		if count == 1 {
-			label = "file"
-		}
-		extra := ""
-		if tokens > 0 {
-			extra = fmt.Sprintf(", %d tokens", tokens)
-		}
-		fmt.Fprintf(writer, "%s  Summary: %d %s, %s%s\n", prefix, count, label, size, extra)
 	}
-	for _, child := range node.Children {
-		writeTree(writer, child, prefix+"  ", includeSummary)
+	for index, child := range node.Children {
+		if child == nil {
+			continue
+		}
+		renderTreeNode(writer, child, childPrefix, includeSummary, false, index == len(node.Children)-1)
 	}
 }
 
@@ -399,7 +436,7 @@ func WriteTreeRaw(writer io.Writer, node *types.TreeOutputNode, includeSummary b
 	if node == nil {
 		return
 	}
-	writeTree(writer, node, "", includeSummary)
+	renderTreeNode(writer, node, "", includeSummary, true, true)
 }
 
 // PrintFileRaw renders a single file output in raw format.

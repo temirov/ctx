@@ -11,45 +11,77 @@ import (
 )
 
 func TestRawStreamRendererStreamsTreeEvents(t *testing.T) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	renderer := output.NewRawStreamRenderer(&stdout, &stderr, types.CommandTree, true)
+	t.Parallel()
 
-	rootPath := "/tmp/root"
-	filePath := rootPath + "/file.txt"
-
-	events := []stream.Event{
-		{Kind: stream.EventKindStart, Path: rootPath},
-		{Kind: stream.EventKindDirectory, Directory: &stream.DirectoryEvent{Phase: stream.DirectoryEnter, Path: rootPath, Depth: 0}},
-		{Kind: stream.EventKindFile, File: &stream.FileEvent{Path: filePath, Depth: 1, Tokens: 2}},
-		{Kind: stream.EventKindDirectory, Directory: &stream.DirectoryEvent{Phase: stream.DirectoryLeave, Path: rootPath, Depth: 0, Summary: &stream.SummaryEvent{Files: 1, Bytes: 4, Tokens: 2}}},
-		{Kind: stream.EventKindSummary, Summary: &stream.SummaryEvent{Files: 1, Bytes: 4, Tokens: 2, Model: "stub"}},
-		{Kind: stream.EventKindDone},
+	directoryPath := "/tmp/root"
+	filePath := directoryPath + "/file.txt"
+	treeNode := &types.TreeOutputNode{
+		Path: directoryPath,
+		Name: "root",
+		Type: types.NodeTypeDirectory,
+		Children: []*types.TreeOutputNode{
+			{
+				Path:   filePath,
+				Name:   "file.txt",
+				Type:   types.NodeTypeFile,
+				Tokens: 2,
+			},
+		},
 	}
 
-	for index, event := range events {
-		if err := renderer.Handle(event); err != nil {
-			t.Fatalf("handle event %d failed: %v", index, err)
-		}
+	testCases := []struct {
+		name              string
+		events            []stream.Event
+		expectedFragments []string
+	}{
+		{
+			name: "streams tree with connectors",
+			events: []stream.Event{
+				{Kind: stream.EventKindStart, Path: directoryPath},
+				{Kind: stream.EventKindDirectory, Directory: &stream.DirectoryEvent{Phase: stream.DirectoryEnter, Path: directoryPath, Depth: 0}},
+				{Kind: stream.EventKindFile, File: &stream.FileEvent{Path: filePath, Depth: 1, Tokens: 2}},
+				{Kind: stream.EventKindDirectory, Directory: &stream.DirectoryEvent{Phase: stream.DirectoryLeave, Path: directoryPath, Depth: 0, Summary: &stream.SummaryEvent{Files: 1, Bytes: 4, Tokens: 2}}},
+				{Kind: stream.EventKindTree, Tree: treeNode},
+				{Kind: stream.EventKindSummary, Summary: &stream.SummaryEvent{Files: 1, Bytes: 4, Tokens: 2, Model: "stub"}},
+				{Kind: stream.EventKindDone},
+			},
+			expectedFragments: []string{
+				directoryPath,
+				"└── [File] " + filePath + " (2 tokens)",
+				"Summary: 1 file",
+			},
+		},
 	}
 
-	if !strings.Contains(stdout.String(), rootPath) {
-		t.Fatalf("expected directory path in output: %s", stdout.String())
-	}
-	if !strings.Contains(stdout.String(), "[File] "+filePath) {
-		t.Fatalf("expected file entry in output")
-	}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 
-	if err := renderer.Flush(); err != nil {
-		t.Fatalf("flush failed: %v", err)
-	}
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			renderer := output.NewRawStreamRenderer(&stdout, &stderr, types.CommandTree, true)
 
-	if !strings.Contains(stdout.String(), "Summary: 1 file") {
-		t.Fatalf("expected summary line in output: %s", stdout.String())
-	}
+			for index, event := range testCase.events {
+				if err := renderer.Handle(event); err != nil {
+					t.Fatalf("handle event %d failed: %v", index, err)
+				}
+			}
 
-	if stderr.Len() != 0 {
-		t.Fatalf("expected no stderr output")
+			if err := renderer.Flush(); err != nil {
+				t.Fatalf("flush failed: %v", err)
+			}
+
+			for _, fragment := range testCase.expectedFragments {
+				if !strings.Contains(stdout.String(), fragment) {
+					t.Fatalf("expected fragment %q in output: %s", fragment, stdout.String())
+				}
+			}
+
+			if stderr.Len() != 0 {
+				t.Fatalf("expected no stderr output")
+			}
+		})
 	}
 }
 

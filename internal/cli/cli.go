@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/temirov/ctx/internal/commands"
@@ -17,6 +20,7 @@ import (
 	"github.com/temirov/ctx/internal/docs"
 	"github.com/temirov/ctx/internal/output"
 	"github.com/temirov/ctx/internal/services/clipboard"
+	"github.com/temirov/ctx/internal/services/mcp"
 	"github.com/temirov/ctx/internal/services/stream"
 	"github.com/temirov/ctx/internal/tokenizer"
 	"github.com/temirov/ctx/internal/types"
@@ -52,6 +56,12 @@ Use --format to select raw, json, or xml output. Use --doc to include documentat
 	initFlagDescription       = "generate a configuration file (local or global)"
 	forceFlagName             = "force"
 	forceFlagDescription      = "overwrite configuration if it already exists"
+	mcpFlagName               = "mcp"
+	mcpFlagDescription        = "run the program as an MCP server"
+	mcpListenAddress          = "127.0.0.1:0"
+	mcpStartupMessageFormat   = "MCP server listening on %s\n"
+	mcpFlagConflictMessage    = "--mcp cannot be combined with subcommands"
+	mcpShutdownTimeout        = 5 * time.Second
 	treeUse                   = "tree [paths...]"
 	contentUse                = "content [paths...]"
 	callchainUse              = "callchain <function>"
@@ -150,6 +160,7 @@ func createRootCommand(clipboardProvider clipboard.Copier) *cobra.Command {
 	var forceInit bool
 	var applicationConfig config.ApplicationConfiguration
 	var configurationLoaded bool
+	var runMCP bool
 
 	rootCommand := &cobra.Command{
 		Use:          rootUse,
@@ -157,12 +168,21 @@ func createRootCommand(clipboardProvider clipboard.Copier) *cobra.Command {
 		Long:         rootLongDescription,
 		SilenceUsage: true,
 		RunE: func(command *cobra.Command, arguments []string) error {
+			if runMCP {
+				if len(arguments) > 0 {
+					return fmt.Errorf("%s accepts no arguments", mcpFlagName)
+				}
+				return startMCPServer(command.Context(), command.OutOrStdout())
+			}
 			return command.Help()
 		},
 		PersistentPreRunE: func(command *cobra.Command, arguments []string) error {
 			if showVersion {
 				fmt.Printf(versionTemplate, utils.GetApplicationVersion())
 				os.Exit(0)
+			}
+			if runMCP && command.Name() != rootUse {
+				return fmt.Errorf(mcpFlagConflictMessage)
 			}
 			if configurationLoaded {
 				return nil
@@ -207,6 +227,7 @@ func createRootCommand(clipboardProvider clipboard.Copier) *cobra.Command {
 		initFlag.NoOptDefVal = string(config.InitTargetLocal)
 	}
 	rootCommand.PersistentFlags().BoolVar(&forceInit, forceFlagName, false, forceFlagDescription)
+	rootCommand.PersistentFlags().BoolVar(&runMCP, mcpFlagName, false, mcpFlagDescription)
 	rootCommand.AddCommand(
 		createTreeCommand(clipboardProvider, &clipboardEnabled, &applicationConfig),
 		createContentCommand(clipboardProvider, &clipboardEnabled, &applicationConfig),
@@ -798,4 +819,37 @@ func resolveAndValidatePaths(inputs []string) ([]types.ValidatedPath, error) {
 		return nil, fmt.Errorf(errorNoValidPaths)
 	}
 	return result, nil
+}
+
+func mcpCapabilities() []mcp.Capability {
+	return []mcp.Capability{
+		{Name: types.CommandTree, Description: treeShortDescription},
+		{Name: types.CommandContent, Description: contentShortDescription},
+		{Name: types.CommandCallChain, Description: callchainShortDescription},
+	}
+}
+
+func startMCPServer(parent context.Context, output io.Writer) error {
+	ctx, cancel := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	writer := output
+	if writer == nil {
+		writer = os.Stdout
+	}
+
+	server := mcp.NewServer(mcp.Config{
+		Address:         mcpListenAddress,
+		Capabilities:    mcpCapabilities(),
+		ShutdownTimeout: mcpShutdownTimeout,
+	})
+
+	notify := func(address string) {
+		fmt.Fprintf(writer, mcpStartupMessageFormat, address)
+	}
+
+	if err := server.Run(ctx, notify); err != nil {
+		return fmt.Errorf("run MCP server: %w", err)
+	}
+	return nil
 }
