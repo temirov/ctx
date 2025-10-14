@@ -192,15 +192,15 @@ curl http://127.0.0.1:45873/capabilities | jq
   "capabilities": [
     {
       "name": "tree",
-      "description": "display directory tree (t)"
+      "description": "Display directory tree as JSON. Paths must be absolute or resolved relative to the reported root directory. Flags: summary (bool), exclude (string[]), includeContent (bool), useGitignore (bool), useIgnore (bool), tokens (bool), model (string), includeGit (bool)."
     },
     {
       "name": "content",
-      "description": "show file contents (c)"
+      "description": "Show file contents as JSON. Paths must be absolute or resolved relative to the reported root directory. Flags: summary (bool), documentation (bool), includeContent (bool), exclude (string[]), useGitignore (bool), useIgnore (bool), tokens (bool), model (string), includeGit (bool)."
     },
     {
       "name": "callchain",
-      "description": "analyze call chains (cc)"
+      "description": "Analyze Go/Python/JavaScript call chains as JSON. Target must be fully qualified or resolvable in the project. Flags: depth (int), documentation (bool)."
     }
   ]
 }

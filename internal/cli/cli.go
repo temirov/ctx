@@ -832,9 +832,18 @@ func resolveAndValidatePaths(inputs []string) ([]types.ValidatedPath, error) {
 
 func mcpCapabilities() []mcp.Capability {
 	return []mcp.Capability{
-		{Name: types.CommandTree, Description: treeShortDescription},
-		{Name: types.CommandContent, Description: contentShortDescription},
-		{Name: types.CommandCallChain, Description: callchainShortDescription},
+		{
+			Name:        types.CommandTree,
+			Description: "Display directory tree as JSON. Paths must be absolute or resolved relative to the reported root directory. Flags: summary (bool), exclude (string[]), includeContent (bool), useGitignore (bool), useIgnore (bool), tokens (bool), model (string), includeGit (bool).",
+		},
+		{
+			Name:        types.CommandContent,
+			Description: "Show file contents as JSON. Paths must be absolute or resolved relative to the reported root directory. Flags: summary (bool), documentation (bool), includeContent (bool), exclude (string[]), useGitignore (bool), useIgnore (bool), tokens (bool), model (string), includeGit (bool).",
+		},
+		{
+			Name:        types.CommandCallChain,
+			Description: "Analyze Go/Python/JavaScript call chains as JSON. Target must be fully qualified or resolvable in the project. Flags: depth (int), documentation (bool).",
+		},
 	}
 }
 
