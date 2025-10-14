@@ -83,7 +83,7 @@ func TestRunTreeRawStreamingOutputsSummaryAfterFiles(t *testing.T) {
 	}
 
 	outputText := captureStdout(t, func() {
-		if err := runTreeOrContentCommand(
+		if err := runStreamCommand(
 			types.CommandTree,
 			[]string{tempDir},
 			nil,
@@ -93,13 +93,14 @@ func TestRunTreeRawStreamingOutputsSummaryAfterFiles(t *testing.T) {
 			types.FormatRaw,
 			false,
 			true,
+			false,
 			treeStubCounter{},
 			"stub-model",
 			nil,
 			os.Stdout,
 			os.Stderr,
 		); err != nil {
-			t.Fatalf("runTreeOrContentCommand error: %v", err)
+			t.Fatalf("runStreamCommand error: %v", err)
 		}
 	})
 
@@ -141,7 +142,7 @@ func TestRunContentRawStreamingStreamsBeforeSummary(t *testing.T) {
 	}
 
 	outputText := captureStdout(t, func() {
-		if err := runTreeOrContentCommand(
+		if err := runStreamCommand(
 			types.CommandContent,
 			[]string{tempDir},
 			nil,
@@ -151,13 +152,14 @@ func TestRunContentRawStreamingStreamsBeforeSummary(t *testing.T) {
 			types.FormatRaw,
 			false,
 			true,
+			true,
 			treeStubCounter{},
 			"stub-model",
 			nil,
 			os.Stdout,
 			os.Stderr,
 		); err != nil {
-			t.Fatalf("runTreeOrContentCommand error: %v", err)
+			t.Fatalf("runStreamCommand error: %v", err)
 		}
 	})
 
@@ -221,6 +223,7 @@ func TestRunToolCopiesOutputToClipboard(t *testing.T) {
 				types.FormatJSON,
 				false,
 				false,
+				true,
 				tokenOptions{},
 				&outputBuffer,
 				io.Discard,
@@ -254,6 +257,7 @@ func TestApplyStreamConfigurationUsesDefaults(t *testing.T) {
 	summaryEnabled := true
 	documentationEnabled := false
 	tokens := tokenOptions{model: "initial"}
+	includeContent := false
 
 	command := &cobra.Command{Use: "test"}
 	command.Flags().StringVar(&format, formatFlagName, format, "")
@@ -265,11 +269,13 @@ func TestApplyStreamConfigurationUsesDefaults(t *testing.T) {
 	command.Flags().BoolVar(&pathConfiguration.disableGitignore, noGitignoreFlagName, pathConfiguration.disableGitignore, "")
 	command.Flags().BoolVar(&pathConfiguration.disableIgnoreFile, noIgnoreFlagName, pathConfiguration.disableIgnoreFile, "")
 	command.Flags().BoolVar(&pathConfiguration.includeGit, includeGitFlagName, pathConfiguration.includeGit, "")
+	command.Flags().BoolVar(&includeContent, contentFlagName, includeContent, "")
 
 	configuration := config.StreamCommandConfiguration{
-		Format:        types.FormatXML,
-		Summary:       boolPtr(false),
-		Documentation: boolPtr(true),
+		Format:         types.FormatXML,
+		Summary:        boolPtr(false),
+		Documentation:  boolPtr(true),
+		IncludeContent: boolPtr(true),
 		Tokens: config.TokenConfiguration{
 			Enabled: boolPtr(true),
 			Model:   "custom",
@@ -282,7 +288,7 @@ func TestApplyStreamConfigurationUsesDefaults(t *testing.T) {
 		},
 	}
 
-	applyStreamConfiguration(command, configuration, &pathConfiguration, &format, &documentationEnabled, &summaryEnabled, &tokens)
+	applyStreamConfiguration(command, configuration, &pathConfiguration, &format, &documentationEnabled, &summaryEnabled, &includeContent, &tokens)
 
 	if format != types.FormatXML {
 		t.Fatalf("expected format %s, got %s", types.FormatXML, format)
@@ -292,6 +298,9 @@ func TestApplyStreamConfigurationUsesDefaults(t *testing.T) {
 	}
 	if !documentationEnabled {
 		t.Fatalf("expected documentation to be enabled")
+	}
+	if !includeContent {
+		t.Fatalf("expected includeContent to be enabled")
 	}
 	if !tokens.enabled {
 		t.Fatalf("expected tokens to be enabled")
@@ -324,6 +333,7 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 	summaryEnabled := true
 	documentationEnabled := true
 	tokens := tokenOptions{enabled: true, model: "cli"}
+	includeContent := true
 
 	command := &cobra.Command{Use: "test"}
 	command.Flags().StringVar(&format, formatFlagName, format, "")
@@ -335,6 +345,7 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 	command.Flags().BoolVar(&pathConfiguration.disableGitignore, noGitignoreFlagName, pathConfiguration.disableGitignore, "")
 	command.Flags().BoolVar(&pathConfiguration.disableIgnoreFile, noIgnoreFlagName, pathConfiguration.disableIgnoreFile, "")
 	command.Flags().BoolVar(&pathConfiguration.includeGit, includeGitFlagName, pathConfiguration.includeGit, "")
+	command.Flags().BoolVar(&includeContent, contentFlagName, includeContent, "")
 
 	// Simulate CLI overrides.
 	if err := command.Flags().Set(formatFlagName, format); err != nil {
@@ -364,11 +375,15 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 	if err := command.Flags().Set(includeGitFlagName, "false"); err != nil {
 		t.Fatalf("set include git flag: %v", err)
 	}
+	if err := command.Flags().Set(contentFlagName, "true"); err != nil {
+		t.Fatalf("set content flag: %v", err)
+	}
 
 	configuration := config.StreamCommandConfiguration{
-		Format:        types.FormatXML,
-		Summary:       boolPtr(false),
-		Documentation: boolPtr(false),
+		Format:         types.FormatXML,
+		Summary:        boolPtr(false),
+		Documentation:  boolPtr(false),
+		IncludeContent: boolPtr(false),
 		Tokens: config.TokenConfiguration{
 			Enabled: boolPtr(false),
 			Model:   "config",
@@ -381,7 +396,7 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 		},
 	}
 
-	applyStreamConfiguration(command, configuration, &pathConfiguration, &format, &documentationEnabled, &summaryEnabled, &tokens)
+	applyStreamConfiguration(command, configuration, &pathConfiguration, &format, &documentationEnabled, &summaryEnabled, &includeContent, &tokens)
 
 	if format != "cli" {
 		t.Fatalf("expected format to remain cli, got %s", format)
@@ -391,6 +406,9 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 	}
 	if !documentationEnabled {
 		t.Fatalf("expected documentation to remain true")
+	}
+	if !includeContent {
+		t.Fatalf("expected includeContent to remain true")
 	}
 	if !tokens.enabled {
 		t.Fatalf("expected tokens to remain enabled")
