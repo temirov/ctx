@@ -3,7 +3,7 @@ name: Release Build
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
@@ -88,14 +88,7 @@ jobs:
       - name: ExtractReleaseNotes
         run: |
           TAG_NAME=${{ github.ref_name }}
-          awk -v tag="## ["tag"]" '
-            $0 == tag {flag=1; next}
-            flag && /^## \[/ {exit}
-            flag {print}
-          ' CHANGELOG.md > release_notes.md
-          if [ ! -s release_notes.md ]; then
-            echo "No changelog entry found for ${TAG_NAME}." > release_notes.md
-          fi
+          sed -n "/## \[$TAG_NAME\]/,/(## \[v[0-9])/p" CHANGELOG.md | grep -v '^## \[' > release_notes.md
 
       - name: CreateGitHubRelease
         uses: softprops/action-gh-release@v2
