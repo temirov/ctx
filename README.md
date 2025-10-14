@@ -228,6 +228,8 @@ warnings emitted during processing:
 
 Set `"documentation": true` when calling the `content` command to include
 documented symbols for Go, JavaScript, and Python files in the JSON response.
+MCP endpoints always emit JSON; requests for other formats are rejected with
+`400 Bad Request`.
 
 Press `Ctrl+C` (or send `SIGTERM`) in the terminal that launched `ctx --mcp` to
 shut the server down. The process waits up to five seconds for in-flight

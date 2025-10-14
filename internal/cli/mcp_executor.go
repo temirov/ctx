@@ -115,14 +115,11 @@ func executeCallChainCommand(commandContext context.Context, request mcp.Command
 	if target == "" {
 		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("target is required"))
 	}
-	format := payload.Format
-	if format == "" {
-		format = types.FormatJSON
+	requestedFormat := strings.ToLower(strings.TrimSpace(payload.Format))
+	if requestedFormat != "" && requestedFormat != types.FormatJSON {
+		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("mcp only supports json format"))
 	}
-	format = strings.ToLower(format)
-	if !isSupportedFormat(format) {
-		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf(invalidFormatMessage, format))
-	}
+	format := types.FormatJSON
 	depth := defaultCallChainDepth
 	if payload.Depth != nil {
 		if *payload.Depth < 1 {
@@ -176,13 +173,9 @@ func parseStreamRequest(payload json.RawMessage, defaults streamConfigurationDef
 		return streamExecutionParameters{}, fmt.Errorf("documentation is not supported for %s", defaults.commandName)
 	}
 	paths := sanitizePaths(requestBody.Paths)
-	format := requestBody.Format
-	if format == "" {
-		format = types.FormatJSON
-	}
-	format = strings.ToLower(format)
-	if !isSupportedFormat(format) {
-		return streamExecutionParameters{}, fmt.Errorf(invalidFormatMessage, format)
+	requestedFormat := strings.ToLower(strings.TrimSpace(requestBody.Format))
+	if requestedFormat != "" && requestedFormat != types.FormatJSON {
+		return streamExecutionParameters{}, fmt.Errorf("mcp only supports json format")
 	}
 	useGitignore := resolveBoolean(requestBody.UseGitignore, true)
 	useIgnoreFile := resolveBoolean(requestBody.UseIgnoreFile, true)
@@ -217,7 +210,7 @@ func parseStreamRequest(payload json.RawMessage, defaults streamConfigurationDef
 		useGitignore:         useGitignore,
 		useIgnoreFile:        useIgnoreFile,
 		includeGit:           includeGit,
-		format:               format,
+		format:               types.FormatJSON,
 		documentationEnabled: documentationEnabled,
 		summaryEnabled:       summaryEnabled,
 		includeContent:       includeContent,
