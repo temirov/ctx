@@ -1,5 +1,44 @@
 # Changelog
 
+## [v0.1.2] - 2025-10-18
+
+### Highlights
+
+* **CGO-enabled builds across CI and release targets.** Test and release workflows now compile with `CGO_ENABLED=1`, ensuring Python and JavaScript call-chain analyzers are always included. Windows releases automatically install a MinGW toolchain so tree-sitter bindings build deterministically. (maintenance/CT-15-enable-cgo)
+
+### Improvements ⚙️
+
+* Switched the test workflow to run with CGO enabled, preventing accidental regressions in language analyzers. (maintenance/CT-15-enable-cgo)
+* Reworked the release pipeline to build per-platform artifacts on native runners, upload them as artifacts, generate checksums, and publish consistently. (maintenance/CT-15-enable-cgo)
+* Hardened release note extraction so publishing succeeds even when the changelog entry is missing. (maintenance/CT-15-enable-cgo)
+
+### Maintenance 🛠️
+
+* Installed the MinGW toolchain on Windows release runners, guaranteeing CGO builds succeed without manual setup. (maintenance/CT-15-enable-cgo)
+
+## [v0.1.1] - 2025-10-17
+
+### Highlights
+
+* **Richer MCP contract with advertised workspace metadata.** The MCP server now exposes `/environment` and includes the root directory in `/capabilities`, guiding agents to send absolute paths. (ba36898)
+* **Comprehensive MCP end-to-end coverage.** A new integration test starts `ctx --mcp`, queries capabilities, and exercises tree/content commands over HTTP against a seeded project. (ecdacec)
+
+### Features ✨
+
+* Documented workflow for registering `ctx` with Claude Desktop and Codex, including JSON-only semantics and environment probing. (69165c4, daec63f)
+
+### Improvements ⚙️
+
+* Expanded capability descriptions to list supported flags and JSON-only behavior, making the MCP surface self-descriptive for agents. (daec63f)
+
+### Docs 📚
+
+* Added instructions for resolving paths via `/environment` and registering MCP servers with popular clients. (69165c4)
+
+### Testing ✅
+
+* Added an automated MCP end-to-end test that launches the server, inspects capabilities, and runs tree/content commands using absolute paths. (ecdacec)
+
 ## [v0.1.0] - 2025-10-14
 
 ### Highlights

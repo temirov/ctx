@@ -76,98 +76,101 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 
 - [X] [CT-03] Add an ability to copy the output into the cliboard. Consider specifics of different OSs. add a flag to copy to clipboard --cliboard.
 
-  ````markdown
-      The most practical way is to use an existing cross-platform library rather than shelling out to `pbcopy` (macOS) / `xclip` (Linux) / `clip` (Windows) yourself. The most widely used one is:
+    ````markdown
+        The most practical way is to use an existing cross-platform library rather than shelling out to `pbcopy` (macOS) / `xclip` (Linux) / `clip` (Windows) yourself. The most widely used one is:
 
-      ### 1. Use `github.com/atotto/clipboard`
+        ### 1. Use `github.com/atotto/clipboard`
 
-      This package abstracts away the platform specifics:
+        This package abstracts away the platform specifics:
 
-      ```go
-      package main
+        ```go
+        package main
 
-      import (
-          "fmt"
-          "log"
+        import (
+            "fmt"
+            "log"
 
-          "github.com/atotto/clipboard"
-      )
+            "github.com/atotto/clipboard"
+        )
 
-      func main() {
-          textToCopy := "Hello from Go!"
-          err := clipboard.WriteAll(textToCopy)
-          if err != nil {
-              log.Fatal(err)
-          }
-          fmt.Println("Copied to clipboard:", textToCopy)
+        func main() {
+            textToCopy := "Hello from Go!"
+            err := clipboard.WriteAll(textToCopy)
+            if err != nil {
+                log.Fatal(err)
+            }
+            fmt.Println("Copied to clipboard:", textToCopy)
 
-          pasted, err := clipboard.ReadAll()
-          if err != nil {
-              log.Fatal(err)
-          }
-          fmt.Println("Read from clipboard:", pasted)
-      }
-      ```
+            pasted, err := clipboard.ReadAll()
+            if err != nil {
+                log.Fatal(err)
+            }
+            fmt.Println("Read from clipboard:", pasted)
+        }
+        ```
 
-      * **macOS** → uses native APIs (`pbcopy`/`pbpaste`).
-      * **Linux** → requires `xclip` or `xsel` installed in the environment.
-      * **Windows** → uses Win32 API directly (no extra dependency).
+        * **macOS** → uses native APIs (`pbcopy`/`pbpaste`).
+        * **Linux** → requires `xclip` or `xsel` installed in the environment.
+        * **Windows** → uses Win32 API directly (no extra dependency).
 
-      ---
+        ---
 
-      ### 2. Minimal OS-specific approach (if you don’t want external libs)
+        ### 2. Minimal OS-specific approach (if you don’t want external libs)
 
-      You can directly call the system clipboard utilities:
+        You can directly call the system clipboard utilities:
 
-      * **macOS**:
+        * **macOS**:
 
-      ```go
-      exec.Command("pbcopy").Stdin.Write([]byte(text))
-      ```
-      * **Linux**:
+        ```go
+        exec.Command("pbcopy").Stdin.Write([]byte(text))
+        ```
+        * **Linux**:
 
-      ```go
-      exec.Command("xclip", "-selection", "clipboard").Stdin.Write([]byte(text))
-      ```
-      * **Windows**:
+        ```go
+        exec.Command("xclip", "-selection", "clipboard").Stdin.Write([]byte(text))
+        ```
+        * **Windows**:
 
-      ```go
-      exec.Command("clip").Stdin.Write([]byte(text))
-      ```
+        ```go
+        exec.Command("clip").Stdin.Write([]byte(text))
+        ```
 
-      But this requires branching per OS and ensuring the utilities are present.
-  ````
+        But this requires branching per OS and ensuring the utilities are present.
+    ````
+    - [ ] Add an ability to retrieve package documentation from the GitHub.
+    1. Analyze the code of @tools/gh_
 
-- [X] [CT-04] Allow for a configuration file config.yaml either locally or under ~/.ctx. Define the defaults and read them in the following priority: CLI flags (P0) -> local config (P1) -> global config (P2)
-- [X] [CT-05] Allow generation of the configuration file (local and global) with --init <local|global>, local by default, --force to overwrite the existing config.yaml, otherwise if the file exists then the program exits with an error
-- [X] [CT-06] Consider retrieving Python and JS code documentation when --doc flag is passed and teh code is in either JS or Python. Research if there is a standardized model of Python and JS party packages' documentation that can be employed.
-  - Implemented language-aware documentation extractors. Go analysis now reuses a shared collector map while Python docstrings (module/class/function/method) are parsed via indentation-aware heuristics and JavaScript leverages JSDoc comment pairing. When go.mod is unavailable the collector gracefully continues for non-Go languages. Falling back to rune counting avoids network failures while keeping tokenized flows operational.
-- [X] [CT-07] Consider supporting a callchain for Python and JS. Research if there are either Go or native callchain detection functionality
-  - Added registry-driven call chain analyzers for Go, Python, and JavaScript using tree-sitter based parsing, depth-limited traversal, and graceful fallback when no Go module is present.
+  - [X] [CT-04] Allow for a configuration file config.yaml either locally or under ~/.ctx. Define the defaults and read them in the following priority: CLI flags (P0) -> local config (P1) -> global config (P2)
+  - [X] [CT-05] Allow generation of the configuration file (local and global) with --init <local|global>, local by default, --force to overwrite the existing config.yaml, otherwise if the file exists then the program exits with an error
+  - [X] [CT-06] Consider retrieving Python and JS code documentation when --doc flag is passed and teh code is in either JS or Python. Research if there is a standardized model of Python and JS party packages' documentation that can be employed.
+    - Implemented language-aware documentation extractors. Go analysis now reuses a shared collector map while Python docstrings (module/class/function/method) are parsed via indentation-aware heuristics and JavaScript leverages JSDoc comment pairing. When go.mod is unavailable the collector gracefully continues for non-Go languages. Falling back to rune counting avoids network failures while keeping tokenized flows operational.
+  - [X] [CT-07] Consider supporting a callchain for Python and JS. Research if there are either Go or native callchain detection functionality
+    - Added registry-driven call chain analyzers for Go, Python, and JavaScript using tree-sitter based parsing, depth-limited traversal, and graceful fallback when no Go module is present.
 - [X] [CT-11] Add an MCP server and advertise program capabilities. use --mcp flag to run the program as an MCP server
 - [X] [CT-13] Extend MCP mode so HTTP clients can execute tree/content/callchain with documentation support, including repositories outside the working directory.
+- [X] [CT-15] Ensure MCP callchain analyzers and releases run with CGO enabled across CI and packaging.
 
 ### Improvements
 
-- [X] [CT-08] Unify internal implementatiopn of the `t` and `c` commands as their only difference is the content of the files on the backend. make t an internal alis to c command with the flag --content false
-- [X] [CT-10] Change raw format to include graphic represwentation, similar to trre command of | and ├── characters to demonstrate the tree structure
+  - [X] [CT-08] Unify internal implementatiopn of the `t` and `c` commands as their only difference is the content of the files on the backend. make t an internal alis to c command with the flag --content false
+  - [X] [CT-10] Change raw format to include graphic represwentation, similar to trre command of | and ├── characters to demonstrate the tree structure
 
 ### Maintenance
 
-- [X] [CT-09] Document copy to clipboard functionality in the README.md
-- [X] [CT-12] Document MCP usage with examples
-  - README now walks through starting `ctx --mcp`, checking the health endpoint, and querying `/capabilities` with `curl`.
+  - [X] [CT-09] Document copy to clipboard functionality in the README.md
+  - [X] [CT-12] Document MCP usage with examples
+    - README now walks through starting `ctx --mcp`, checking the health endpoint, and querying `/capabilities` with `curl`.
 
 ### Portability
 
-- [X] [CT-01] Consider how would the compiled Go executable run python scripts? Do we need to embed and recreate them at the runtime? Reflect the considerations in the NOTES.md under the respective items
-  - Tokenizer helpers for Anthropic and LLaMA models live under `internal/tokenizer/helpers` and are embedded via `//go:embed`.
-  - At runtime `materializeHelperScripts` writes the embedded helpers to a temporary directory before invoking them with `uv run`.
-  - Shipping a single binary therefore only requires bundling the Go executable; the Python code and shell entry points are reproduced automatically, while the environment must provide `uv` and its dependencies.
-- [X] [CT-02] Check OS specific assumptions. Can we run the compiled version of this app on Windows? Prepare a plan of what needs to change to be able to run it on Windows. Reflect the considerations in the NOTES.md under the respective items
-  - Path handling already relies on `filepath` so tree traversal and config resolution adapt to Windows path separators.
-  - Clipboard support uses `github.com/atotto/clipboard`, which wraps the Win32 API and does not require shell utilities.
-  - Token counters depend on the `uv` executable; Windows builds must bundle or document `uv.exe` (or set `CTX_UV`) and ensure Python dependencies install through uv.
-  - MCP server uses `signal.NotifyContext` for shutdown; confirm Windows builds observe `SIGINT`/`SIGTERM` and extend coverage with CI jobs on Windows to validate end-to-end flows.
+  - [X] [CT-01] Consider how would the compiled Go executable run python scripts? Do we need to embed and recreate them at the runtime? Reflect the considerations in the NOTES.md under the respective items
+    - Tokenizer helpers for Anthropic and LLaMA models live under `internal/tokenizer/helpers` and are embedded via `//go:embed`.
+    - At runtime `materializeHelperScripts` writes the embedded helpers to a temporary directory before invoking them with `uv run`.
+    - Shipping a single binary therefore only requires bundling the Go executable; the Python code and shell entry points are reproduced automatically, while the environment must provide `uv` and its dependencies.
+  - [X] [CT-02] Check OS specific assumptions. Can we run the compiled version of this app on Windows? Prepare a plan of what needs to change to be able to run it on Windows. Reflect the considerations in the NOTES.md under the respective items
+    - Path handling already relies on `filepath` so tree traversal and config resolution adapt to Windows path separators.
+    - Clipboard support uses `github.com/atotto/clipboard`, which wraps the Win32 API and does not require shell utilities.
+    - Token counters depend on the `uv` executable; Windows builds must bundle or document `uv.exe` (or set `CTX_UV`) and ensure Python dependencies install through uv.
+    - MCP server uses `signal.NotifyContext` for shutdown; confirm Windows builds observe `SIGINT`/`SIGTERM` and extend coverage with CI jobs on Windows to validate end-to-end flows.
 
 ## BugFixes
