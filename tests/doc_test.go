@@ -19,8 +19,6 @@ func TestDocCommandGitHubExtraction(t *testing.T) {
 	}
 
 	binary := buildBinary(t)
-	moduleRoot := getModuleRoot(t)
-
 	testCases := []struct {
 		name       string
 		owner      string
@@ -28,7 +26,6 @@ func TestDocCommandGitHubExtraction(t *testing.T) {
 		reference  string
 		rootPath   string
 		mode       string
-		rulesPath  string
 		files      map[string]string
 		expect     []string
 		unexpected []string
@@ -40,7 +37,6 @@ func TestDocCommandGitHubExtraction(t *testing.T) {
 			reference:  "main",
 			rootPath:   "docs/jspreadsheet",
 			mode:       "full",
-			rulesPath:  filepath.Join("tools", "gh_to_doc", "jspreadsheet.rules.yaml"),
 			files: map[string]string{
 				"docs/jspreadsheet/editors.md": "# Editors\n\nEditors overview.",
 				"docs/jspreadsheet/filters.md": "# Filters\n\nFilters overview.",
@@ -60,7 +56,6 @@ func TestDocCommandGitHubExtraction(t *testing.T) {
 			reference:  "main",
 			rootPath:   "docs/jspreadsheet",
 			mode:       "relevant",
-			rulesPath:  filepath.Join("tools", "gh_to_doc", "jspreadsheet.rules.yaml"),
 			files: map[string]string{
 				"docs/jspreadsheet/editors.md": "# Editors\n\nEditors overview.",
 				"docs/jspreadsheet/filters.md": "# Filters\n\nFilters overview.",
@@ -81,7 +76,6 @@ func TestDocCommandGitHubExtraction(t *testing.T) {
 			reference:  "main",
 			rootPath:   "docs",
 			mode:       "full",
-			rulesPath:  filepath.Join("tools", "gh_to_doc", "marked.rules.yaml"),
 			files: map[string]string{
 				"docs/api.md":   "# API\n\nAPI usage.",
 				"docs/guide.md": "# Guide\n\nGetting started guide.",
@@ -99,7 +93,6 @@ func TestDocCommandGitHubExtraction(t *testing.T) {
 			reference:  "main",
 			rootPath:   "docs",
 			mode:       "full",
-			rulesPath:  filepath.Join("tools", "gh_to_doc", "beercss.rules.yaml"),
 			files: map[string]string{
 				"docs/components.md": "# Components\n\nComponent overview.",
 				"docs/layouts.md":    "# Layouts\n\nLayout overview.",
@@ -129,9 +122,6 @@ func TestDocCommandGitHubExtraction(t *testing.T) {
 			}
 			if testCase.reference != "" {
 				arguments = append(arguments, "--ref", testCase.reference)
-			}
-			if testCase.rulesPath != "" {
-				arguments = append(arguments, "--rules", filepath.Join(moduleRoot, testCase.rulesPath))
 			}
 
 			output := runCommand(t, binary, arguments, workingDirectory)

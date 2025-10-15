@@ -163,7 +163,7 @@ ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 
 Retrieve GitHub documentation for a project section:
 
 ```shell
-ctx doc --repo-url https://github.com/jspreadsheet/ce/tree/main/docs/jspreadsheet --rules tools/gh_to_doc/jspreadsheet.rules.yaml --doc full
+ctx doc --repo-url https://github.com/jspreadsheet/ce/tree/main/docs/jspreadsheet --doc full
 ```
 
 ### MCP Server Mode
