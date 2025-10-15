@@ -201,8 +201,8 @@ func assertCapabilitiesPayload(t *testing.T, address string) {
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode capabilities: %v", err)
 	}
-	if len(payload.Capabilities) != 3 {
-		t.Fatalf("expected 3 capabilities, got %d", len(payload.Capabilities))
+	if len(payload.Capabilities) != 4 {
+		t.Fatalf("expected 4 capabilities, got %d", len(payload.Capabilities))
 	}
 	lookup := map[string]string{}
 	for _, capability := range payload.Capabilities {
@@ -212,6 +212,7 @@ func assertCapabilitiesPayload(t *testing.T, address string) {
 		"tree":      "Display directory tree as JSON.",
 		"content":   "Show file contents as JSON.",
 		"callchain": "Analyze Go/Python/JavaScript call chains as JSON.",
+		"doc":       "Retrieve GitHub documentation as Markdown.",
 	}
 	for name, prefix := range expected {
 		description, ok := lookup[name]
@@ -257,7 +258,7 @@ func assertContentCommandOutput(t *testing.T, address, projectDir string) {
 	t.Helper()
 	client := http.Client{Timeout: 2 * time.Second}
 	escaped := strings.ReplaceAll(projectDir, `"`, `\"`)
-	payload := bytes.NewBufferString(`{"paths":["` + escaped + `"],"documentation":true}`)
+	payload := bytes.NewBufferString(`{"paths":["` + escaped + `"],"documentation":"relevant"}`)
 	request, err := http.NewRequest(http.MethodPost, "http://"+address+"/commands/content", payload)
 	if err != nil {
 		t.Fatalf("content request: %v", err)

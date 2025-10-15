@@ -1,8 +1,9 @@
 # Plan
 
-## CT-13 MCP Server Execution Support
-- [x] Introduce a command executor registry and `/commands/<name>` endpoint so MCP clients can invoke tree/content/callchain remotely with structured responses.
-- [x] Reuse existing CLI runners through executor adapters that normalize flags, capture stdout/stderr buffers, and honor documentation/token settings.
-- [x] Add server-level unit tests for successful execution, missing commands, and bubbled status codes.
-- [x] Add CLI-level end-to-end tests covering documentation retrieval for Go/JS/Python files in directories outside the current repository.
-- [x] Update README with MCP invocation examples, including enabling documentation in HTTP requests.
+## CT-16 GitHub Documentation Retrieval
+- [x] internal/docs: Promote the GitHub scraping logic into an injectable package and extend the documentation collector to support `relevant` (local) vs `full` (local + remote) modes.
+- [x] internal/commands/doc.go, internal/cli/cli.go: Add the `doc`/`d` command, convert `--doc` into an enumerated flag, and wire remote documentation fetching with clipboard and configuration defaults.
+- [x] internal/types/types.go, internal/config/app_config.go: Introduce documentation mode constants, update configuration schemas, and validate allowed values.
+- [x] internal/services/mcp/server.go, internal/cli/mcp_executor.go, internal/cli/mcp_test.go: Advertise the new command, expose mode-aware parameters, and adapt MCP execution paths.
+- [x] tests/ctx_test.go: Add integration coverage using stubbed GitHub responses for jspreadsheet, marked.js, and beer.css targets to prove full extraction.
+- [x] README.md, NOTES.md: Document the new workflow, describe documentation modes, and mark CT-16 as complete.

@@ -93,7 +93,7 @@ func TestRunTreeRawStreamingOutputsSummaryAfterFiles(t *testing.T) {
 			true,
 			false,
 			types.FormatRaw,
-			false,
+			types.DocumentationModeDisabled,
 			true,
 			false,
 			treeStubCounter{},
@@ -162,7 +162,7 @@ func TestRunContentRawStreamingStreamsBeforeSummary(t *testing.T) {
 			true,
 			false,
 			types.FormatRaw,
-			false,
+			types.DocumentationModeDisabled,
 			true,
 			true,
 			treeStubCounter{},
@@ -234,7 +234,7 @@ func TestRunToolCopiesOutputToClipboard(t *testing.T) {
 				false,
 				defaultCallChainDepth,
 				types.FormatJSON,
-				false,
+				types.DocumentationModeDisabled,
 				false,
 				true,
 				tokenOptions{},
@@ -268,14 +268,14 @@ func TestApplyStreamConfigurationUsesDefaults(t *testing.T) {
 	var pathConfiguration pathOptions
 	format := types.FormatJSON
 	summaryEnabled := true
-	documentationEnabled := false
+	documentationMode := types.DocumentationModeDisabled
 	tokens := tokenOptions{model: "initial"}
 	includeContent := false
 
 	command := &cobra.Command{Use: "test"}
 	command.Flags().StringVar(&format, formatFlagName, format, "")
 	command.Flags().BoolVar(&summaryEnabled, summaryFlagName, summaryEnabled, "")
-	command.Flags().BoolVar(&documentationEnabled, documentationFlagName, documentationEnabled, "")
+	command.Flags().StringVar(&documentationMode, documentationFlagName, documentationMode, "")
 	command.Flags().BoolVar(&tokens.enabled, tokensFlagName, tokens.enabled, "")
 	command.Flags().StringVar(&tokens.model, modelFlagName, tokens.model, "")
 	command.Flags().StringArrayVarP(&pathConfiguration.exclusionPatterns, exclusionFlagName, exclusionFlagName, pathConfiguration.exclusionPatterns, "")
@@ -301,7 +301,7 @@ func TestApplyStreamConfigurationUsesDefaults(t *testing.T) {
 		},
 	}
 
-	applyStreamConfiguration(command, configuration, &pathConfiguration, &format, &documentationEnabled, &summaryEnabled, &includeContent, &tokens)
+	applyStreamConfiguration(command, configuration, &pathConfiguration, &format, &documentationMode, &summaryEnabled, &includeContent, &tokens)
 
 	if format != types.FormatXML {
 		t.Fatalf("expected format %s, got %s", types.FormatXML, format)
@@ -309,8 +309,8 @@ func TestApplyStreamConfigurationUsesDefaults(t *testing.T) {
 	if summaryEnabled {
 		t.Fatalf("expected summary to be disabled")
 	}
-	if !documentationEnabled {
-		t.Fatalf("expected documentation to be enabled")
+	if documentationMode != types.DocumentationModeRelevant {
+		t.Fatalf("expected documentation mode relevant, got %s", documentationMode)
 	}
 	if !includeContent {
 		t.Fatalf("expected includeContent to be enabled")
@@ -344,14 +344,14 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 	}
 	format := "cli"
 	summaryEnabled := true
-	documentationEnabled := true
+	documentationMode := types.DocumentationModeFull
 	tokens := tokenOptions{enabled: true, model: "cli"}
 	includeContent := true
 
 	command := &cobra.Command{Use: "test"}
 	command.Flags().StringVar(&format, formatFlagName, format, "")
 	command.Flags().BoolVar(&summaryEnabled, summaryFlagName, summaryEnabled, "")
-	command.Flags().BoolVar(&documentationEnabled, documentationFlagName, documentationEnabled, "")
+	command.Flags().StringVar(&documentationMode, documentationFlagName, documentationMode, "")
 	command.Flags().BoolVar(&tokens.enabled, tokensFlagName, tokens.enabled, "")
 	command.Flags().StringVar(&tokens.model, modelFlagName, tokens.model, "")
 	command.Flags().StringArrayVarP(&pathConfiguration.exclusionPatterns, exclusionFlagName, exclusionFlagName, pathConfiguration.exclusionPatterns, "")
@@ -367,7 +367,7 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 	if err := command.Flags().Set(summaryFlagName, "true"); err != nil {
 		t.Fatalf("set summary flag: %v", err)
 	}
-	if err := command.Flags().Set(documentationFlagName, "true"); err != nil {
+	if err := command.Flags().Set(documentationFlagName, types.DocumentationModeFull); err != nil {
 		t.Fatalf("set doc flag: %v", err)
 	}
 	if err := command.Flags().Set(tokensFlagName, "true"); err != nil {
@@ -409,7 +409,7 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 		},
 	}
 
-	applyStreamConfiguration(command, configuration, &pathConfiguration, &format, &documentationEnabled, &summaryEnabled, &includeContent, &tokens)
+	applyStreamConfiguration(command, configuration, &pathConfiguration, &format, &documentationMode, &summaryEnabled, &includeContent, &tokens)
 
 	if format != "cli" {
 		t.Fatalf("expected format to remain cli, got %s", format)
@@ -417,8 +417,8 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 	if !summaryEnabled {
 		t.Fatalf("expected summary to remain true")
 	}
-	if !documentationEnabled {
-		t.Fatalf("expected documentation to remain true")
+	if documentationMode != types.DocumentationModeFull {
+		t.Fatalf("expected documentation mode to remain full, got %s", documentationMode)
 	}
 	if !includeContent {
 		t.Fatalf("expected includeContent to remain true")
@@ -445,12 +445,12 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 
 func TestApplyCallChainConfigurationUsesDefaults(t *testing.T) {
 	format := types.FormatJSON
-	documentationEnabled := false
+	documentationMode := types.DocumentationModeDisabled
 	depth := defaultCallChainDepth
 
 	command := &cobra.Command{Use: "callchain"}
 	command.Flags().StringVar(&format, formatFlagName, format, "")
-	command.Flags().BoolVar(&documentationEnabled, documentationFlagName, documentationEnabled, "")
+	command.Flags().StringVar(&documentationMode, documentationFlagName, documentationMode, "")
 	command.Flags().IntVar(&depth, callChainDepthFlagName, depth, "")
 
 	configuration := config.CallChainConfiguration{
@@ -459,7 +459,7 @@ func TestApplyCallChainConfigurationUsesDefaults(t *testing.T) {
 		Documentation: boolPtr(true),
 	}
 
-	applyCallChainConfiguration(command, configuration, &format, &depth, &documentationEnabled)
+	applyCallChainConfiguration(command, configuration, &format, &depth, &documentationMode)
 
 	if format != types.FormatXML {
 		t.Fatalf("expected format to change to xml")
@@ -467,7 +467,7 @@ func TestApplyCallChainConfigurationUsesDefaults(t *testing.T) {
 	if depth != 2 {
 		t.Fatalf("expected depth to be updated to 2")
 	}
-	if !documentationEnabled {
-		t.Fatalf("expected documentation to be enabled")
+	if documentationMode != types.DocumentationModeRelevant {
+		t.Fatalf("expected documentation mode relevant, got %s", documentationMode)
 	}
 }
