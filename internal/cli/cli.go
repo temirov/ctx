@@ -124,6 +124,7 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	docHeaderTemplate   = "## %s\n\n"
 	docSectionSeparator = "\n\n"
 	githubTreeSegment   = "tree"
+	githubBlobSegment   = "blob"
 
 	callChainDepthFlagName          = "depth"
 	unsupportedCommandMessage       = "unsupported command"
@@ -1117,12 +1118,16 @@ func parseGitHubRepositoryURL(raw string) (repositoryCoordinates, error) {
 		Owner:      segments[0],
 		Repository: segments[1],
 	}
-	if len(segments) >= 4 && segments[2] == githubTreeSegment {
-		coords.Reference = segments[3]
-		if len(segments) > 4 {
-			coords.RootPath = strings.Join(segments[4:], "/")
+	if len(segments) >= 4 {
+		switch strings.ToLower(segments[2]) {
+		case githubTreeSegment, githubBlobSegment:
+			coords.Reference = segments[3]
+			if len(segments) > 4 {
+				coords.RootPath = strings.Join(segments[4:], "/")
+			}
 		}
-	} else if len(segments) > 2 {
+	}
+	if coords.Reference == "" && len(segments) > 2 {
 		coords.RootPath = strings.Join(segments[2:], "/")
 	}
 	if coords.RootPath == "" {
