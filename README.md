@@ -41,6 +41,9 @@ Install and try ctx's core features: directory trees, file contents with optiona
   commands.
 - **Call Chain Analysis:** Analyzes the call graph for a specified function using the `callchain` command. Provide the
   fully qualified (or suffix) function name as the sole argument. The traversal depth is configurable with `--depth`.
+- **GitHub Documentation Command (`doc`, `d`):** Retrieves and renders documentation stored in GitHub repositories.
+  Combine repository coordinates or a GitHub URL with optional rules to clean remote content, and use `--doc` to select
+  `relevant` or `full` extraction.
 - **Embedded Documentation (`--doc`):** When the `--doc` flag is used with the `content` or `callchain` command,
   ctx embeds documentation for imported third-party packages and referenced functions in the output (*json*, *xml*, and
   *raw* formats).
@@ -126,7 +129,7 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--summary`           | tree, content      | Print total file count and combined size for results (enabled by default, set to `false` to disable). |
 | `--tokens`            | tree, content      | Estimate token counts for files and surface totals in summaries. |
 | `--model <name>`      | tree, content      | Select tokenizer model (default `gpt-4o`). |
-| `--doc`               | content, callchain | Embed documentation for referenced external packages and symbols into the output. |
+| `--doc`               | content, callchain, doc | Select documentation mode (`disabled`, `relevant`, `full`). `relevant` embeds local symbol docs; `full` also incorporates GitHub content. |
 | `--depth <number>`    | callchain          | Limit call graph traversal depth (default `1`). |
 | `--version`           | all commands       | Print ctx version and exit. |
 | `--clipboard`         | tree, content, callchain | Copy command output to the system clipboard after rendering completes. |
@@ -155,6 +158,12 @@ Analyze the call chain for a function in XML including docs:
 
 ```shell
 ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 --doc --format xml
+```
+
+Retrieve GitHub documentation for a project section:
+
+```shell
+ctx doc --repo-url https://github.com/jspreadsheet/ce/tree/main/docs/jspreadsheet --rules tools/gh_to_doc/jspreadsheet.rules.yaml --doc full
 ```
 
 ### MCP Server Mode

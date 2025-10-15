@@ -25,13 +25,14 @@ type ApplicationConfiguration struct {
 
 // StreamCommandConfiguration defines options shared by tree and content commands.
 type StreamCommandConfiguration struct {
-	Format         string             `mapstructure:"format"`
-	Summary        *bool              `mapstructure:"summary"`
-	Documentation  *bool              `mapstructure:"documentation"`
-	IncludeContent *bool              `mapstructure:"content"`
-	Tokens         TokenConfiguration `mapstructure:"tokens"`
-	Paths          PathConfiguration  `mapstructure:"paths"`
-	Clipboard      *bool              `mapstructure:"clipboard"`
+	Format            string             `mapstructure:"format"`
+	Summary           *bool              `mapstructure:"summary"`
+	Documentation     *bool              `mapstructure:"documentation"`
+	DocumentationMode string             `mapstructure:"documentation_mode"`
+	IncludeContent    *bool              `mapstructure:"content"`
+	Tokens            TokenConfiguration `mapstructure:"tokens"`
+	Paths             PathConfiguration  `mapstructure:"paths"`
+	Clipboard         *bool              `mapstructure:"clipboard"`
 }
 
 // TokenConfiguration controls token counting defaults.
@@ -50,10 +51,11 @@ type PathConfiguration struct {
 
 // CallChainConfiguration defines defaults for the callchain command.
 type CallChainConfiguration struct {
-	Format        string `mapstructure:"format"`
-	Depth         *int   `mapstructure:"depth"`
-	Documentation *bool  `mapstructure:"documentation"`
-	Clipboard     *bool  `mapstructure:"clipboard"`
+	Format            string `mapstructure:"format"`
+	Depth             *int   `mapstructure:"depth"`
+	Documentation     *bool  `mapstructure:"documentation"`
+	DocumentationMode string `mapstructure:"documentation_mode"`
+	Clipboard         *bool  `mapstructure:"clipboard"`
 }
 
 // LoadApplicationConfiguration loads configuration from global and local files.
@@ -162,6 +164,12 @@ func (config StreamCommandConfiguration) merge(override StreamCommandConfigurati
 	}
 	if override.Documentation != nil {
 		result.Documentation = cloneBool(override.Documentation)
+	}
+	if override.DocumentationMode != "" {
+		result.DocumentationMode = override.DocumentationMode
+	}
+	if override.DocumentationMode != "" {
+		result.DocumentationMode = override.DocumentationMode
 	}
 	if override.IncludeContent != nil {
 		result.IncludeContent = cloneBool(override.IncludeContent)

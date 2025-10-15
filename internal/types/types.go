@@ -11,10 +11,15 @@ const (
 	CommandTree      = "tree"
 	CommandContent   = "content"
 	CommandCallChain = "callchain"
+	CommandDoc       = "doc"
 
 	FormatRaw  = "raw"
 	FormatJSON = "json"
 	FormatXML  = "xml"
+
+	DocumentationModeDisabled = "disabled"
+	DocumentationModeRelevant = "relevant"
+	DocumentationModeFull     = "full"
 )
 
 // ValidatedPath is an absolute input path that already passed existence checks.

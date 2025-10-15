@@ -1,0 +1,44 @@
+name: "Jspreadsheet CE docs cleanup"
+repo_url: "https://github.com/jspreadsheet/ce/tree/master/docs/jspreadsheet"
+path_root: "docs/jspreadsheet"
+
+skip_dir_pattern: "(?i)^(v\\d+|version[-_ ]?\\d+|legacy|old|archive|archived)$"
+include_exts: [".md", ".mdx", ".html", ".htm"]
+
+generic_heading_regex: "(?i)^(element|overview|introduction|readme|guide|documentation)$"
+
+drop_line_regexps:
+  - "(?i)^\\s*\\[?edit (this )?page\\]?\\(.*github.*\\)\\s*$"
+  - "(?i)^back to top$"
+  - "(?i)^\\s*copyright\\b.*$"
+  - "(?i)^\\s*license\\b.*$"
+  - "(?i)^\\s*subscribe to our newsletter.*$"
+  - "(?i)^\\s*products\\s*$"
+  - "(?i)^\\s*enterprise extensions\\s*$"
+  - "(?i)^\\s*—\\s*$"
+  - "(?i)^\\s*##\\s*go to\\s*$"
+
+toc:
+  max_lines: 40
+  min_link_density: 0.40
+
+link_farms:
+  top_probe_lines: 140
+  bottom_probe_lines: 160
+  min_links_in_block: 4
+  min_density: 0.45
+
+shingles:
+  size_lines: 6
+  quorum_fraction: 0.60
+
+content:
+  strip_leading_h1: true
+  bump_headings_by: 1
+  rewrite_md_links: true
+
+post:
+  dedupe_titles: true
+  common_head_tail_quorum: 0.70
+  common_head_tail_probe_lines: 80
+

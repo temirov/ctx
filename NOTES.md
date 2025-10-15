@@ -146,7 +146,7 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
   - [X] [CT-11] Add an MCP server and advertise program capabilities. use --mcp flag to run the program as an MCP server
   - [X] [CT-13] Extend MCP mode so HTTP clients can execute tree/content/callchain with documentation support, including repositories outside the working directory.
   - [X] [CT-15] Ensure MCP callchain analyzers and releases run with CGO enabled across CI and packaging.
-  - [ ] [CT-16] Add an ability to retrieve package documentation from the GitHub.
+  - [X] [CT-16] Add an ability to retrieve package documentation from the GitHub.
       1. Analyze the code of @tools/gh_to_doc
       2. Add integration tests for verification. Use the following targets for tests
           2a. [jspreadsheet documentation](https://github.com/jspreadsheet/ce/blob/master/docs/jspreadsheet/docs/editors.md)
@@ -159,6 +159,8 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
         6a. Full test coverage
         6b. MCP advertisement
         6c. Readme documentation
+      - Implemented `internal/docs/githubdoc` fetcher, new `doc` CLI command with GitHub integration, MCP wiring, and regression tests for jspreadsheet, marked, and beercss documentation flows.
+      7. Disreagrd the @tools/gh_to_doc/ code after using it. it's a throw away code brough here as a matter of example
 
 ### Improvements
 

@@ -1,0 +1,55 @@
+# Human-friendly name for logs
+name: "Beer.css docs cleanup"
+
+# The canonical docs URL (used for sanity checks / your own bookkeeping)
+repo_url: "https://github.com/beercss/beercss/tree/main/docs"
+
+# Optional path hints (useful if you later read one file with many repos)
+path_root: "docs"
+
+# Which directories to skip while walking (overrides CLI if present)
+skip_dir_pattern: "(?i)^(v\\d+|version[-_ ]?\\d+|legacy|old|archive|archived)$"
+
+# File extensions to include (overrides CLI if present)
+include_exts: [".md", ".mdx", ".html", ".htm"]
+
+# Headings that are too generic for TOC/title purposes
+generic_heading_regex: "(?i)^(element|overview|introduction|readme|guide|documentation)$"
+
+# Drop entire lines if they match any of these regexes (case-insensitive supported)
+drop_line_regexps:
+  - "(?i)^\\s*\\[?edit (this )?page\\]?\\(.*github.*\\)\\s*$"
+  - "(?i)^back to top$"
+  - "(?i)^\\s*copyright\\b.*$"
+  - "(?i)^\\s*license\\b.*$"
+  - "(?i)^\\s*—\\s*$"
+  - "(?i)^\\s*##\\s*go to\\s*$"
+
+# Remove a link-dense “TOC” block at the very top
+toc:
+  max_lines: 50
+  min_link_density: 0.45
+
+# Remove big link-farm nav blocks near top/bottom
+link_farms:
+  top_probe_lines: 160
+  bottom_probe_lines: 180
+  min_links_in_block: 5
+  min_density: 0.50
+
+# Find repeated boilerplate chunks across files and drop them
+shingles:
+  size_lines: 6
+  quorum_fraction: 0.60
+
+# Per-file content transforms
+content:
+  strip_leading_h1: true
+  bump_headings_by: 1      # ensure each file nests under its section
+  rewrite_md_links: true   # make relative links absolute to GitHub blob
+
+# Post-collection behaviors
+post:
+  dedupe_titles: true
+  common_head_tail_quorum: 0.70
+  common_head_tail_probe_lines: 80
