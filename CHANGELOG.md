@@ -1,5 +1,33 @@
 # Changelog
 
+# Changelog
+
+## [v0.2.0] - 2025-10-18
+
+### Highlights
+
+* **GitHub-backed documentation retrieval via `ctx doc`.** A dedicated command now walks repository directories through the GitHub Contents API, applies rule-driven cleanup, and renders curated documentation in raw, JSON, or XML formats with clipboard support. (feature/CT-16-github-docs)
+* **Human-readable CLI diagnostics.** Fatal errors surface as plain text alongside richer flag guidance, keeping workflows approachable for operators and MCP clients alike. (bugfix/CT-doc-help)
+
+### Features ✨
+
+* Added `internal/docs/githubdoc` with recursive fetchers, rule set loaders, and sorting to deliver deterministic documentation bundles for remote repositories. (feature/CT-16-github-docs)
+* Introduced the `doc`/`d` Cobra command with flags for owner, repo, ref, rules, documentation mode, and clipboard usage, seamlessly reusing configuration defaults. (feature/CT-16-github-docs)
+
+### Improvements ⚙️
+
+* Removed the deprecated static documentation rule scaffolding in favor of runtime rule evaluation sourced from local files. (feature/CT-16-github-docs)
+* Redesigned `ctx doc` error handling and help text to spell out required coordinates and hint at `--repo-url` shortcuts. (bugfix/CT-doc-help)
+* Switched zap to console encoding without metadata noise so `application execution failed` lines print as a single human-readable sentence. (bugfix/CT-doc-help)
+
+### Docs 📚
+
+* Documented doc command parameters in README, outlining required coordinates, optional flags, and clipboard behavior. (bugfix/CT-doc-help)
+
+### Testing ✅
+
+* Added integration tests that spin up a GitHub mock server and verify `ctx doc` across full and relevant modes for jspreadsheet, marked.js, and beer.css fixtures. (feature/CT-16-github-docs)
+
 ## [v0.1.2] - 2025-10-18
 
 ### Highlights
