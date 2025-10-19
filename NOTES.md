@@ -159,7 +159,10 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
         6b. MCP advertisement
         6c. Readme documentation
       - Implemented `internal/docs/githubdoc` fetcher, new `doc` CLI command with GitHub integration, MCP wiring, and regression tests for jspreadsheet, marked, and beercss documentation flows.
-  - [ ] [CT-18] Intelligent document retrieval. Add the best efforts for document retrieval from the github repos. Make educated guesses and develop a heuristics to identify if a package is on github and has documentation under `tree/master/docs`. Implement under --docs-attempt flag. Expected behaviour is to identify the versions of the 3rd party packages and look up their documentation on github and retrieve it intelligently. This is for in-code dependencies only. The implementation of the retrieval shall be shared between the `doc` flag and  `--docs-attempt`
+  - [X] [CT-18] Intelligent document retrieval. Add the best efforts for document retrieval from the github repos. Make educated guesses and develop a heuristics to identify if a package is on github and has documentation under `tree/master/docs`. Implement under --docs-attempt flag. Expected behaviour is to identify the versions of the 3rd party packages and look up their documentation on github and retrieve it intelligently. This is for in-code dependencies only. The implementation of the retrieval shall be shared between the `doc` flag and  `--docs-attempt`
+    - Added a remote documentation attempt engine that parses `go.mod`, resolves GitHub coordinates, and reuses the GitHub fetcher to collect `docs/` content per module.
+    - `ctx content` and `ctx callchain` accept `--docs-attempt`, automatically upgrading to `--doc full` when unset and folding remote module docs into output alongside local symbol references.
+    - Integration coverage provisions a mocked GitHub API to prove `--docs-attempt` surfaces third-party documentation without regressing existing flows.
 
 ### Improvements
 
@@ -171,6 +174,7 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
   - [X] [CT-09] Document copy to clipboard functionality in the README.md
   - [X] [CT-12] Document MCP usage with examples
     - README now walks through starting `ctx --mcp`, checking the health endpoint, and querying `/capabilities` with `curl`.
+  - [ ] [CT-19] Replace differetn flags for the `doc` command with a single flag `--path`. Allow different formats: urls, owner/repo and owner/repo/path under path. No regressions so all currently accepted formats shall be detected and accepted under --path flag
 
 ### Portability
 
