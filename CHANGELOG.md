@@ -29,6 +29,10 @@
 
 * Added integration tests that spin up a GitHub mock server and verify `ctx doc` across full and relevant modes for jspreadsheet, marked.js, and beer.css fixtures. (feature/CT-16-github-docs)
 
+### Maintenance 🛠️
+
+* Removed `PLAN.md` from version control and added a guard test that fails when the file becomes tracked again. (maintenance/CT-20-plan-guard)
+
 ## [v0.1.2] - 2025-10-18
 
 ### Highlights

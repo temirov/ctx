@@ -176,6 +176,8 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
     - README now walks through starting `ctx --mcp`, checking the health endpoint, and querying `/capabilities` with `curl`.
   - [X] [CT-19] Replace differetn flags for the `doc` command with a single flag `--path`. Allow different formats: urls, owner/repo and owner/repo/path under path. No regressions so all currently accepted formats shall be detected and accepted under --path flag
     - `ctx doc` now accepts `--path` inputs in `owner/repo`, `owner/repo/path`, and full GitHub URL forms, with `--ref` continuing to override repository references and README updated accordingly.
+  - [X] [CT-20] Remove PLAN.md from the git tree. PLAN.md is an ephemeral file that changes from issue to ssiue, no need to track it
+    - `PLAN.md` is gitignored, a guard test fails if it becomes tracked, and the file was deleted from the repository.
 
 ### Portability
 
