@@ -17,8 +17,9 @@
 ### Improvements ⚙️
 
 * Removed the deprecated static documentation rule scaffolding in favor of runtime rule evaluation sourced from local files. (feature/CT-16-github-docs)
-* Redesigned `ctx doc` error handling and help text to spell out required coordinates and hint at `--repo-url` shortcuts. (bugfix/CT-doc-help)
+* Redesigned `ctx doc` error handling and help text to spell out unified `--path` coordinates and clipboard options. (bugfix/CT-doc-help)
 * Switched zap to console encoding without metadata noise so `application execution failed` lines print as a single human-readable sentence. (bugfix/CT-doc-help)
+* Consolidated doc command coordinates behind a single `--path` flag that accepts `owner/repo[/path]` specs or GitHub URLs while preserving explicit `--ref` overrides. (maintenance/CT-19-doc-path)
 
 ### Docs 📚
 

@@ -206,7 +206,16 @@ func executeDocCommand(commandContext context.Context, request mcp.CommandReques
 		}
 		mode = resolvedMode
 	}
-	coordinates, coordinatesErr := resolveRepositoryCoordinates(payload.RepositoryURL, payload.Owner, payload.Repository, payload.Reference, payload.Path)
+	pathSpec := payload.Path
+	rootPath := ""
+	if payload.Owner != "" || payload.Repository != "" {
+		rootPath = payload.Path
+		pathSpec = payload.RepositoryURL
+	}
+	if pathSpec == "" {
+		pathSpec = payload.RepositoryURL
+	}
+	coordinates, coordinatesErr := resolveRepositoryCoordinates(pathSpec, payload.Owner, payload.Repository, payload.Reference, rootPath)
 	if coordinatesErr != nil {
 		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("resolve repository: %w", coordinatesErr))
 	}

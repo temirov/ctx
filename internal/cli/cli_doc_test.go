@@ -96,3 +96,35 @@ func TestParseGitHubRepositoryURL(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveRepositoryCoordinatesAcceptsUnifiedPath(t *testing.T) {
+	result, err := resolveRepositoryCoordinates("jspreadsheet/ce/docs/jspreadsheet", "", "", "", "")
+	if err != nil {
+		t.Fatalf("expected unified path to resolve without error, got %v", err)
+	}
+	expected := repositoryCoordinates{
+		Owner:      "jspreadsheet",
+		Repository: "ce",
+		Reference:  "",
+		RootPath:   "docs/jspreadsheet",
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Fatalf("expected %+v, got %+v", expected, result)
+	}
+}
+
+func TestResolveRepositoryCoordinatesDefaultsRootForOwnerRepoFormat(t *testing.T) {
+	result, err := resolveRepositoryCoordinates("example/documentation", "", "", "", "")
+	if err != nil {
+		t.Fatalf("expected owner/repo format to resolve without error, got %v", err)
+	}
+	expected := repositoryCoordinates{
+		Owner:      "example",
+		Repository: "documentation",
+		Reference:  "",
+		RootPath:   ".",
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Fatalf("expected %+v, got %+v", expected, result)
+	}
+}
