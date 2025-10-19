@@ -84,8 +84,8 @@ func normalizeCopyFlagArguments(arguments []string) []string {
 				index += 2
 				continue
 			}
-			normalized = append(normalized, fmt.Sprintf("--%s=%s", copyFlagName, nextValue))
-			index += 2
+			normalized = append(normalized, fmt.Sprintf("--%s=true", copyFlagName))
+			index++
 			continue
 		}
 		normalized = append(normalized, current)
