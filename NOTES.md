@@ -159,6 +159,7 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
         6b. MCP advertisement
         6c. Readme documentation
       - Implemented `internal/docs/githubdoc` fetcher, new `doc` CLI command with GitHub integration, MCP wiring, and regression tests for jspreadsheet, marked, and beercss documentation flows.
+  - [ ] [CT-18] Intelligent document retrieval. Add the best efforts for document retrieval from the github repos. Make educated guesses and develop a heuristics to identify if a package is on github and has documentation under `tree/master/docs`. Implement under --docs-attempt flag. Expected behaviour is to identify the versions of the 3rd party packages and look up their documentation on github and retrieve it intelligently. This is for in-code dependencies only. The implementation of the retrieval shall be shared between the `doc` flag and  `--docs-attempt`
 
 ### Improvements
 
