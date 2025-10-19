@@ -58,6 +58,13 @@ func TestRegisterBooleanFlagParsesValues(t *testing.T) {
 			expected:     true,
 			expectError:  false,
 		},
+		{
+			name:         "preserves_arguments_after_terminator",
+			defaultValue: false,
+			arguments:    []string{"--", "--feature"},
+			expected:     false,
+			expectError:  false,
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -84,6 +91,12 @@ func TestRegisterBooleanFlagParsesValues(t *testing.T) {
 			}
 			if flagValue != testCase.expected {
 				t.Fatalf("expected %t, got %t", testCase.expected, flagValue)
+			}
+			if testCase.name == "preserves_arguments_after_terminator" {
+				remaining := command.Flags().Args()
+				if len(remaining) != 1 || remaining[0] != "--feature" {
+					t.Fatalf("expected positional args [--feature], got %v", remaining)
+				}
 			}
 		})
 	}

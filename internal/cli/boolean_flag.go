@@ -92,6 +92,10 @@ func normalizeBooleanFlagArguments(command *cobra.Command, arguments []string) [
 	index := 0
 	for index < len(arguments) {
 		current := arguments[index]
+		if current == "--" {
+			normalized = append(normalized, arguments[index:]...)
+			break
+		}
 		if strings.HasPrefix(current, "--") && !strings.Contains(current, "=") {
 			flagName := strings.TrimPrefix(current, "--")
 			if _, exists := booleanFlags[flagName]; exists && index+1 < len(arguments) {
