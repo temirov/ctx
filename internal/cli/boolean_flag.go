@@ -91,22 +91,26 @@ func normalizeBooleanFlagArguments(command *cobra.Command, arguments []string) [
 	normalized := make([]string, 0, len(arguments))
 	index := 0
 	for index < len(arguments) {
-		current := arguments[index]
-		if strings.HasPrefix(current, "--") && !strings.Contains(current, "=") {
-			flagName := strings.TrimPrefix(current, "--")
+		currentArgument := arguments[index]
+		if currentArgument == "--" {
+			normalized = append(normalized, arguments[index:]...)
+			break
+		}
+		if strings.HasPrefix(currentArgument, "--") && !strings.Contains(currentArgument, "=") {
+			flagName := strings.TrimPrefix(currentArgument, "--")
 			if _, exists := booleanFlags[flagName]; exists && index+1 < len(arguments) {
-				next := arguments[index+1]
-				if !strings.HasPrefix(next, "-") {
-					literal := strings.ToLower(strings.TrimSpace(next))
+				nextArgument := arguments[index+1]
+				if !strings.HasPrefix(nextArgument, "-") {
+					literal := strings.ToLower(strings.TrimSpace(nextArgument))
 					if _, valid := booleanFlagLiterals[literal]; valid {
-						normalized = append(normalized, fmt.Sprintf("--%s=%s", flagName, next))
+						normalized = append(normalized, fmt.Sprintf("--%s=%s", flagName, nextArgument))
 						index += 2
 						continue
 					}
 				}
 			}
 		}
-		normalized = append(normalized, current)
+		normalized = append(normalized, currentArgument)
 		index++
 	}
 	return normalized
