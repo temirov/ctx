@@ -11,7 +11,22 @@ import (
 	"testing"
 )
 
-const docCommandName = "doc"
+const (
+	docCommandName                   = "doc"
+	docHelpMissingCoordinatesSnippet = "doc command requires repository coordinates"
+	docHelpRepositoryFlagsSnippet    = "Provide --owner, --repo, and --path or supply --repo-url."
+	docHelpUsageReminderSnippet      = `Run "ctx doc --help" for complete flag help.`
+	docHelpRequiredSectionSnippet    = "Required parameters"
+	docHelpOptionalSectionSnippet    = "Optional parameters"
+	docHelpRequiredOwnerSnippet      = "--owner string"
+	docHelpRequiredRepositorySnippet = "--repo string"
+	docHelpRequiredPathSnippet       = "--path string"
+	docHelpOptionalUrlSnippet        = "--repo-url string"
+	docHelpOptionalReferenceSnippet  = "--ref string"
+	docHelpOptionalRulesSnippet      = "--rules string"
+	docHelpOptionalClipboardSnippet  = "--clipboard"
+	docHelpOptionalDocModeSnippet    = "--doc string"
+)
 
 func TestDocCommandGitHubExtraction(t *testing.T) {
 	if testing.Short() {
@@ -139,6 +154,51 @@ func TestDocCommandGitHubExtraction(t *testing.T) {
 				t.Fatalf("navigation block should be removed\n%s", output)
 			}
 		})
+	}
+}
+
+func TestDocCommandMissingCoordinatesShowsGuidance(t *testing.T) {
+	binary := buildBinary(t)
+	workingDirectory := t.TempDir()
+	output := runCommandExpectError(t, binary, []string{docCommandName}, workingDirectory)
+	if !strings.Contains(output, docHelpMissingCoordinatesSnippet) {
+		t.Fatalf("expected output to contain %q\n%s", docHelpMissingCoordinatesSnippet, output)
+	}
+	if !strings.Contains(output, docHelpRepositoryFlagsSnippet) {
+		t.Fatalf("expected output to contain %q\n%s", docHelpRepositoryFlagsSnippet, output)
+	}
+	if !strings.Contains(output, docHelpUsageReminderSnippet) {
+		t.Fatalf("expected output to contain %q\n%s", docHelpUsageReminderSnippet, output)
+	}
+}
+
+func TestDocCommandHelpExplainsParameters(t *testing.T) {
+	binary := buildBinary(t)
+	workingDirectory := t.TempDir()
+	output := runCommand(t, binary, []string{docCommandName, "--help"}, workingDirectory)
+	requiredChecks := []string{
+		docHelpRequiredSectionSnippet,
+		docHelpRequiredOwnerSnippet,
+		docHelpRequiredRepositorySnippet,
+		docHelpRequiredPathSnippet,
+	}
+	for _, snippet := range requiredChecks {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected help output to contain %q\n%s", snippet, output)
+		}
+	}
+	optionalChecks := []string{
+		docHelpOptionalSectionSnippet,
+		docHelpOptionalUrlSnippet,
+		docHelpOptionalReferenceSnippet,
+		docHelpOptionalRulesSnippet,
+		docHelpOptionalClipboardSnippet,
+		docHelpOptionalDocModeSnippet,
+	}
+	for _, snippet := range optionalChecks {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected help output to contain %q\n%s", snippet, output)
+		}
 	}
 }
 
