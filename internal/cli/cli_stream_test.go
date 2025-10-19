@@ -276,15 +276,15 @@ func TestApplyStreamConfigurationUsesDefaults(t *testing.T) {
 
 	command := &cobra.Command{Use: "test"}
 	command.Flags().StringVar(&format, formatFlagName, format, "")
-	command.Flags().BoolVar(&summaryEnabled, summaryFlagName, summaryEnabled, "")
+	registerBooleanFlag(command.Flags(), &summaryEnabled, summaryFlagName, summaryEnabled, "")
 	command.Flags().StringVar(&documentationMode, documentationFlagName, documentationMode, "")
-	command.Flags().BoolVar(&tokens.enabled, tokensFlagName, tokens.enabled, "")
+	registerBooleanFlag(command.Flags(), &tokens.enabled, tokensFlagName, tokens.enabled, "")
 	command.Flags().StringVar(&tokens.model, modelFlagName, tokens.model, "")
 	command.Flags().StringArrayVarP(&pathConfiguration.exclusionPatterns, exclusionFlagName, exclusionFlagName, pathConfiguration.exclusionPatterns, "")
-	command.Flags().BoolVar(&pathConfiguration.disableGitignore, noGitignoreFlagName, pathConfiguration.disableGitignore, "")
-	command.Flags().BoolVar(&pathConfiguration.disableIgnoreFile, noIgnoreFlagName, pathConfiguration.disableIgnoreFile, "")
-	command.Flags().BoolVar(&pathConfiguration.includeGit, includeGitFlagName, pathConfiguration.includeGit, "")
-	command.Flags().BoolVar(&includeContent, contentFlagName, includeContent, "")
+	registerBooleanFlag(command.Flags(), &pathConfiguration.disableGitignore, noGitignoreFlagName, pathConfiguration.disableGitignore, "")
+	registerBooleanFlag(command.Flags(), &pathConfiguration.disableIgnoreFile, noIgnoreFlagName, pathConfiguration.disableIgnoreFile, "")
+	registerBooleanFlag(command.Flags(), &pathConfiguration.includeGit, includeGitFlagName, pathConfiguration.includeGit, "")
+	registerBooleanFlag(command.Flags(), &includeContent, contentFlagName, includeContent, "")
 	docsAttempt := false
 
 	configuration := config.StreamCommandConfiguration{
@@ -353,15 +353,15 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 
 	command := &cobra.Command{Use: "test"}
 	command.Flags().StringVar(&format, formatFlagName, format, "")
-	command.Flags().BoolVar(&summaryEnabled, summaryFlagName, summaryEnabled, "")
+	registerBooleanFlag(command.Flags(), &summaryEnabled, summaryFlagName, summaryEnabled, "")
 	command.Flags().StringVar(&documentationMode, documentationFlagName, documentationMode, "")
-	command.Flags().BoolVar(&tokens.enabled, tokensFlagName, tokens.enabled, "")
+	registerBooleanFlag(command.Flags(), &tokens.enabled, tokensFlagName, tokens.enabled, "")
 	command.Flags().StringVar(&tokens.model, modelFlagName, tokens.model, "")
 	command.Flags().StringArrayVarP(&pathConfiguration.exclusionPatterns, exclusionFlagName, exclusionFlagName, pathConfiguration.exclusionPatterns, "")
-	command.Flags().BoolVar(&pathConfiguration.disableGitignore, noGitignoreFlagName, pathConfiguration.disableGitignore, "")
-	command.Flags().BoolVar(&pathConfiguration.disableIgnoreFile, noIgnoreFlagName, pathConfiguration.disableIgnoreFile, "")
-	command.Flags().BoolVar(&pathConfiguration.includeGit, includeGitFlagName, pathConfiguration.includeGit, "")
-	command.Flags().BoolVar(&includeContent, contentFlagName, includeContent, "")
+	registerBooleanFlag(command.Flags(), &pathConfiguration.disableGitignore, noGitignoreFlagName, pathConfiguration.disableGitignore, "")
+	registerBooleanFlag(command.Flags(), &pathConfiguration.disableIgnoreFile, noIgnoreFlagName, pathConfiguration.disableIgnoreFile, "")
+	registerBooleanFlag(command.Flags(), &pathConfiguration.includeGit, includeGitFlagName, pathConfiguration.includeGit, "")
+	registerBooleanFlag(command.Flags(), &includeContent, contentFlagName, includeContent, "")
 	docsAttempt := false
 
 	// Simulate CLI overrides.

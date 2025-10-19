@@ -136,6 +136,8 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--copy`              | tree, content, callchain | Copy command output to the system clipboard after rendering completes. |
 | `--mcp`               | root command       | Run an HTTP server that publishes ctx capabilities for MCP clients. |
 
+Boolean flags accept any of `true`, `false`, `yes`, `no`, `on`, `off`, `1`, or `0` (case-insensitive), so commands such as `--summary no` or `--copy off` work consistently across the CLI.
+
 When `--copy` is active the command writes its output to the terminal
 and copies the same text into the system clipboard. Configure persistent clipboard behaviour by setting `copy: true` under the relevant command (`tree`, `content`, or `callchain`) in `config.yaml`. If clipboard integration
 is requested but not supported on the current platform, the command fails with

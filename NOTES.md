@@ -168,7 +168,8 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 
   - [X] [CT-08] Unify internal implementatiopn of the `t` and `c` commands as their only difference is the content of the files on the backend. make t an internal alis to c command with the flag --content false
   - [X] [CT-10] Change raw format to include graphic represwentation, similar to trre command of | and ├── characters to demonstrate the tree structure
-  - [ ] [CT-22] Unify and centralize the handling of boolean flags. Extend cobra or write our own package that allows to handle yes/no/true etc so that we dont have custom ahndling of boolean flags in multiple place. E.g. handling of --copy flag shall be a DSL instruction instead of current custom logic
+  - [X] [CT-22] Unify and centralize the handling of boolean flags. Extend cobra or write our own package that allows to handle yes/no/true etc so that we dont have custom ahndling of boolean flags in multiple place. E.g. handling of --copy flag shall be a DSL instruction instead of current custom logic
+    - Added a shared boolean flag registrar that accepts true/false, yes/no, on/off, and numeric literals, wiring every Cobra command through the helper to eliminate ad-hoc parsers.
 
 ### Maintenance
 
