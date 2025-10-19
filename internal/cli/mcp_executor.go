@@ -206,14 +206,15 @@ func executeDocCommand(commandContext context.Context, request mcp.CommandReques
 		}
 		mode = resolvedMode
 	}
-	pathSpec := payload.Path
+	trimmedPath := strings.TrimSpace(payload.Path)
+	pathSpec := payload.RepositoryURL
 	rootPath := ""
-	if payload.Owner != "" || payload.Repository != "" {
-		rootPath = payload.Path
-		pathSpec = payload.RepositoryURL
+	hasExplicitCoordinates := payload.Owner != "" || payload.Repository != ""
+	if trimmedPath != "" && (payload.RepositoryURL != "" || hasExplicitCoordinates) {
+		rootPath = trimmedPath
 	}
-	if pathSpec == "" {
-		pathSpec = payload.RepositoryURL
+	if pathSpec == "" && !hasExplicitCoordinates {
+		pathSpec = trimmedPath
 	}
 	coordinates, coordinatesErr := resolveRepositoryCoordinates(pathSpec, payload.Owner, payload.Repository, payload.Reference, rootPath)
 	if coordinatesErr != nil {
