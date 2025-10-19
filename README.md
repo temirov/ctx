@@ -133,11 +133,11 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--docs-attempt`      | content, callchain | When paired with `--doc full`, heuristically fetch documentation for imported GitHub modules. |
 | `--depth <number>`    | callchain          | Limit call graph traversal depth (default `1`). |
 | `--version`           | all commands       | Print ctx version and exit. |
-| `--clipboard`         | tree, content, callchain | Copy command output to the system clipboard after rendering completes. |
+| `--copy`              | tree, content, callchain | Copy command output to the system clipboard after rendering completes. |
 | `--mcp`               | root command       | Run an HTTP server that publishes ctx capabilities for MCP clients. |
 
-When `--clipboard` is active the command writes its output to the terminal
-and copies the same text into the system clipboard. If clipboard integration
+When `--copy` is active the command writes its output to the terminal
+and copies the same text into the system clipboard. Configure persistent clipboard behaviour by setting `copy: true` under the relevant command (`tree`, `content`, or `callchain`) in `config.yaml`. If clipboard integration
 is requested but not supported on the current platform, the command fails with
 an explanatory error.
 
@@ -172,7 +172,7 @@ ctx doc --path jspreadsheet/ce/docs/jspreadsheet --doc full
 `ctx doc` expects enough information to identify the GitHub documentation directory.
 
 - **Required:** Provide a single `--path` value using `owner/repo[/path]` coordinates or paste a `https://github.com/owner/repo/tree/...` URL. Supplying only `owner/repo` fetches documentation from the repository root.
-- **Optional:** `--ref` selects a branch, tag, or commit; `--rules` applies a cleanup rule set; `--doc` toggles the rendered documentation mode; `--clipboard` copies the rendered output. Combine these with configuration defaults as needed.
+- **Optional:** `--ref` selects a branch, tag, or commit; `--rules` applies a cleanup rule set; `--doc` toggles the rendered documentation mode; `--copy` copies the rendered output. Combine these with configuration defaults as needed.
 - **Heuristics:** Use `--docs-attempt` with `--doc full` on `content` or `callchain` to let ctx detect third-party Go module imports, infer GitHub repositories, and retrieve `docs/` content when available. The same GitHub fetcher powers both the doc command and docs attempts.
 
 Run `ctx doc --help` to review the command description, flag roles, and examples.

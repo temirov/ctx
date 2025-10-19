@@ -33,7 +33,8 @@ type StreamCommandConfiguration struct {
 	DocsAttempt       *bool              `mapstructure:"docs_attempt"`
 	Tokens            TokenConfiguration `mapstructure:"tokens"`
 	Paths             PathConfiguration  `mapstructure:"paths"`
-	Clipboard         *bool              `mapstructure:"clipboard"`
+	Copy              *bool              `mapstructure:"copy"`
+	LegacyClipboard   *bool              `mapstructure:"clipboard"`
 }
 
 // TokenConfiguration controls token counting defaults.
@@ -57,7 +58,8 @@ type CallChainConfiguration struct {
 	Documentation     *bool  `mapstructure:"documentation"`
 	DocumentationMode string `mapstructure:"documentation_mode"`
 	DocsAttempt       *bool  `mapstructure:"docs_attempt"`
-	Clipboard         *bool  `mapstructure:"clipboard"`
+	Copy              *bool  `mapstructure:"copy"`
+	LegacyClipboard   *bool  `mapstructure:"clipboard"`
 }
 
 // LoadApplicationConfiguration loads configuration from global and local files.
@@ -97,7 +99,7 @@ func LoadApplicationConfiguration(options LoadOptions) (ApplicationConfiguration
 	merged.Tree.Paths.Exclude = utils.DeduplicatePatterns(merged.Tree.Paths.Exclude)
 	merged.Content.Paths.Exclude = utils.DeduplicatePatterns(merged.Content.Paths.Exclude)
 
-	return merged, nil
+	return merged.normalizeCopySettings(), nil
 }
 
 func resolveLocalConfigPath(workingDirectory, explicitPath string) (string, error) {
@@ -144,7 +146,7 @@ func loadConfigurationFromPath(path string) (ApplicationConfiguration, error) {
 	if decodeErr := reader.Unmarshal(&config); decodeErr != nil {
 		return ApplicationConfiguration{}, fmt.Errorf("decode configuration from %s: %w", path, decodeErr)
 	}
-	return config, nil
+	return config.normalizeCopySettings(), nil
 }
 
 // Merge overlays override onto the receiver returning the combined configuration.
@@ -153,11 +155,19 @@ func (config ApplicationConfiguration) Merge(override ApplicationConfiguration) 
 	result.Tree = result.Tree.merge(override.Tree)
 	result.Content = result.Content.merge(override.Content)
 	result.CallChain = result.CallChain.merge(override.CallChain)
-	return result
+	return result.normalizeCopySettings()
+}
+
+func (config ApplicationConfiguration) normalizeCopySettings() ApplicationConfiguration {
+	config.Tree = config.Tree.normalizeCopySettings()
+	config.Content = config.Content.normalizeCopySettings()
+	config.CallChain = config.CallChain.normalizeCopySettings()
+	return config
 }
 
 func (config StreamCommandConfiguration) merge(override StreamCommandConfiguration) StreamCommandConfiguration {
-	result := config
+	result := config.normalizeCopySettings()
+	overrideNormalized := override.normalizeCopySettings()
 	if override.Format != "" {
 		result.Format = override.Format
 	}
@@ -181,10 +191,10 @@ func (config StreamCommandConfiguration) merge(override StreamCommandConfigurati
 	}
 	result.Tokens = result.Tokens.merge(override.Tokens)
 	result.Paths = result.Paths.merge(override.Paths)
-	if override.Clipboard != nil {
-		result.Clipboard = cloneBool(override.Clipboard)
+	if overrideNormalized.Copy != nil {
+		result.Copy = cloneBool(overrideNormalized.Copy)
 	}
-	return result
+	return result.normalizeCopySettings()
 }
 
 func (config TokenConfiguration) merge(override TokenConfiguration) TokenConfiguration {
@@ -216,7 +226,8 @@ func (config PathConfiguration) merge(override PathConfiguration) PathConfigurat
 }
 
 func (config CallChainConfiguration) merge(override CallChainConfiguration) CallChainConfiguration {
-	result := config
+	result := config.normalizeCopySettings()
+	overrideNormalized := override.normalizeCopySettings()
 	if override.Format != "" {
 		result.Format = override.Format
 	}
@@ -232,9 +243,27 @@ func (config CallChainConfiguration) merge(override CallChainConfiguration) Call
 	if override.DocsAttempt != nil {
 		result.DocsAttempt = cloneBool(override.DocsAttempt)
 	}
-	if override.Clipboard != nil {
-		result.Clipboard = cloneBool(override.Clipboard)
+	if overrideNormalized.Copy != nil {
+		result.Copy = cloneBool(overrideNormalized.Copy)
 	}
+	return result.normalizeCopySettings()
+}
+
+func (config StreamCommandConfiguration) normalizeCopySettings() StreamCommandConfiguration {
+	result := config
+	if result.Copy == nil && result.LegacyClipboard != nil {
+		result.Copy = cloneBool(result.LegacyClipboard)
+	}
+	result.LegacyClipboard = nil
+	return result
+}
+
+func (config CallChainConfiguration) normalizeCopySettings() CallChainConfiguration {
+	result := config
+	if result.Copy == nil && result.LegacyClipboard != nil {
+		result.Copy = cloneBool(result.LegacyClipboard)
+	}
+	result.LegacyClipboard = nil
 	return result
 }
 

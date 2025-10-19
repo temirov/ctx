@@ -50,8 +50,8 @@ const (
 It renders directory trees, shows file content, and analyzes call chains.
 Use --format to select raw, json, or xml output. Use --doc to include documentation for supported commands, and --version to print the application version.`
 	versionFlagDescription    = "display application version"
-	clipboardFlagName         = "clipboard"
-	clipboardFlagDescription  = "copy command output to the system clipboard"
+	copyFlagName              = "copy"
+	copyFlagDescription       = "copy command output to the system clipboard"
 	configFlagName            = "config"
 	configFlagDescription     = "path to an application configuration file"
 	initFlagName              = "init"
@@ -116,7 +116,7 @@ Optional parameters:
   --ref selects the git branch, tag, or commit to read.
   --rules points to a documentation cleanup rule set for pruning files.
   --doc controls the amount of fetched documentation included in the output.
-  --clipboard copies the rendered documentation to the system clipboard.`
+  --copy copies the rendered documentation to the system clipboard.`
 	docUsageExample = `  # Use explicit repository coordinates
   ctx doc --path example/project/docs
 
@@ -200,13 +200,14 @@ func isSupportedFormat(format string) bool {
 // Execute runs the ctx application.
 func Execute() error {
 	rootCommand := createRootCommand(clipboard.NewService())
+	rootCommand.SetArgs(normalizeCopyFlagArguments(os.Args[1:]))
 	return rootCommand.Execute()
 }
 
 // createRootCommand builds the root Cobra command.
 func createRootCommand(clipboardProvider clipboard.Copier) *cobra.Command {
 	var showVersion bool
-	var clipboardEnabled bool
+	var copyFlagValue bool
 	var explicitConfigPath string
 	var initTarget string
 	var forceInit bool
@@ -272,7 +273,7 @@ func createRootCommand(clipboardProvider clipboard.Copier) *cobra.Command {
 		},
 	}
 	rootCommand.PersistentFlags().BoolVar(&showVersion, versionFlagName, false, versionFlagDescription)
-	rootCommand.PersistentFlags().BoolVar(&clipboardEnabled, clipboardFlagName, false, clipboardFlagDescription)
+	registerCopyFlag(rootCommand.PersistentFlags(), &copyFlagValue)
 	rootCommand.PersistentFlags().StringVar(&explicitConfigPath, configFlagName, "", configFlagDescription)
 	rootCommand.PersistentFlags().StringVar(&initTarget, initFlagName, "", initFlagDescription)
 	if initFlag := rootCommand.PersistentFlags().Lookup(initFlagName); initFlag != nil {
@@ -281,10 +282,10 @@ func createRootCommand(clipboardProvider clipboard.Copier) *cobra.Command {
 	rootCommand.PersistentFlags().BoolVar(&forceInit, forceFlagName, false, forceFlagDescription)
 	rootCommand.PersistentFlags().BoolVar(&runMCP, mcpFlagName, false, mcpFlagDescription)
 	rootCommand.AddCommand(
-		createTreeCommand(clipboardProvider, &clipboardEnabled, &applicationConfig),
-		createContentCommand(clipboardProvider, &clipboardEnabled, &applicationConfig),
-		createCallChainCommand(clipboardProvider, &clipboardEnabled, &applicationConfig),
-		createDocCommand(clipboardProvider, &clipboardEnabled),
+		createTreeCommand(clipboardProvider, &copyFlagValue, &applicationConfig),
+		createContentCommand(clipboardProvider, &copyFlagValue, &applicationConfig),
+		createCallChainCommand(clipboardProvider, &copyFlagValue, &applicationConfig),
+		createDocCommand(clipboardProvider, &copyFlagValue),
 	)
 	rootCommand.InitDefaultHelpCmd()
 	rootCommand.InitDefaultCompletionCmd()
@@ -320,7 +321,7 @@ func addPathFlags(command *cobra.Command, options *pathOptions) {
 }
 
 // createTreeCommand returns the tree subcommand.
-func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
+func createTreeCommand(clipboardProvider clipboard.Copier, copyFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
 	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
 	var summaryEnabled bool = true
@@ -346,9 +347,9 @@ func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, 
 			if !isSupportedFormat(outputFormatLower) {
 				return fmt.Errorf(invalidFormatMessage, outputFormatLower)
 			}
-			clipboardEnabledForCommand := clipboardFlag != nil && *clipboardFlag
+			copyEnabledForCommand := copyFlag != nil && *copyFlag
 			if applicationConfig != nil {
-				clipboardEnabledForCommand = resolveClipboardDefault(command, clipboardEnabledForCommand, applicationConfig.Tree.Clipboard)
+				copyEnabledForCommand = resolveCopyDefault(command, copyEnabledForCommand, applicationConfig.Tree.Copy)
 			}
 			return runTool(
 				command.Context(),
@@ -368,7 +369,7 @@ func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, 
 				"",
 				os.Stdout,
 				os.Stderr,
-				clipboardEnabledForCommand,
+				copyEnabledForCommand,
 				clipboardProvider,
 			)
 		},
@@ -384,7 +385,7 @@ func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, 
 }
 
 // createContentCommand returns the content subcommand.
-func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
+func createContentCommand(clipboardProvider clipboard.Copier, copyFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
 	var pathConfiguration pathOptions
 	var outputFormat string = types.FormatJSON
 	documentationMode := types.DocumentationModeDisabled
@@ -423,9 +424,9 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 			if documentationErr != nil {
 				return documentationErr
 			}
-			clipboardEnabledForCommand := clipboardFlag != nil && *clipboardFlag
+			copyEnabledForCommand := copyFlag != nil && *copyFlag
 			if applicationConfig != nil {
-				clipboardEnabledForCommand = resolveClipboardDefault(command, clipboardEnabledForCommand, applicationConfig.Content.Clipboard)
+				copyEnabledForCommand = resolveCopyDefault(command, copyEnabledForCommand, applicationConfig.Content.Copy)
 			}
 			return runTool(
 				command.Context(),
@@ -445,7 +446,7 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 				docsAPIBase,
 				os.Stdout,
 				os.Stderr,
-				clipboardEnabledForCommand,
+				copyEnabledForCommand,
 				clipboardProvider,
 			)
 		},
@@ -470,7 +471,7 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 }
 
 // createCallChainCommand returns the callchain subcommand.
-func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
+func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
 	var outputFormat string = types.FormatJSON
 	documentationMode := types.DocumentationModeDisabled
 	var callChainDepth int = defaultCallChainDepth
@@ -502,9 +503,9 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 			if documentationErr != nil {
 				return documentationErr
 			}
-			clipboardEnabledForCommand := clipboardFlag != nil && *clipboardFlag
+			copyEnabledForCommand := copyFlag != nil && *copyFlag
 			if applicationConfig != nil {
-				clipboardEnabledForCommand = resolveClipboardDefault(command, clipboardEnabledForCommand, applicationConfig.CallChain.Clipboard)
+				copyEnabledForCommand = resolveCopyDefault(command, copyEnabledForCommand, applicationConfig.CallChain.Copy)
 			}
 			return runTool(
 				command.Context(),
@@ -524,7 +525,7 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 				docsAPIBase,
 				os.Stdout,
 				os.Stderr,
-				clipboardEnabledForCommand,
+				copyEnabledForCommand,
 				clipboardProvider,
 			)
 		},
@@ -544,7 +545,7 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 	return callChainCommand
 }
 
-func createDocCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool) *cobra.Command {
+func createDocCommand(clipboardProvider clipboard.Copier, copyFlag *bool) *cobra.Command {
 	var repositoryPathSpec string
 	var repositoryReference string
 	var rulesPath string
@@ -587,7 +588,7 @@ func createDocCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool) *
 				ruleSet = loadedRuleSet
 			}
 			writer := command.OutOrStdout()
-			useClipboard := clipboardFlag != nil && *clipboardFlag
+			copyEnabled := copyFlag != nil && *copyFlag
 			authorizationToken := resolveGitHubAuthorizationToken()
 			options := docCommandOptions{
 				Coordinates:        coordinates,
@@ -595,7 +596,7 @@ func createDocCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool) *
 				Mode:               mode,
 				APIBase:            apiBase,
 				AuthorizationToken: authorizationToken,
-				ClipboardEnabled:   useClipboard,
+				ClipboardEnabled:   copyEnabled,
 				Clipboard:          clipboardProvider,
 				Writer:             writer,
 			}
@@ -1012,12 +1013,12 @@ func applyCallChainConfiguration(
 	}
 }
 
-func resolveClipboardDefault(command *cobra.Command, cliValue bool, configurationValue *bool) bool {
+func resolveCopyDefault(command *cobra.Command, cliValue bool, configurationValue *bool) bool {
 	if command == nil || configurationValue == nil {
 		return cliValue
 	}
 	inherited := command.InheritedFlags()
-	if inherited != nil && inherited.Changed(clipboardFlagName) {
+	if inherited != nil && inherited.Changed(copyFlagName) {
 		return cliValue
 	}
 	return *configurationValue
@@ -1350,7 +1351,7 @@ func mcpCapabilities() []mcp.Capability {
 		},
 		{
 			Name:        types.CommandDoc,
-			Description: "Retrieve GitHub documentation as Markdown. Flags: path (string), ref (string), rules (string), doc (string), clipboard (bool).",
+			Description: "Retrieve GitHub documentation as Markdown. Flags: path (string), ref (string), rules (string), doc (string), copy (bool).",
 		},
 	}
 }

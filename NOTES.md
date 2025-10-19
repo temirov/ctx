@@ -178,6 +178,7 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
     - `ctx doc` now accepts `--path` inputs in `owner/repo`, `owner/repo/path`, and full GitHub URL forms, with `--ref` continuing to override repository references and README updated accordingly.
   - [X] [CT-20] Remove PLAN.md from the git tree. PLAN.md is an ephemeral file that changes from issue to ssiue, no need to track it
     - `PLAN.md` is gitignored, a guard test fails if it becomes tracked, and the file was deleted from the repository.
+  - [X] [CT-21] Rename the --clipboard flag to --copy flag, document the change, wire the `copy` configuration default, and accept boolean overrides via `--copy=false` or `--copy no`.
 
 ### Portability
 
