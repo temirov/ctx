@@ -21,7 +21,7 @@ const (
 	docHelpRequiredUnifiedPathSnippet     = "--path string"
 	docHelpOptionalReferenceSnippet       = "--ref string"
 	docHelpOptionalRulesSnippet           = "--rules string"
-	docHelpOptionalClipboardSnippet       = "--clipboard"
+	docHelpOptionalCopySnippet            = "--copy"
 	docHelpOptionalDocModeSnippet         = "--doc string"
 	docHelpRequiredUnifiedPathDetail      = "owner/repo[/path] or https://github.com/owner/repo[...path] values"
 	docHelpDeprecatedOwnerFlagSnippet     = "--owner string"
@@ -223,7 +223,7 @@ func TestDocCommandHelpExplainsParameters(t *testing.T) {
 		docHelpOptionalSectionSnippet,
 		docHelpOptionalReferenceSnippet,
 		docHelpOptionalRulesSnippet,
-		docHelpOptionalClipboardSnippet,
+		docHelpOptionalCopySnippet,
 		docHelpOptionalDocModeSnippet,
 	}
 	for _, snippet := range optionalChecks {

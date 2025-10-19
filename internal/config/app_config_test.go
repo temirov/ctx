@@ -18,6 +18,7 @@ type configTestCase struct {
 	expectTokens  *bool
 	expectModel   string
 	expectContent *bool
+	expectCopy    *bool
 }
 
 func boolPointer(value bool) *bool {
@@ -33,12 +34,13 @@ func TestLoadApplicationConfigurationMergesSources(t *testing.T) {
 		{
 			name:          "local_overrides_global",
 			globalContent: "tree:\n  format: raw\n  summary: false\n  content: false\n  clipboard: true\n",
-			localContent:  "tree:\n  format: xml\n  content: true\n  tokens:\n    enabled: true\n    model: custom\n",
+			localContent:  "tree:\n  format: xml\n  content: true\n  copy: false\n  tokens:\n    enabled: true\n    model: custom\n",
 			expectFormat:  "xml",
 			expectSummary: summaryFalse,
 			expectTokens:  tokensEnabled,
 			expectModel:   "custom",
 			expectContent: boolPointer(true),
+			expectCopy:    boolPointer(false),
 		},
 		{
 			name:          "explicit_path_only",
@@ -50,6 +52,18 @@ func TestLoadApplicationConfigurationMergesSources(t *testing.T) {
 			expectTokens:  nil,
 			expectModel:   "",
 			expectContent: nil,
+			expectCopy:    nil,
+		},
+		{
+			name:          "copy_key_applies",
+			globalContent: "tree:\n  copy: true\n",
+			localContent:  "",
+			expectFormat:  "",
+			expectSummary: nil,
+			expectTokens:  nil,
+			expectModel:   "",
+			expectContent: nil,
+			expectCopy:    boolPointer(true),
 		},
 	}
 
@@ -123,6 +137,15 @@ func TestLoadApplicationConfigurationMergesSources(t *testing.T) {
 			} else {
 				if loadedConfig.Tree.IncludeContent == nil || *loadedConfig.Tree.IncludeContent != *testCase.expectContent {
 					t.Fatalf("unexpected content value")
+				}
+			}
+			if testCase.expectCopy == nil {
+				if loadedConfig.Tree.Copy != nil {
+					t.Fatalf("expected no copy override")
+				}
+			} else {
+				if loadedConfig.Tree.Copy == nil || *loadedConfig.Tree.Copy != *testCase.expectCopy {
+					t.Fatalf("unexpected copy value")
 				}
 			}
 		})
