@@ -1,9 +1,12 @@
 # Plan
 
-## CT-16 GitHub Documentation Retrieval
-- [x] internal/docs: Promote the GitHub scraping logic into an injectable package and extend the documentation collector to support `relevant` (local) vs `full` (local + remote) modes.
-- [x] internal/commands/doc.go, internal/cli/cli.go: Add the `doc`/`d` command, convert `--doc` into an enumerated flag, and wire remote documentation fetching with clipboard and configuration defaults.
-- [x] internal/types/types.go, internal/config/app_config.go: Introduce documentation mode constants, update configuration schemas, and validate allowed values.
-- [x] internal/services/mcp/server.go, internal/cli/mcp_executor.go, internal/cli/mcp_test.go: Advertise the new command, expose mode-aware parameters, and adapt MCP execution paths.
-- [x] tests/ctx_test.go: Add integration coverage using stubbed GitHub responses for jspreadsheet, marked.js, and beer.css targets to prove full extraction.
-- [x] README.md, NOTES.md: Document the new workflow, describe documentation modes, and mark CT-16 as complete.
+## CT Doc Command Help
+- [x] internal/cli/cli.go: Expand doc command descriptions and error handling to spell out required owner, repository, and path flags while guiding users toward optional URL, reference, rules, and clipboard settings.
+- [x] tests/doc_test.go: Add coverage asserting that missing coordinates produce actionable guidance and that command help enumerates required versus optional parameters.
+- [x] README.md: Extend documentation with a doc command usage section listing required and optional parameters.
+- [x] NOTES.md: Mark the CT doc help issue as completed once tests and guidance are in place.
+
+## Logging Output Formatting
+- [x] internal/utils: Provide a constructor that configures zap with console encoding and friendly defaults for CLI output.
+- [x] main.go, cmd/ctx/main.go: Reuse the shared logger constructor so fatal errors emit human-readable text instead of JSON.
+- [x] tests/doc_test.go: Ensure fatal error output remains detectable without relying on JSON formatting.

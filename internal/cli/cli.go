@@ -107,8 +107,35 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	docUse              = "doc"
 	docAlias            = "d"
 	docShortDescription = "retrieve GitHub documentation (" + docAlias + ")"
-	docLongDescription  = `Fetch and render documentation stored in a GitHub repository path.`
-	docUsageExample     = `  ctx doc --repo-url https://github.com/example/project/tree/main/docs`
+	docLongDescription  = `Fetch and render documentation stored in a GitHub repository path.
+
+Required parameters:
+  --owner, --repo, and --path identify the documentation root unless --repo-url is provided.
+  --repo-url can infer owner, repository, reference, and path automatically.
+
+Optional parameters:
+  --ref selects the git branch, tag, or commit to read.
+  --rules points to a documentation cleanup rule set for pruning files.
+  --doc controls the amount of fetched documentation included in the output.
+  --clipboard copies the rendered documentation to the system clipboard.`
+	docUsageExample = `  # Use explicit repository coordinates
+  ctx doc --owner example --repo project --path docs
+
+  # Derive coordinates from a repository URL
+  ctx doc --repo-url https://github.com/example/project/tree/main/docs`
+
+	docCoordinatesRequiredMessage     = "doc command requires repository coordinates"
+	docCoordinatesGuidanceMessage     = "Provide --owner, --repo, and --path or supply --repo-url."
+	docCoordinatesHelpMessage         = `Run "ctx doc --help" for complete flag help.`
+	docMissingCoordinatesErrorMessage = docCoordinatesRequiredMessage + ". " + docCoordinatesGuidanceMessage + " " + docCoordinatesHelpMessage
+	docMissingPathErrorMessage        = "doc command requires a documentation path. Specify --path or include it in --repo-url. " + docCoordinatesHelpMessage
+	docRepositoryURLFlagDescription   = "GitHub repository URL to derive owner, repository, reference, and path"
+	docOwnerFlagDescription           = "GitHub repository owner (required unless --repo-url is set)"
+	docRepositoryFlagDescription      = "GitHub repository name (required unless --repo-url is set)"
+	docPathFlagDescription            = "Documentation root path within the repository (required unless --repo-url is set)"
+	docReferenceFlagDescription       = "Git reference to fetch (branch, tag, or commit)"
+	docRulesFlagDescription           = "path to cleanup rules file for documentation pruning"
+	docAPIBaseFlagDescription         = "GitHub API base URL"
 
 	repositoryURLFlagName     = "repo-url"
 	repositoryOwnerFlagName   = "owner"
@@ -550,13 +577,13 @@ func createDocCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool) *
 		},
 	}
 
-	docCommand.Flags().StringVar(&repositoryURL, repositoryURLFlagName, "", "GitHub repository URL")
-	docCommand.Flags().StringVar(&repositoryOwner, repositoryOwnerFlagName, "", "repository owner")
-	docCommand.Flags().StringVar(&repositoryName, repositoryNameFlagName, "", "repository name")
-	docCommand.Flags().StringVar(&repositoryReference, repositoryRefFlagName, "", "git reference")
-	docCommand.Flags().StringVar(&repositoryPath, repositoryPathFlagName, "", "documentation root path")
-	docCommand.Flags().StringVar(&rulesPath, repositoryRulesFlagName, "", "path to cleanup rules")
-	docCommand.Flags().StringVar(&apiBase, repositoryAPIBaseFlagName, "", "GitHub API base URL")
+	docCommand.Flags().StringVar(&repositoryURL, repositoryURLFlagName, "", docRepositoryURLFlagDescription)
+	docCommand.Flags().StringVar(&repositoryOwner, repositoryOwnerFlagName, "", docOwnerFlagDescription)
+	docCommand.Flags().StringVar(&repositoryName, repositoryNameFlagName, "", docRepositoryFlagDescription)
+	docCommand.Flags().StringVar(&repositoryReference, repositoryRefFlagName, "", docReferenceFlagDescription)
+	docCommand.Flags().StringVar(&repositoryPath, repositoryPathFlagName, "", docPathFlagDescription)
+	docCommand.Flags().StringVar(&rulesPath, repositoryRulesFlagName, "", docRulesFlagDescription)
+	docCommand.Flags().StringVar(&apiBase, repositoryAPIBaseFlagName, "", docAPIBaseFlagDescription)
 	docCommand.Flags().StringVar(&documentationMode, documentationFlagName, types.DocumentationModeFull, documentationFlagDescription)
 	if docFlag := docCommand.Flags().Lookup(documentationFlagName); docFlag != nil {
 		docFlag.NoOptDefVal = types.DocumentationModeFull
@@ -1093,10 +1120,10 @@ func resolveRepositoryCoordinates(repositoryURL string, owner string, repository
 		coordinates.RootPath = parsed.RootPath
 	}
 	if coordinates.Owner == "" || coordinates.Repository == "" {
-		return repositoryCoordinates{}, fmt.Errorf("repository owner and name are required")
+		return repositoryCoordinates{}, fmt.Errorf(docMissingCoordinatesErrorMessage)
 	}
 	if strings.TrimSpace(coordinates.RootPath) == "" {
-		return repositoryCoordinates{}, fmt.Errorf("documentation path is required")
+		return repositoryCoordinates{}, fmt.Errorf(docMissingPathErrorMessage)
 	}
 	return coordinates, nil
 }

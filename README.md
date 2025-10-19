@@ -166,6 +166,15 @@ Retrieve GitHub documentation for a project section:
 ctx doc --repo-url https://github.com/jspreadsheet/ce/tree/main/docs/jspreadsheet --doc full
 ```
 
+#### Doc Command Parameters
+
+`ctx doc` expects enough information to identify the GitHub documentation directory.
+
+- **Required:** Provide `--owner`, `--repo`, and `--path`, or supply a single `--repo-url` so ctx can derive every coordinate. A documentation path is always required.
+- **Optional:** `--ref` selects a branch, tag, or commit; `--rules` applies a cleanup rule set; `--doc` toggles the rendered documentation mode; `--clipboard` copies the rendered output. Combine these with configuration defaults as needed.
+
+Run `ctx doc --help` to review the command description, flag roles, and examples.
+
 ### MCP Server Mode
 
 `ctx` can expose its capabilities over HTTP for Model Context Protocol (MCP)
