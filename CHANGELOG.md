@@ -1,6 +1,27 @@
 # Changelog
 
-# Changelog
+## [v0.2.1] - 2025-10-19
+
+### Highlights
+
+* **Consistent CLI booleans and clipboard flag rename.** All commands now share a single boolean flag parser that understands true/false, yes/no, on/off, and 1/0
+literals, and the former `--clipboard` flag has been renamed to `--copy` with configuration defaults preserved.
+
+### Improvements ⚙️
+
+* Replaced every direct `BoolVar` registration with the shared registrar, eliminating bespoke parsers and ensuring `--flag no` works everywhere. (improvement/CT-22-
+bool-flags)
+* Stopped normalizing boolean flags after the `--` sentinel so dash-prefixed filenames (e.g., `ctx tree -- --summary`) are handled correctly. (improvement/CT-22-
+bool-flags)
+* Updated configuration loading to honor both legacy `clipboard` and new `copy` keys, retaining overrides from user config. (maintenance/CT-21-copy-flag)
+
+### Docs 📚
+
+* Documented the expanded boolean syntax and the new `--copy` flag in the README, along with guidance for enabling automatic copy via config.
+
+### Testing ✅
+
+* Added unit coverage for the boolean flag registrar, including argument normalization around the `--` terminator and non-boolean trailing values.
 
 ## [v0.2.0] - 2025-10-18
 
