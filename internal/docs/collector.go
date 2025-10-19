@@ -2,6 +2,7 @@
 package docs
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -19,17 +20,36 @@ type documentationExtractor interface {
 // Collector routes documentation lookups to language-specific extractors.
 type Collector struct {
 	extensionToExtractor map[string]documentationExtractor
+	remote               remoteDocumentationProvider
+}
+
+// CollectorOptions configures optional documentation providers.
+type CollectorOptions struct {
+	RemoteAttempt RemoteAttemptOptions
 }
 
 // NewCollector creates a Collector using the repository root that contains go.mod.
 func NewCollector(repositoryRoot string) (*Collector, error) {
+	return NewCollectorWithOptions(repositoryRoot, CollectorOptions{})
+}
+
+// NewCollectorWithOptions creates a Collector with the supplied options.
+func NewCollectorWithOptions(repositoryRoot string, options CollectorOptions) (*Collector, error) {
 	extensionToExtractor := map[string]documentationExtractor{}
 	moduleRoot, moduleLocateError := findModuleRoot(repositoryRoot)
 	if moduleLocateError != nil {
 		return nil, moduleLocateError
 	}
+	var remoteAttempt *RemoteDocumentationAttempt
+	var remoteError error
+	if moduleRoot != "" && options.RemoteAttempt.Enabled {
+		remoteAttempt, remoteError = newRemoteDocumentationAttempt(moduleRoot, options.RemoteAttempt)
+		if remoteError != nil {
+			return nil, remoteError
+		}
+	}
 	if moduleRoot != "" {
-		goExtractor, goExtractorError := newGoExtractor(moduleRoot)
+		goExtractor, goExtractorError := newGoExtractor(moduleRoot, remoteAttempt)
 		if goExtractorError != nil {
 			return nil, goExtractorError
 		}
@@ -37,7 +57,10 @@ func NewCollector(repositoryRoot string) (*Collector, error) {
 	}
 	registerExtractor(extensionToExtractor, newPythonExtractor())
 	registerExtractor(extensionToExtractor, newJavaScriptExtractor())
-	return &Collector{extensionToExtractor: extensionToExtractor}, nil
+	return &Collector{
+		extensionToExtractor: extensionToExtractor,
+		remote:               remoteAttempt,
+	}, nil
 }
 
 func registerExtractor(extensionToExtractor map[string]documentationExtractor, extractor documentationExtractor) {
@@ -70,6 +93,14 @@ func (collector *Collector) CollectFromFile(filePath string) ([]types.Documentat
 		return nil, extractionError
 	}
 	return documentationEntries, nil
+}
+
+// ActivateRemoteDocumentation stores the context used for remote lookups.
+func (collector *Collector) ActivateRemoteDocumentation(ctx context.Context) {
+	if collector == nil || collector.remote == nil {
+		return
+	}
+	collector.remote.Activate(ctx)
 }
 
 func findModuleRoot(startingPath string) (string, error) {

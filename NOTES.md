@@ -159,6 +159,10 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
         6b. MCP advertisement
         6c. Readme documentation
       - Implemented `internal/docs/githubdoc` fetcher, new `doc` CLI command with GitHub integration, MCP wiring, and regression tests for jspreadsheet, marked, and beercss documentation flows.
+  - [X] [CT-18] Intelligent document retrieval. Add the best efforts for document retrieval from the github repos. Make educated guesses and develop a heuristics to identify if a package is on github and has documentation under `tree/master/docs`. Implement under --docs-attempt flag. Expected behaviour is to identify the versions of the 3rd party packages and look up their documentation on github and retrieve it intelligently. This is for in-code dependencies only. The implementation of the retrieval shall be shared between the `doc` flag and  `--docs-attempt`
+    - Added a remote documentation attempt engine that parses `go.mod`, resolves GitHub coordinates, and reuses the GitHub fetcher to collect `docs/` content per module.
+    - `ctx content` and `ctx callchain` accept `--docs-attempt`, automatically upgrading to `--doc full` when unset and folding remote module docs into output alongside local symbol references.
+    - Integration coverage provisions a mocked GitHub API to prove `--docs-attempt` surfaces third-party documentation without regressing existing flows.
 
 ### Improvements
 
@@ -170,6 +174,10 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
   - [X] [CT-09] Document copy to clipboard functionality in the README.md
   - [X] [CT-12] Document MCP usage with examples
     - README now walks through starting `ctx --mcp`, checking the health endpoint, and querying `/capabilities` with `curl`.
+  - [X] [CT-19] Replace differetn flags for the `doc` command with a single flag `--path`. Allow different formats: urls, owner/repo and owner/repo/path under path. No regressions so all currently accepted formats shall be detected and accepted under --path flag
+    - `ctx doc` now accepts `--path` inputs in `owner/repo`, `owner/repo/path`, and full GitHub URL forms, with `--ref` continuing to override repository references and README updated accordingly.
+  - [X] [CT-20] Remove PLAN.md from the git tree. PLAN.md is an ephemeral file that changes from issue to ssiue, no need to track it
+    - `PLAN.md` is gitignored, a guard test fails if it becomes tracked, and the file was deleted from the repository.
 
 ### Portability
 
@@ -185,11 +193,11 @@ Leave Features, BugFixes, Improvements, Maintenance sections empty when all fixe
 
 ## BugFixes
   - [X] [CT-17] Add human readeable help to doc command with an explanation of required and optional parameters
-    - `ctx doc --help` now lists required owner/repo/path inputs alongside optional repo URL, reference, rules, documentation mode, and clipboard flags.
-    - Failing to provide repository coordinates surfaces actionable guidance that points to the relevant flags and reminds users to consult the help output.
+    - `ctx doc --help` now lists the unified `--path` coordinate flag alongside reference, rules, documentation mode, and clipboard options.
+    - Failing to provide repository coordinates surfaces actionable guidance pointing to `--path` and the help output.
   ```shell
     17:23:49 tyemirov@Vadyms-MacBook-Pro:~/Development/temirov/ctx - [master] $ go run main.go doc
-  Error: doc command requires repository coordinates. Provide --owner, --repo, and --path or supply --repo-url. Run "ctx doc --help" for complete flag help.
-  {"level":"fatal","ts":1760833434.554803,"caller":"ctx/main.go:19","msg":"application execution failed","error":"doc command requires repository coordinates. Provide --owner, --repo, and --path or supply --repo-url. Run \"ctx doc --help\" for complete flag help.","stacktrace":"main.main\n\t/Users/tyemirov/Development/temirov/ctx/main.go:19\nruntime.main\n\t/usr/local/opt/go/libexec/src/runtime/proc.go:285"}
+  Error: doc command requires repository coordinates. Provide --path with owner/repo[/path] or a GitHub URL. Run "ctx doc --help" for complete flag help.
+  application execution failed: doc command requires repository coordinates. Provide --path with owner/repo[/path] or a GitHub URL. Run "ctx doc --help" for complete flag help.
   exit status 1
   ```

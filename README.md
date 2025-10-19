@@ -130,6 +130,7 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--tokens`            | tree, content      | Estimate token counts for files and surface totals in summaries. |
 | `--model <name>`      | tree, content      | Select tokenizer model (default `gpt-4o`). |
 | `--doc`               | content, callchain, doc | Select documentation mode (`disabled`, `relevant`, `full`). `relevant` embeds local symbol docs; `full` also incorporates GitHub content. |
+| `--docs-attempt`      | content, callchain | When paired with `--doc full`, heuristically fetch documentation for imported GitHub modules. |
 | `--depth <number>`    | callchain          | Limit call graph traversal depth (default `1`). |
 | `--version`           | all commands       | Print ctx version and exit. |
 | `--clipboard`         | tree, content, callchain | Copy command output to the system clipboard after rendering completes. |
@@ -163,15 +164,16 @@ ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 
 Retrieve GitHub documentation for a project section:
 
 ```shell
-ctx doc --repo-url https://github.com/jspreadsheet/ce/tree/main/docs/jspreadsheet --doc full
+ctx doc --path jspreadsheet/ce/docs/jspreadsheet --doc full
 ```
 
 #### Doc Command Parameters
 
 `ctx doc` expects enough information to identify the GitHub documentation directory.
 
-- **Required:** Provide `--owner`, `--repo`, and `--path`, or supply a single `--repo-url` so ctx can derive every coordinate. A documentation path is always required.
+- **Required:** Provide a single `--path` value using `owner/repo[/path]` coordinates or paste a `https://github.com/owner/repo/tree/...` URL. Supplying only `owner/repo` fetches documentation from the repository root.
 - **Optional:** `--ref` selects a branch, tag, or commit; `--rules` applies a cleanup rule set; `--doc` toggles the rendered documentation mode; `--clipboard` copies the rendered output. Combine these with configuration defaults as needed.
+- **Heuristics:** Use `--docs-attempt` with `--doc full` on `content` or `callchain` to let ctx detect third-party Go module imports, infer GitHub repositories, and retrieve `docs/` content when available. The same GitHub fetcher powers both the doc command and docs attempts.
 
 Run `ctx doc --help` to review the command description, flag roles, and examples.
 

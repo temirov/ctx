@@ -110,8 +110,7 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 	docLongDescription  = `Fetch and render documentation stored in a GitHub repository path.
 
 Required parameters:
-  --owner, --repo, and --path identify the documentation root unless --repo-url is provided.
-  --repo-url can infer owner, repository, reference, and path automatically.
+  --path accepts owner/repo[/path] or https://github.com/owner/repo[...path] values.
 
 Optional parameters:
   --ref selects the git branch, tag, or commit to read.
@@ -119,27 +118,28 @@ Optional parameters:
   --doc controls the amount of fetched documentation included in the output.
   --clipboard copies the rendered documentation to the system clipboard.`
 	docUsageExample = `  # Use explicit repository coordinates
-  ctx doc --owner example --repo project --path docs
+  ctx doc --path example/project/docs
+
+  # Fetch documentation from the repository root on a branch
+  ctx doc --path example/project --ref main
 
   # Derive coordinates from a repository URL
-  ctx doc --repo-url https://github.com/example/project/tree/main/docs`
+  ctx doc --path https://github.com/example/project/tree/main/docs`
+	docsAttemptFlagName        = "docs-attempt"
+	docsAttemptFlagDescription = "attempt to retrieve GitHub documentation for imported modules"
+	docsAPIBaseFlagName        = "docs-api-base"
+	docsAPIBaseFlagDescription = "GitHub API base URL for documentation attempts"
 
 	docCoordinatesRequiredMessage     = "doc command requires repository coordinates"
-	docCoordinatesGuidanceMessage     = "Provide --owner, --repo, and --path or supply --repo-url."
+	docCoordinatesGuidanceMessage     = "Provide --path with owner/repo[/path] or a GitHub URL."
 	docCoordinatesHelpMessage         = `Run "ctx doc --help" for complete flag help.`
 	docMissingCoordinatesErrorMessage = docCoordinatesRequiredMessage + ". " + docCoordinatesGuidanceMessage + " " + docCoordinatesHelpMessage
-	docMissingPathErrorMessage        = "doc command requires a documentation path. Specify --path or include it in --repo-url. " + docCoordinatesHelpMessage
-	docRepositoryURLFlagDescription   = "GitHub repository URL to derive owner, repository, reference, and path"
-	docOwnerFlagDescription           = "GitHub repository owner (required unless --repo-url is set)"
-	docRepositoryFlagDescription      = "GitHub repository name (required unless --repo-url is set)"
-	docPathFlagDescription            = "Documentation root path within the repository (required unless --repo-url is set)"
+	docMissingPathErrorMessage        = "doc command requires a documentation path. " + docCoordinatesGuidanceMessage + " " + docCoordinatesHelpMessage
+	docPathFlagDescription            = "Repository coordinates (owner/repo[/path]) or GitHub URL (tree/blob)"
 	docReferenceFlagDescription       = "Git reference to fetch (branch, tag, or commit)"
 	docRulesFlagDescription           = "path to cleanup rules file for documentation pruning"
 	docAPIBaseFlagDescription         = "GitHub API base URL"
 
-	repositoryURLFlagName     = "repo-url"
-	repositoryOwnerFlagName   = "owner"
-	repositoryNameFlagName    = "repo"
 	repositoryRefFlagName     = "ref"
 	repositoryPathFlagName    = "path"
 	repositoryRulesFlagName   = "rules"
@@ -337,7 +337,7 @@ func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, 
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(command *cobra.Command, arguments []string) error {
 			if applicationConfig != nil {
-				applyStreamConfiguration(command, applicationConfig.Tree, &pathConfiguration, &outputFormat, nil, &summaryEnabled, &includeContent, &tokenConfiguration)
+				applyStreamConfiguration(command, applicationConfig.Tree, &pathConfiguration, &outputFormat, nil, &summaryEnabled, &includeContent, nil, &tokenConfiguration)
 			}
 			if len(arguments) == 0 {
 				arguments = []string{defaultPath}
@@ -364,6 +364,8 @@ func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, 
 				summaryEnabled,
 				includeContent,
 				tokenConfiguration,
+				false,
+				"",
 				os.Stdout,
 				os.Stderr,
 				clipboardEnabledForCommand,
@@ -390,6 +392,8 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 	var tokenConfiguration tokenOptions
 	tokenConfiguration.model = defaultTokenizerModelName
 	includeContent := true
+	var docsAttempt bool
+	var docsAPIBase string
 
 	contentCommand := &cobra.Command{
 		Use:     contentUse,
@@ -400,10 +404,16 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(command *cobra.Command, arguments []string) error {
 			if applicationConfig != nil {
-				applyStreamConfiguration(command, applicationConfig.Content, &pathConfiguration, &outputFormat, &documentationMode, &summaryEnabled, &includeContent, &tokenConfiguration)
+				applyStreamConfiguration(command, applicationConfig.Content, &pathConfiguration, &outputFormat, &documentationMode, &summaryEnabled, &includeContent, &docsAttempt, &tokenConfiguration)
 			}
 			if len(arguments) == 0 {
 				arguments = []string{defaultPath}
+			}
+			if docsAttempt {
+				docFlag := command.Flags().Lookup(documentationFlagName)
+				if (docFlag == nil || !docFlag.Changed) && documentationMode != types.DocumentationModeFull {
+					documentationMode = types.DocumentationModeFull
+				}
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
 			if !isSupportedFormat(outputFormatLower) {
@@ -431,6 +441,8 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 				summaryEnabled,
 				includeContent,
 				tokenConfiguration,
+				docsAttempt,
+				docsAPIBase,
 				os.Stdout,
 				os.Stderr,
 				clipboardEnabledForCommand,
@@ -449,6 +461,11 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 	contentCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
 	contentCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
 	contentCommand.Flags().BoolVar(&includeContent, contentFlagName, true, contentFlagDescription)
+	contentCommand.Flags().BoolVar(&docsAttempt, docsAttemptFlagName, false, docsAttemptFlagDescription)
+	contentCommand.Flags().StringVar(&docsAPIBase, docsAPIBaseFlagName, "", docsAPIBaseFlagDescription)
+	if docsAPIFlag := contentCommand.Flags().Lookup(docsAPIBaseFlagName); docsAPIFlag != nil {
+		docsAPIFlag.Hidden = true
+	}
 	return contentCommand
 }
 
@@ -457,6 +474,8 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 	var outputFormat string = types.FormatJSON
 	documentationMode := types.DocumentationModeDisabled
 	var callChainDepth int = defaultCallChainDepth
+	var docsAttempt bool
+	var docsAPIBase string
 
 	callChainCommand := &cobra.Command{
 		Use:     callchainUse,
@@ -467,7 +486,13 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 		Args:    cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, arguments []string) error {
 			if applicationConfig != nil {
-				applyCallChainConfiguration(command, applicationConfig.CallChain, &outputFormat, &callChainDepth, &documentationMode)
+				applyCallChainConfiguration(command, applicationConfig.CallChain, &outputFormat, &callChainDepth, &documentationMode, &docsAttempt)
+			}
+			if docsAttempt {
+				docFlag := command.Flags().Lookup(documentationFlagName)
+				if (docFlag == nil || !docFlag.Changed) && documentationMode != types.DocumentationModeFull {
+					documentationMode = types.DocumentationModeFull
+				}
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
 			if !isSupportedFormat(outputFormatLower) {
@@ -495,6 +520,8 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 				false,
 				false,
 				tokenOptions{},
+				docsAttempt,
+				docsAPIBase,
 				os.Stdout,
 				os.Stderr,
 				clipboardEnabledForCommand,
@@ -509,15 +536,17 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 		docFlag.NoOptDefVal = types.DocumentationModeRelevant
 	}
 	callChainCommand.Flags().IntVar(&callChainDepth, callChainDepthFlagName, defaultCallChainDepth, callChainDepthDescription)
+	callChainCommand.Flags().BoolVar(&docsAttempt, docsAttemptFlagName, false, docsAttemptFlagDescription)
+	callChainCommand.Flags().StringVar(&docsAPIBase, docsAPIBaseFlagName, "", docsAPIBaseFlagDescription)
+	if docsAPIFlag := callChainCommand.Flags().Lookup(docsAPIBaseFlagName); docsAPIFlag != nil {
+		docsAPIFlag.Hidden = true
+	}
 	return callChainCommand
 }
 
 func createDocCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool) *cobra.Command {
-	var repositoryURL string
-	var repositoryOwner string
-	var repositoryName string
+	var repositoryPathSpec string
 	var repositoryReference string
-	var repositoryPath string
 	var rulesPath string
 	var apiBase string
 	documentationMode := types.DocumentationModeFull
@@ -545,7 +574,7 @@ func createDocCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool) *
 			if modeErr != nil {
 				return modeErr
 			}
-			coordinates, coordinatesErr := resolveRepositoryCoordinates(repositoryURL, repositoryOwner, repositoryName, repositoryReference, repositoryPath)
+			coordinates, coordinatesErr := resolveRepositoryCoordinates(repositoryPathSpec, "", "", repositoryReference, "")
 			if coordinatesErr != nil {
 				return coordinatesErr
 			}
@@ -577,11 +606,8 @@ func createDocCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool) *
 		},
 	}
 
-	docCommand.Flags().StringVar(&repositoryURL, repositoryURLFlagName, "", docRepositoryURLFlagDescription)
-	docCommand.Flags().StringVar(&repositoryOwner, repositoryOwnerFlagName, "", docOwnerFlagDescription)
-	docCommand.Flags().StringVar(&repositoryName, repositoryNameFlagName, "", docRepositoryFlagDescription)
+	docCommand.Flags().StringVar(&repositoryPathSpec, repositoryPathFlagName, "", docPathFlagDescription)
 	docCommand.Flags().StringVar(&repositoryReference, repositoryRefFlagName, "", docReferenceFlagDescription)
-	docCommand.Flags().StringVar(&repositoryPath, repositoryPathFlagName, "", docPathFlagDescription)
 	docCommand.Flags().StringVar(&rulesPath, repositoryRulesFlagName, "", docRulesFlagDescription)
 	docCommand.Flags().StringVar(&apiBase, repositoryAPIBaseFlagName, "", docAPIBaseFlagDescription)
 	docCommand.Flags().StringVar(&documentationMode, documentationFlagName, types.DocumentationModeFull, documentationFlagDescription)
@@ -609,6 +635,8 @@ func runTool(
 	summaryEnabled bool,
 	includeContent bool,
 	tokenConfiguration tokenOptions,
+	docsAttempt bool,
+	docsAPIBase string,
 	outputWriter io.Writer,
 	errorWriter io.Writer,
 	clipboardEnabled bool,
@@ -625,13 +653,25 @@ func runTool(
 	if mode == "" {
 		mode = types.DocumentationModeDisabled
 	}
+	remoteEnabled := docsAttempt && mode == types.DocumentationModeFull
 	var collector *docs.Collector
 	if mode != types.DocumentationModeDisabled {
-		createdCollector, collectorCreationError := docs.NewCollector(workingDirectory)
+		options := docs.CollectorOptions{}
+		if remoteEnabled {
+			options.RemoteAttempt = docs.RemoteAttemptOptions{
+				Enabled:            true,
+				APIBase:            docsAPIBase,
+				AuthorizationToken: resolveGitHubAuthorizationToken(),
+			}
+		}
+		createdCollector, collectorCreationError := docs.NewCollectorWithOptions(workingDirectory, options)
 		if collectorCreationError != nil {
 			return collectorCreationError
 		}
 		collector = createdCollector
+		if remoteEnabled {
+			collector.ActivateRemoteDocumentation(commandContext)
+		}
 	}
 
 	var tokenCounter tokenizer.Counter
@@ -882,6 +922,7 @@ func applyStreamConfiguration(
 	documentationMode *string,
 	summaryEnabled *bool,
 	includeContent *bool,
+	docsAttempt *bool,
 	tokens *tokenOptions,
 ) {
 	if command == nil {
@@ -908,6 +949,9 @@ func applyStreamConfiguration(
 	}
 	if configuration.IncludeContent != nil && includeContent != nil && !command.Flags().Changed(contentFlagName) {
 		*includeContent = *configuration.IncludeContent
+	}
+	if configuration.DocsAttempt != nil && docsAttempt != nil && !command.Flags().Changed(docsAttemptFlagName) {
+		*docsAttempt = *configuration.DocsAttempt
 	}
 	if tokens != nil {
 		if configuration.Tokens.Enabled != nil && !command.Flags().Changed(tokensFlagName) {
@@ -939,6 +983,7 @@ func applyCallChainConfiguration(
 	outputFormat *string,
 	depth *int,
 	documentationMode *string,
+	docsAttempt *bool,
 ) {
 	if command == nil {
 		return
@@ -961,6 +1006,9 @@ func applyCallChainConfiguration(
 				*documentationMode = types.DocumentationModeDisabled
 			}
 		}
+	}
+	if configuration.DocsAttempt != nil && docsAttempt != nil && !command.Flags().Changed(docsAttemptFlagName) {
+		*docsAttempt = *configuration.DocsAttempt
 	}
 }
 
@@ -1096,36 +1144,110 @@ type repositoryCoordinates struct {
 	RootPath   string
 }
 
-func resolveRepositoryCoordinates(repositoryURL string, owner string, repository string, reference string, rootPath string) (repositoryCoordinates, error) {
-	parsed, parseErr := parseGitHubRepositoryURL(repositoryURL)
+func resolveRepositoryCoordinates(pathSpec string, owner string, repository string, reference string, rootPath string) (repositoryCoordinates, error) {
+	parsed, parseErr := parseRepositoryPathSpec(pathSpec)
 	if parseErr != nil {
-		return repositoryCoordinates{}, parseErr
+		return repositoryCoordinates{}, fmt.Errorf("parse --path: %w", parseErr)
 	}
 	coordinates := repositoryCoordinates{
 		Owner:      owner,
 		Repository: repository,
-		Reference:  reference,
 		RootPath:   rootPath,
 	}
-	if coordinates.Owner == "" {
+	if parsed.Owner != "" {
 		coordinates.Owner = parsed.Owner
 	}
-	if coordinates.Repository == "" {
+	if parsed.Repository != "" {
 		coordinates.Repository = parsed.Repository
 	}
-	if coordinates.Reference == "" {
+	if parsed.RootPath != "" {
+		coordinates.RootPath = parsed.RootPath
+	}
+	if parsed.Reference != "" {
 		coordinates.Reference = parsed.Reference
 	}
-	if strings.TrimSpace(coordinates.RootPath) == "" {
-		coordinates.RootPath = parsed.RootPath
+	if reference != "" {
+		coordinates.Reference = reference
 	}
 	if coordinates.Owner == "" || coordinates.Repository == "" {
 		return repositoryCoordinates{}, fmt.Errorf(docMissingCoordinatesErrorMessage)
 	}
-	if strings.TrimSpace(coordinates.RootPath) == "" {
+	normalizedRoot := normalizeRepositoryRootPath(coordinates.RootPath)
+	if normalizedRoot == "" {
 		return repositoryCoordinates{}, fmt.Errorf(docMissingPathErrorMessage)
 	}
+	coordinates.RootPath = normalizedRoot
 	return coordinates, nil
+}
+
+func parseRepositoryPathSpec(raw string) (repositoryCoordinates, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return repositoryCoordinates{}, nil
+	}
+	if strings.Contains(trimmed, "://") {
+		return parseGitHubRepositoryURL(trimmed)
+	}
+	segments := strings.Split(trimmed, "/")
+	if len(segments) < 2 {
+		return repositoryCoordinates{}, fmt.Errorf("repository path must include owner and repository")
+	}
+	owner := strings.TrimSpace(segments[0])
+	repositorySegment := strings.TrimSpace(segments[1])
+	if owner == "" || repositorySegment == "" {
+		return repositoryCoordinates{}, fmt.Errorf("repository path must include owner and repository")
+	}
+	reference := ""
+	repository := repositorySegment
+	if at := strings.Index(repositorySegment, "@"); at >= 0 {
+		repository = strings.TrimSpace(repositorySegment[:at])
+		reference = strings.TrimSpace(repositorySegment[at+1:])
+	}
+	if repository == "" {
+		return repositoryCoordinates{}, fmt.Errorf("repository path must include owner and repository")
+	}
+	remaining := segments[2:]
+	rootSegments := remaining
+	if len(remaining) >= 2 {
+		switch strings.ToLower(remaining[0]) {
+		case githubTreeSegment, githubBlobSegment:
+			if len(remaining) >= 2 {
+				if reference == "" {
+					reference = strings.TrimSpace(remaining[1])
+				}
+				rootSegments = remaining[2:]
+			}
+		}
+	}
+	rootPath := strings.Join(rootSegments, "/")
+	if strings.TrimSpace(rootPath) == "" {
+		rootPath = "."
+	}
+	return repositoryCoordinates{
+		Owner:      owner,
+		Repository: repository,
+		Reference:  reference,
+		RootPath:   strings.Trim(rootPath, "/"),
+	}, nil
+}
+
+func normalizeRepositoryRootPath(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	if trimmed == "." {
+		return "."
+	}
+	cleaned := strings.Trim(trimmed, "/")
+	for strings.HasPrefix(cleaned, "./") {
+		cleaned = strings.TrimPrefix(cleaned, "./")
+	}
+	cleaned = strings.Trim(cleaned, "/")
+	if cleaned == "" {
+		return "."
+	}
+	return cleaned
 }
 
 func parseGitHubRepositoryURL(raw string) (repositoryCoordinates, error) {
@@ -1228,7 +1350,7 @@ func mcpCapabilities() []mcp.Capability {
 		},
 		{
 			Name:        types.CommandDoc,
-			Description: "Retrieve GitHub documentation as Markdown. Flags: repo-url (string), owner (string), repo (string), ref (string), path (string), rules (string), doc (string).",
+			Description: "Retrieve GitHub documentation as Markdown. Flags: path (string), ref (string), rules (string), doc (string), clipboard (bool).",
 		},
 	}
 }

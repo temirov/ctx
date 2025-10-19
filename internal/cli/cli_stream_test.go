@@ -238,6 +238,8 @@ func TestRunToolCopiesOutputToClipboard(t *testing.T) {
 				false,
 				true,
 				tokenOptions{},
+				false,
+				"",
 				&outputBuffer,
 				io.Discard,
 				true,
@@ -283,6 +285,7 @@ func TestApplyStreamConfigurationUsesDefaults(t *testing.T) {
 	command.Flags().BoolVar(&pathConfiguration.disableIgnoreFile, noIgnoreFlagName, pathConfiguration.disableIgnoreFile, "")
 	command.Flags().BoolVar(&pathConfiguration.includeGit, includeGitFlagName, pathConfiguration.includeGit, "")
 	command.Flags().BoolVar(&includeContent, contentFlagName, includeContent, "")
+	docsAttempt := false
 
 	configuration := config.StreamCommandConfiguration{
 		Format:         types.FormatXML,
@@ -301,7 +304,7 @@ func TestApplyStreamConfigurationUsesDefaults(t *testing.T) {
 		},
 	}
 
-	applyStreamConfiguration(command, configuration, &pathConfiguration, &format, &documentationMode, &summaryEnabled, &includeContent, &tokens)
+	applyStreamConfiguration(command, configuration, &pathConfiguration, &format, &documentationMode, &summaryEnabled, &includeContent, &docsAttempt, &tokens)
 
 	if format != types.FormatXML {
 		t.Fatalf("expected format %s, got %s", types.FormatXML, format)
@@ -359,6 +362,7 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 	command.Flags().BoolVar(&pathConfiguration.disableIgnoreFile, noIgnoreFlagName, pathConfiguration.disableIgnoreFile, "")
 	command.Flags().BoolVar(&pathConfiguration.includeGit, includeGitFlagName, pathConfiguration.includeGit, "")
 	command.Flags().BoolVar(&includeContent, contentFlagName, includeContent, "")
+	docsAttempt := false
 
 	// Simulate CLI overrides.
 	if err := command.Flags().Set(formatFlagName, format); err != nil {
@@ -409,7 +413,7 @@ func TestApplyStreamConfigurationRespectsCliOverrides(t *testing.T) {
 		},
 	}
 
-	applyStreamConfiguration(command, configuration, &pathConfiguration, &format, &documentationMode, &summaryEnabled, &includeContent, &tokens)
+	applyStreamConfiguration(command, configuration, &pathConfiguration, &format, &documentationMode, &summaryEnabled, &includeContent, &docsAttempt, &tokens)
 
 	if format != "cli" {
 		t.Fatalf("expected format to remain cli, got %s", format)
@@ -452,6 +456,7 @@ func TestApplyCallChainConfigurationUsesDefaults(t *testing.T) {
 	command.Flags().StringVar(&format, formatFlagName, format, "")
 	command.Flags().StringVar(&documentationMode, documentationFlagName, documentationMode, "")
 	command.Flags().IntVar(&depth, callChainDepthFlagName, depth, "")
+	docsAttempt := false
 
 	configuration := config.CallChainConfiguration{
 		Format:        types.FormatXML,
@@ -459,7 +464,7 @@ func TestApplyCallChainConfigurationUsesDefaults(t *testing.T) {
 		Documentation: boolPtr(true),
 	}
 
-	applyCallChainConfiguration(command, configuration, &format, &depth, &documentationMode)
+	applyCallChainConfiguration(command, configuration, &format, &depth, &documentationMode, &docsAttempt)
 
 	if format != types.FormatXML {
 		t.Fatalf("expected format to change to xml")
