@@ -200,7 +200,8 @@ func isSupportedFormat(format string) bool {
 // Execute runs the ctx application.
 func Execute() error {
 	rootCommand := createRootCommand(clipboard.NewService())
-	rootCommand.SetArgs(normalizeCopyFlagArguments(os.Args[1:]))
+	normalizedArguments := normalizeBooleanFlagArguments(rootCommand, os.Args[1:])
+	rootCommand.SetArgs(normalizedArguments)
 	return rootCommand.Execute()
 }
 
@@ -272,15 +273,15 @@ func createRootCommand(clipboardProvider clipboard.Copier) *cobra.Command {
 			return nil
 		},
 	}
-	rootCommand.PersistentFlags().BoolVar(&showVersion, versionFlagName, false, versionFlagDescription)
-	registerCopyFlag(rootCommand.PersistentFlags(), &copyFlagValue)
+	registerBooleanFlag(rootCommand.PersistentFlags(), &showVersion, versionFlagName, false, versionFlagDescription)
+	registerBooleanFlag(rootCommand.PersistentFlags(), &copyFlagValue, copyFlagName, false, copyFlagDescription)
 	rootCommand.PersistentFlags().StringVar(&explicitConfigPath, configFlagName, "", configFlagDescription)
 	rootCommand.PersistentFlags().StringVar(&initTarget, initFlagName, "", initFlagDescription)
 	if initFlag := rootCommand.PersistentFlags().Lookup(initFlagName); initFlag != nil {
 		initFlag.NoOptDefVal = string(config.InitTargetLocal)
 	}
-	rootCommand.PersistentFlags().BoolVar(&forceInit, forceFlagName, false, forceFlagDescription)
-	rootCommand.PersistentFlags().BoolVar(&runMCP, mcpFlagName, false, mcpFlagDescription)
+	registerBooleanFlag(rootCommand.PersistentFlags(), &forceInit, forceFlagName, false, forceFlagDescription)
+	registerBooleanFlag(rootCommand.PersistentFlags(), &runMCP, mcpFlagName, false, mcpFlagDescription)
 	rootCommand.AddCommand(
 		createTreeCommand(clipboardProvider, &copyFlagValue, &applicationConfig),
 		createContentCommand(clipboardProvider, &copyFlagValue, &applicationConfig),
@@ -315,9 +316,9 @@ func (options tokenOptions) toConfig(workingDirectory string) tokenizer.Config {
 // addPathFlags registers path-related flags on the command.
 func addPathFlags(command *cobra.Command, options *pathOptions) {
 	command.Flags().StringArrayVarP(&options.exclusionPatterns, exclusionFlagName, exclusionFlagName, nil, exclusionFlagDescription)
-	command.Flags().BoolVar(&options.disableGitignore, noGitignoreFlagName, false, disableGitignoreFlagDescription)
-	command.Flags().BoolVar(&options.disableIgnoreFile, noIgnoreFlagName, false, disableIgnoreFlagDescription)
-	command.Flags().BoolVar(&options.includeGit, includeGitFlagName, false, includeGitFlagDescription)
+	registerBooleanFlag(command.Flags(), &options.disableGitignore, noGitignoreFlagName, false, disableGitignoreFlagDescription)
+	registerBooleanFlag(command.Flags(), &options.disableIgnoreFile, noIgnoreFlagName, false, disableIgnoreFlagDescription)
+	registerBooleanFlag(command.Flags(), &options.includeGit, includeGitFlagName, false, includeGitFlagDescription)
 }
 
 // createTreeCommand returns the tree subcommand.
@@ -377,10 +378,10 @@ func createTreeCommand(clipboardProvider clipboard.Copier, copyFlag *bool, appli
 
 	addPathFlags(treeCommand, &pathConfiguration)
 	treeCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
-	treeCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, true, summaryFlagDescription)
-	treeCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
+	registerBooleanFlag(treeCommand.Flags(), &summaryEnabled, summaryFlagName, true, summaryFlagDescription)
+	registerBooleanFlag(treeCommand.Flags(), &tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
 	treeCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
-	treeCommand.Flags().BoolVar(&includeContent, contentFlagName, false, contentFlagDescription)
+	registerBooleanFlag(treeCommand.Flags(), &includeContent, contentFlagName, false, contentFlagDescription)
 	return treeCommand
 }
 
@@ -458,11 +459,11 @@ func createContentCommand(clipboardProvider clipboard.Copier, copyFlag *bool, ap
 	if docFlag := contentCommand.Flags().Lookup(documentationFlagName); docFlag != nil {
 		docFlag.NoOptDefVal = types.DocumentationModeRelevant
 	}
-	contentCommand.Flags().BoolVar(&summaryEnabled, summaryFlagName, true, summaryFlagDescription)
-	contentCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
+	registerBooleanFlag(contentCommand.Flags(), &summaryEnabled, summaryFlagName, true, summaryFlagDescription)
+	registerBooleanFlag(contentCommand.Flags(), &tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
 	contentCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
-	contentCommand.Flags().BoolVar(&includeContent, contentFlagName, true, contentFlagDescription)
-	contentCommand.Flags().BoolVar(&docsAttempt, docsAttemptFlagName, false, docsAttemptFlagDescription)
+	registerBooleanFlag(contentCommand.Flags(), &includeContent, contentFlagName, true, contentFlagDescription)
+	registerBooleanFlag(contentCommand.Flags(), &docsAttempt, docsAttemptFlagName, false, docsAttemptFlagDescription)
 	contentCommand.Flags().StringVar(&docsAPIBase, docsAPIBaseFlagName, "", docsAPIBaseFlagDescription)
 	if docsAPIFlag := contentCommand.Flags().Lookup(docsAPIBaseFlagName); docsAPIFlag != nil {
 		docsAPIFlag.Hidden = true
@@ -537,7 +538,7 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, 
 		docFlag.NoOptDefVal = types.DocumentationModeRelevant
 	}
 	callChainCommand.Flags().IntVar(&callChainDepth, callChainDepthFlagName, defaultCallChainDepth, callChainDepthDescription)
-	callChainCommand.Flags().BoolVar(&docsAttempt, docsAttemptFlagName, false, docsAttemptFlagDescription)
+	registerBooleanFlag(callChainCommand.Flags(), &docsAttempt, docsAttemptFlagName, false, docsAttemptFlagDescription)
 	callChainCommand.Flags().StringVar(&docsAPIBase, docsAPIBaseFlagName, "", docsAPIBaseFlagDescription)
 	if docsAPIFlag := callChainCommand.Flags().Lookup(docsAPIBaseFlagName); docsAPIFlag != nil {
 		docsAPIFlag.Hidden = true
