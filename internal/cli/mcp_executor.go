@@ -23,6 +23,8 @@ type streamRequestCommon struct {
 	IncludeContent *bool                `json:"includeContent"`
 	Documentation  json.RawMessage      `json:"documentation"`
 	Tokens         *streamTokensRequest `json:"tokens"`
+	DocsAttempt    *bool                `json:"docsAttempt"`
+	DocsAPIBase    string               `json:"docsApiBase"`
 }
 
 type streamTokensRequest struct {
@@ -51,12 +53,16 @@ type streamExecutionParameters struct {
 	summaryEnabled     bool
 	includeContent     bool
 	tokenConfiguration tokenOptions
+	docsAttempt        bool
+	docsAPIBase        string
 }
 
 type callChainRequest struct {
 	Target        string          `json:"target"`
 	Depth         *int            `json:"depth"`
 	Documentation json.RawMessage `json:"documentation"`
+	DocsAttempt   *bool           `json:"docsAttempt"`
+	DocsAPIBase   string          `json:"docsApiBase"`
 }
 
 type docRequest struct {
@@ -142,6 +148,13 @@ func executeCallChainCommand(commandContext context.Context, request mcp.Command
 		}
 		documentationMode = mode
 	}
+	docsAttempt := false
+	if payload.DocsAttempt != nil {
+		docsAttempt = *payload.DocsAttempt
+	}
+	if docsAttempt && documentationMode != types.DocumentationModeFull && len(payload.Documentation) == 0 {
+		documentationMode = types.DocumentationModeFull
+	}
 	var outputBuffer bytes.Buffer
 	var warningBuffer bytes.Buffer
 	executionErr := runTool(
@@ -158,6 +171,8 @@ func executeCallChainCommand(commandContext context.Context, request mcp.Command
 		false,
 		false,
 		tokenOptions{},
+		docsAttempt,
+		payload.DocsAPIBase,
 		&outputBuffer,
 		&warningBuffer,
 		false,
@@ -253,6 +268,11 @@ func parseStreamRequest(payload json.RawMessage, defaults streamConfigurationDef
 			return streamExecutionParameters{}, documentationErr
 		}
 	}
+	docsAttempt := resolveBoolean(requestBody.DocsAttempt, false)
+	docsAPIBase := strings.TrimSpace(requestBody.DocsAPIBase)
+	if docsAttempt && documentationMode != types.DocumentationModeFull && len(requestBody.Documentation) == 0 {
+		documentationMode = types.DocumentationModeFull
+	}
 
 	tokenConfiguration := tokenOptions{
 		enabled: false,
@@ -279,6 +299,8 @@ func parseStreamRequest(payload json.RawMessage, defaults streamConfigurationDef
 		summaryEnabled:     summaryEnabled,
 		includeContent:     includeContent,
 		tokenConfiguration: tokenConfiguration,
+		docsAttempt:        docsAttempt,
+		docsAPIBase:        docsAPIBase,
 	}, nil
 }
 
@@ -299,6 +321,8 @@ func invokeStreamCommand(commandContext context.Context, parameters streamExecut
 		parameters.summaryEnabled,
 		parameters.includeContent,
 		parameters.tokenConfiguration,
+		parameters.docsAttempt,
+		parameters.docsAPIBase,
 		&outputBuffer,
 		&warningBuffer,
 		false,

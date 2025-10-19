@@ -123,6 +123,10 @@ Optional parameters:
 
   # Derive coordinates from a repository URL
   ctx doc --repo-url https://github.com/example/project/tree/main/docs`
+	docsAttemptFlagName        = "docs-attempt"
+	docsAttemptFlagDescription = "attempt to retrieve GitHub documentation for imported modules"
+	docsAPIBaseFlagName        = "docs-api-base"
+	docsAPIBaseFlagDescription = "GitHub API base URL for documentation attempts"
 
 	docCoordinatesRequiredMessage     = "doc command requires repository coordinates"
 	docCoordinatesGuidanceMessage     = "Provide --owner, --repo, and --path or supply --repo-url."
@@ -337,7 +341,7 @@ func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, 
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(command *cobra.Command, arguments []string) error {
 			if applicationConfig != nil {
-				applyStreamConfiguration(command, applicationConfig.Tree, &pathConfiguration, &outputFormat, nil, &summaryEnabled, &includeContent, &tokenConfiguration)
+				applyStreamConfiguration(command, applicationConfig.Tree, &pathConfiguration, &outputFormat, nil, &summaryEnabled, &includeContent, nil, &tokenConfiguration)
 			}
 			if len(arguments) == 0 {
 				arguments = []string{defaultPath}
@@ -364,6 +368,8 @@ func createTreeCommand(clipboardProvider clipboard.Copier, clipboardFlag *bool, 
 				summaryEnabled,
 				includeContent,
 				tokenConfiguration,
+				false,
+				"",
 				os.Stdout,
 				os.Stderr,
 				clipboardEnabledForCommand,
@@ -390,6 +396,8 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 	var tokenConfiguration tokenOptions
 	tokenConfiguration.model = defaultTokenizerModelName
 	includeContent := true
+	var docsAttempt bool
+	var docsAPIBase string
 
 	contentCommand := &cobra.Command{
 		Use:     contentUse,
@@ -400,10 +408,16 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(command *cobra.Command, arguments []string) error {
 			if applicationConfig != nil {
-				applyStreamConfiguration(command, applicationConfig.Content, &pathConfiguration, &outputFormat, &documentationMode, &summaryEnabled, &includeContent, &tokenConfiguration)
+				applyStreamConfiguration(command, applicationConfig.Content, &pathConfiguration, &outputFormat, &documentationMode, &summaryEnabled, &includeContent, &docsAttempt, &tokenConfiguration)
 			}
 			if len(arguments) == 0 {
 				arguments = []string{defaultPath}
+			}
+			if docsAttempt {
+				docFlag := command.Flags().Lookup(documentationFlagName)
+				if (docFlag == nil || !docFlag.Changed) && documentationMode != types.DocumentationModeFull {
+					documentationMode = types.DocumentationModeFull
+				}
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
 			if !isSupportedFormat(outputFormatLower) {
@@ -431,6 +445,8 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 				summaryEnabled,
 				includeContent,
 				tokenConfiguration,
+				docsAttempt,
+				docsAPIBase,
 				os.Stdout,
 				os.Stderr,
 				clipboardEnabledForCommand,
@@ -449,6 +465,11 @@ func createContentCommand(clipboardProvider clipboard.Copier, clipboardFlag *boo
 	contentCommand.Flags().BoolVar(&tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
 	contentCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
 	contentCommand.Flags().BoolVar(&includeContent, contentFlagName, true, contentFlagDescription)
+	contentCommand.Flags().BoolVar(&docsAttempt, docsAttemptFlagName, false, docsAttemptFlagDescription)
+	contentCommand.Flags().StringVar(&docsAPIBase, docsAPIBaseFlagName, "", docsAPIBaseFlagDescription)
+	if docsAPIFlag := contentCommand.Flags().Lookup(docsAPIBaseFlagName); docsAPIFlag != nil {
+		docsAPIFlag.Hidden = true
+	}
 	return contentCommand
 }
 
@@ -457,6 +478,8 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 	var outputFormat string = types.FormatJSON
 	documentationMode := types.DocumentationModeDisabled
 	var callChainDepth int = defaultCallChainDepth
+	var docsAttempt bool
+	var docsAPIBase string
 
 	callChainCommand := &cobra.Command{
 		Use:     callchainUse,
@@ -467,7 +490,13 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 		Args:    cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, arguments []string) error {
 			if applicationConfig != nil {
-				applyCallChainConfiguration(command, applicationConfig.CallChain, &outputFormat, &callChainDepth, &documentationMode)
+				applyCallChainConfiguration(command, applicationConfig.CallChain, &outputFormat, &callChainDepth, &documentationMode, &docsAttempt)
+			}
+			if docsAttempt {
+				docFlag := command.Flags().Lookup(documentationFlagName)
+				if (docFlag == nil || !docFlag.Changed) && documentationMode != types.DocumentationModeFull {
+					documentationMode = types.DocumentationModeFull
+				}
 			}
 			outputFormatLower := strings.ToLower(outputFormat)
 			if !isSupportedFormat(outputFormatLower) {
@@ -495,6 +524,8 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 				false,
 				false,
 				tokenOptions{},
+				docsAttempt,
+				docsAPIBase,
 				os.Stdout,
 				os.Stderr,
 				clipboardEnabledForCommand,
@@ -509,6 +540,11 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, clipboardFlag *b
 		docFlag.NoOptDefVal = types.DocumentationModeRelevant
 	}
 	callChainCommand.Flags().IntVar(&callChainDepth, callChainDepthFlagName, defaultCallChainDepth, callChainDepthDescription)
+	callChainCommand.Flags().BoolVar(&docsAttempt, docsAttemptFlagName, false, docsAttemptFlagDescription)
+	callChainCommand.Flags().StringVar(&docsAPIBase, docsAPIBaseFlagName, "", docsAPIBaseFlagDescription)
+	if docsAPIFlag := callChainCommand.Flags().Lookup(docsAPIBaseFlagName); docsAPIFlag != nil {
+		docsAPIFlag.Hidden = true
+	}
 	return callChainCommand
 }
 
@@ -609,6 +645,8 @@ func runTool(
 	summaryEnabled bool,
 	includeContent bool,
 	tokenConfiguration tokenOptions,
+	docsAttempt bool,
+	docsAPIBase string,
 	outputWriter io.Writer,
 	errorWriter io.Writer,
 	clipboardEnabled bool,
@@ -625,13 +663,25 @@ func runTool(
 	if mode == "" {
 		mode = types.DocumentationModeDisabled
 	}
+	remoteEnabled := docsAttempt && mode == types.DocumentationModeFull
 	var collector *docs.Collector
 	if mode != types.DocumentationModeDisabled {
-		createdCollector, collectorCreationError := docs.NewCollector(workingDirectory)
+		options := docs.CollectorOptions{}
+		if remoteEnabled {
+			options.RemoteAttempt = docs.RemoteAttemptOptions{
+				Enabled:            true,
+				APIBase:            docsAPIBase,
+				AuthorizationToken: resolveGitHubAuthorizationToken(),
+			}
+		}
+		createdCollector, collectorCreationError := docs.NewCollectorWithOptions(workingDirectory, options)
 		if collectorCreationError != nil {
 			return collectorCreationError
 		}
 		collector = createdCollector
+		if remoteEnabled {
+			collector.ActivateRemoteDocumentation(commandContext)
+		}
 	}
 
 	var tokenCounter tokenizer.Counter
@@ -882,6 +932,7 @@ func applyStreamConfiguration(
 	documentationMode *string,
 	summaryEnabled *bool,
 	includeContent *bool,
+	docsAttempt *bool,
 	tokens *tokenOptions,
 ) {
 	if command == nil {
@@ -908,6 +959,9 @@ func applyStreamConfiguration(
 	}
 	if configuration.IncludeContent != nil && includeContent != nil && !command.Flags().Changed(contentFlagName) {
 		*includeContent = *configuration.IncludeContent
+	}
+	if configuration.DocsAttempt != nil && docsAttempt != nil && !command.Flags().Changed(docsAttemptFlagName) {
+		*docsAttempt = *configuration.DocsAttempt
 	}
 	if tokens != nil {
 		if configuration.Tokens.Enabled != nil && !command.Flags().Changed(tokensFlagName) {
@@ -939,6 +993,7 @@ func applyCallChainConfiguration(
 	outputFormat *string,
 	depth *int,
 	documentationMode *string,
+	docsAttempt *bool,
 ) {
 	if command == nil {
 		return
@@ -961,6 +1016,9 @@ func applyCallChainConfiguration(
 				*documentationMode = types.DocumentationModeDisabled
 			}
 		}
+	}
+	if configuration.DocsAttempt != nil && docsAttempt != nil && !command.Flags().Changed(docsAttemptFlagName) {
+		*docsAttempt = *configuration.DocsAttempt
 	}
 }
 

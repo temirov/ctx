@@ -20,14 +20,16 @@ type goExtractor struct {
 	currentModulePath string
 	packageCache      map[string]*doc.Package
 	textCache         map[string]string
+	remote            remoteDocumentationProvider
 }
 
 const (
 	goPackageEntryPrefix = "pkg:"
 	goSymbolEntryPrefix  = "sym:"
+	goRemoteEntryPrefix  = "remote:"
 )
 
-func newGoExtractor(repositoryRoot string) (*goExtractor, error) {
+func newGoExtractor(repositoryRoot string, remote remoteDocumentationProvider) (*goExtractor, error) {
 	goModBytes, readError := os.ReadFile(filepath.Join(repositoryRoot, "go.mod"))
 	if readError != nil {
 		return nil, readError
@@ -40,6 +42,7 @@ func newGoExtractor(repositoryRoot string) (*goExtractor, error) {
 		currentModulePath: moduleFile.Module.Mod.Path,
 		packageCache:      map[string]*doc.Package{},
 		textCache:         map[string]string{},
+		remote:            remote,
 	}, nil
 }
 
@@ -132,6 +135,16 @@ func (extractor *goExtractor) CollectDocumentation(filePath string, _ []byte) ([
 
 	for _, importPath := range aliasToImport {
 		addPackageEntry(importPath)
+		if extractor.remote != nil {
+			for _, entry := range extractor.remote.DocumentationForImport(importPath) {
+				entryKey := goRemoteEntryPrefix + entry.Kind + ":" + entry.Name
+				if _, exists := seenEntries[entryKey]; exists {
+					continue
+				}
+				documentationEntries = append(documentationEntries, entry)
+				seenEntries[entryKey] = struct{}{}
+			}
+		}
 	}
 
 	ast.Inspect(fileAST, func(node ast.Node) bool {

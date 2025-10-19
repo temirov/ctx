@@ -30,6 +30,7 @@ type StreamCommandConfiguration struct {
 	Documentation     *bool              `mapstructure:"documentation"`
 	DocumentationMode string             `mapstructure:"documentation_mode"`
 	IncludeContent    *bool              `mapstructure:"content"`
+	DocsAttempt       *bool              `mapstructure:"docs_attempt"`
 	Tokens            TokenConfiguration `mapstructure:"tokens"`
 	Paths             PathConfiguration  `mapstructure:"paths"`
 	Clipboard         *bool              `mapstructure:"clipboard"`
@@ -55,6 +56,7 @@ type CallChainConfiguration struct {
 	Depth             *int   `mapstructure:"depth"`
 	Documentation     *bool  `mapstructure:"documentation"`
 	DocumentationMode string `mapstructure:"documentation_mode"`
+	DocsAttempt       *bool  `mapstructure:"docs_attempt"`
 	Clipboard         *bool  `mapstructure:"clipboard"`
 }
 
@@ -174,6 +176,9 @@ func (config StreamCommandConfiguration) merge(override StreamCommandConfigurati
 	if override.IncludeContent != nil {
 		result.IncludeContent = cloneBool(override.IncludeContent)
 	}
+	if override.DocsAttempt != nil {
+		result.DocsAttempt = cloneBool(override.DocsAttempt)
+	}
 	result.Tokens = result.Tokens.merge(override.Tokens)
 	result.Paths = result.Paths.merge(override.Paths)
 	if override.Clipboard != nil {
@@ -220,6 +225,12 @@ func (config CallChainConfiguration) merge(override CallChainConfiguration) Call
 	}
 	if override.Documentation != nil {
 		result.Documentation = cloneBool(override.Documentation)
+	}
+	if override.DocumentationMode != "" {
+		result.DocumentationMode = override.DocumentationMode
+	}
+	if override.DocsAttempt != nil {
+		result.DocsAttempt = cloneBool(override.DocsAttempt)
 	}
 	if override.Clipboard != nil {
 		result.Clipboard = cloneBool(override.Clipboard)
