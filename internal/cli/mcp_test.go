@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/temirov/ctx/internal/services/mcp"
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/services/mcp"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 func TestStartMCPServerServesCapabilities(t *testing.T) {

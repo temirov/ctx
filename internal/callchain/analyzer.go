@@ -4,8 +4,8 @@ package callchain
 import (
 	"errors"
 
-	"github.com/temirov/ctx/internal/docs"
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/docs"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 // ErrSymbolNotFound indicates that an analyzer could not locate the requested symbol.

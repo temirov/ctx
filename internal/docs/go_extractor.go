@@ -13,7 +13,7 @@ import (
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 type goExtractor struct {

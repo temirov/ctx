@@ -9,7 +9,7 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	javascript "github.com/smacker/go-tree-sitter/javascript"
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 const (

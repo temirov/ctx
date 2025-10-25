@@ -3,7 +3,7 @@ package output
 import (
 	"path/filepath"
 
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 func normalizePath(path string) string {

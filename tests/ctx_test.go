@@ -14,11 +14,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/temirov/ctx/internal/commands"
-	"github.com/temirov/ctx/internal/output"
-	"github.com/temirov/ctx/internal/tokenizer"
-	appTypes "github.com/temirov/ctx/internal/types"
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/commands"
+	"github.com/tyemirov/ctx/internal/output"
+	"github.com/tyemirov/ctx/internal/tokenizer"
+	appTypes "github.com/tyemirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 const (
@@ -55,10 +55,10 @@ const (
 	googleSheetsAddonGitignoreContent = nodeModulesPattern + claspConfigurationPattern
 	commandDirectoryRelativePath      = "cmd/ctx"
 	integrationBinaryBaseName         = "ctx_integration_binary"
-	contentDataFunction               = "github.com/temirov/ctx/internal/commands.GetContentData"
-	streamContentFunction             = "github.com/temirov/ctx/internal/commands.StreamContent"
-	runStreamCommandFunction          = "github.com/temirov/ctx/internal/cli.runStreamCommand"
-	runToolFunction                   = "github.com/temirov/ctx/internal/cli.runTool"
+	contentDataFunction               = "github.com/tyemirov/ctx/internal/commands.GetContentData"
+	streamContentFunction             = "github.com/tyemirov/ctx/internal/commands.StreamContent"
+	runStreamCommandFunction          = "github.com/tyemirov/ctx/internal/cli.runStreamCommand"
+	runToolFunction                   = "github.com/tyemirov/ctx/internal/cli.runTool"
 	callChainAlias                    = "cc"
 	formatFlag                        = "--format"
 	depthFlag                         = "--depth"

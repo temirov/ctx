@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 type documentationExtractor interface {

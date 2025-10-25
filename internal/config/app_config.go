@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 // LoadOptions controls how application configuration is discovered.

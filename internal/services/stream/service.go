@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/temirov/ctx/internal/commands"
-	"github.com/temirov/ctx/internal/tokenizer"
-	"github.com/temirov/ctx/internal/types"
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/commands"
+	"github.com/tyemirov/ctx/internal/tokenizer"
+	"github.com/tyemirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 type TreeOptions struct {

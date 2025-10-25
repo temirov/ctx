@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 // textFileName defines the name of the text file used in tests.

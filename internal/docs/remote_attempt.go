@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/mod/modfile"
 
-	"github.com/temirov/ctx/internal/docs/githubdoc"
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/docs/githubdoc"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 // RemoteAttemptOptions configures remote documentation lookup for third-party modules.

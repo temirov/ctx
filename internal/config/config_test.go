@@ -7,8 +7,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/temirov/ctx/internal/config"
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/config"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 const (

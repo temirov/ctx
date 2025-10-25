@@ -1,8 +1,8 @@
 package commands
 
 import (
-	"github.com/temirov/ctx/internal/tokenizer"
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/tokenizer"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 const (

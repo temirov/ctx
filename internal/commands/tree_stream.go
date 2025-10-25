@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/temirov/ctx/internal/tokenizer"
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/tokenizer"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 type TreeEventKind int

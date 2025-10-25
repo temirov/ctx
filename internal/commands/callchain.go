@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/temirov/ctx/internal/callchain"
-	"github.com/temirov/ctx/internal/docs"
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/callchain"
+	"github.com/tyemirov/ctx/internal/docs"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 const (

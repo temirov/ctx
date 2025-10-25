@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/temirov/ctx/internal/tokenizer"
-	"github.com/temirov/ctx/internal/types"
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/tokenizer"
+	"github.com/tyemirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 // ContentVisitor receives each FileOutput discovered during traversal.

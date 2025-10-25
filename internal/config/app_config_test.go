@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 type configTestCase struct {

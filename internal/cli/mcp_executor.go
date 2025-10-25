@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/temirov/ctx/internal/docs/githubdoc"
-	"github.com/temirov/ctx/internal/services/mcp"
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/docs/githubdoc"
+	"github.com/tyemirov/ctx/internal/services/mcp"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 type streamRequestCommon struct {

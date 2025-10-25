@@ -1,7 +1,7 @@
 package output
 
 import (
-	"github.com/temirov/ctx/internal/services/stream"
+	"github.com/tyemirov/ctx/internal/services/stream"
 )
 
 type StreamRenderer interface {

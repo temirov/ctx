@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 type javaScriptExtractor struct{}

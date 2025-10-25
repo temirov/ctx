@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/temirov/ctx/internal/types"
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 // BuildContentTree constructs a directory tree representation for content command outputs.

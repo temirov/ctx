@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/temirov/ctx/internal/services/stream"
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/services/stream"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 type stubCounter struct{}

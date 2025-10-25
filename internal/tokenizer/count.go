@@ -5,7 +5,7 @@ import (
 	"os"
 	"unicode/utf8"
 
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 // CountResult captures the outcome of counting a file or byte slice.

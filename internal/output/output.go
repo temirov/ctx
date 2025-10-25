@@ -9,8 +9,8 @@ import (
 	"os"
 	"sort"
 
-	"github.com/temirov/ctx/internal/types"
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 const (

@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/temirov/ctx/internal/cli"
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/cli"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 // main is the entry point for the ctx command.

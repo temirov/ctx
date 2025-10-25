@@ -6,8 +6,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/temirov/ctx/internal/commands"
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/commands"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 type streamStubCounter struct{}

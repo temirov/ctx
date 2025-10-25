@@ -1,6 +1,6 @@
 # ctx
 
-[![GitHub release](https://img.shields.io/github/release/temirov/ctx.svg)](https://github.com/temirov/ctx/releases)
+[![GitHub release](https://img.shields.io/github/release/temirov/ctx.svg)](https://github.com/tyemirov/ctx/releases)
 
 `ctx` is a command-line tool written in Go that displays a directory tree view, outputs file contents for specified
 files and directories, or analyzes the call chain for a given function in the repository. It supports exclusion patterns
@@ -14,7 +14,7 @@ Install and try ctx's core features: directory trees, file contents with optiona
 1. Install:
 
    ```shell
-   go install github.com/temirov/ctx@latest
+   go install github.com/tyemirov/ctx@latest
    ```
 
 2. Show a directory tree:
@@ -32,7 +32,7 @@ Install and try ctx's core features: directory trees, file contents with optiona
 4. Analyze a call chain:
 
    ```shell
-   ctx callchain github.com/temirov/ctx/internal/commands.GetContentData
+   ctx callchain github.com/tyemirov/ctx/internal/commands.GetContentData
    ```
 
 ## Features
@@ -73,7 +73,7 @@ Install and try ctx's core features: directory trees, file contents with optiona
       direct callers and callees. For example:
 
       ```shell
-      ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2
+      ctx callchain github.com/tyemirov/ctx/internal/commands.GetContentData --depth 2
       ```
 - **Exclusion Patterns (for `tree` and `content`):**
     - Reads patterns from a `.ignore` file located at the root of each processed directory (can be disabled with
@@ -93,7 +93,7 @@ Install and try ctx's core features: directory trees, file contents with optiona
 ## Downloads
 
 Pre-built binaries are available on the
-[Releases](https://github.com/temirov/ctx/releases) page for macOS (Intel & ARM), Linux (Intel), and Windows (Intel).
+[Releases](https://github.com/tyemirov/ctx/releases) page for macOS (Intel & ARM), Linux (Intel), and Windows (Intel).
 
 ## Installation
 
@@ -102,7 +102,7 @@ Pre-built binaries are available on the
 3. Run:
 
    ```shell
-   go install github.com/temirov/ctx@latest
+   go install github.com/tyemirov/ctx@latest
    ```
 
 4. Verify:
@@ -160,7 +160,7 @@ ctx content main.go pkg --doc
 Analyze the call chain for a function in XML including docs:
 
 ```shell
-ctx callchain github.com/temirov/ctx/internal/commands.GetContentData --depth 2 --doc --format xml
+ctx callchain github.com/tyemirov/ctx/internal/commands.GetContentData --depth 2 --doc --format xml
 ```
 
 Retrieve GitHub documentation for a project section:

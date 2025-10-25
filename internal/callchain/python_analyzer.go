@@ -9,7 +9,7 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	python "github.com/smacker/go-tree-sitter/python"
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 const (

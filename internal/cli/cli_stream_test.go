@@ -12,9 +12,9 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/temirov/ctx/internal/config"
-	"github.com/temirov/ctx/internal/types"
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/config"
+	"github.com/tyemirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 type treeStubCounter struct{}

@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/temirov/ctx/internal/output"
-	"github.com/temirov/ctx/internal/services/stream"
-	"github.com/temirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/output"
+	"github.com/tyemirov/ctx/internal/services/stream"
+	"github.com/tyemirov/ctx/internal/types"
 )
 
 func TestRawStreamRendererStreamsTreeEvents(t *testing.T) {

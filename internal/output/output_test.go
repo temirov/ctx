@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/temirov/ctx/internal/output"
-	"github.com/temirov/ctx/internal/types"
-	"github.com/temirov/ctx/internal/utils"
+	"github.com/tyemirov/ctx/internal/output"
+	"github.com/tyemirov/ctx/internal/types"
+	"github.com/tyemirov/ctx/internal/utils"
 )
 
 // textMimeTypeExpected defines the MIME type expected for text files.
