@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.2.2] - 2025-10-25
+
+### Highlights
+
+* **Repository owner rename and module path alignment.** The project now lives at `github.com/tyemirov/ctx`, and every import, configuration default, and installer reference has been migrated so downstream builds keep working after the move.
+
+### Improvements ⚙️
+
+* Raised the minimum Go toolchain to 1.25, matching the repository relocation and ensuring `go install github.com/tyemirov/ctx@latest` succeeds with the updated module path.
+
+### Docs 📚
+
+* Updated README badges, installation instructions, and call chain examples to point to the new `tyemirov` GitHub namespace.
+
 ## [v0.2.1] - 2025-10-19
 
 ### Highlights
