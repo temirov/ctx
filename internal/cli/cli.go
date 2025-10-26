@@ -52,6 +52,7 @@ Use --format to select raw, json, or xml output. Use --doc to include documentat
 	versionFlagDescription    = "display application version"
 	copyFlagName              = "copy"
 	copyFlagDescription       = "copy command output to the system clipboard"
+	copyFlagAlias             = "c"
 	copyOnlyFlagName          = "copy-only"
 	copyOnlyFlagAlias         = "co"
 	copyOnlyFlagDescription   = "copy command output to the system clipboard without writing to stdout"
@@ -279,8 +280,12 @@ func createRootCommand(clipboardProvider clipboard.Copier) *cobra.Command {
 	}
 	registerBooleanFlag(rootCommand.PersistentFlags(), &showVersion, versionFlagName, false, versionFlagDescription)
 	registerBooleanFlag(rootCommand.PersistentFlags(), &copyFlagValue, copyFlagName, false, copyFlagDescription)
+	registerBooleanFlag(rootCommand.PersistentFlags(), &copyFlagValue, copyFlagAlias, false, copyFlagDescription)
 	registerBooleanFlag(rootCommand.PersistentFlags(), &copyOnlyFlagValue, copyOnlyFlagName, false, copyOnlyFlagDescription)
 	registerBooleanFlag(rootCommand.PersistentFlags(), &copyOnlyFlagValue, copyOnlyFlagAlias, false, copyOnlyFlagDescription)
+	if copyAliasFlag := rootCommand.PersistentFlags().Lookup(copyFlagAlias); copyAliasFlag != nil {
+		copyAliasFlag.Hidden = true
+	}
 	if aliasFlag := rootCommand.PersistentFlags().Lookup(copyOnlyFlagAlias); aliasFlag != nil {
 		aliasFlag.Hidden = true
 	}
@@ -1056,7 +1061,7 @@ func resolveCopyDefault(command *cobra.Command, cliValue bool, configurationValu
 	if configurationValue == nil {
 		return cliValue
 	}
-	if booleanFlagChanged(command, copyFlagName) {
+	if booleanFlagChanged(command, copyFlagName, copyFlagAlias) {
 		return cliValue
 	}
 	return *configurationValue
@@ -1076,13 +1081,22 @@ func booleanFlagChanged(command *cobra.Command, names ...string) bool {
 	if command == nil {
 		return false
 	}
+	for _, name := range names {
+		if flag := command.Flag(name); flag != nil && flag.Changed {
+			return true
+		}
+	}
 	inherited := command.InheritedFlags()
 	local := command.Flags()
+	persistent := command.PersistentFlags()
 	for _, name := range names {
 		if inherited != nil && inherited.Changed(name) {
 			return true
 		}
 		if local != nil && local.Changed(name) {
+			return true
+		}
+		if persistent != nil && persistent.Changed(name) {
 			return true
 		}
 	}

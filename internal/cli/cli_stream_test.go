@@ -316,6 +316,31 @@ func TestRunToolCopyOnlySuppressesStdout(t *testing.T) {
 	}
 }
 
+func TestResolveCopyDefaultRespectsAlias(t *testing.T) {
+	root := &cobra.Command{Use: "root"}
+	child := &cobra.Command{Use: "child"}
+	root.AddCommand(child)
+	var copyValue bool
+	registerBooleanFlag(root.PersistentFlags(), &copyValue, copyFlagName, false, "")
+	registerBooleanFlag(root.PersistentFlags(), &copyValue, copyFlagAlias, false, "")
+	if alias := root.PersistentFlags().Lookup(copyFlagAlias); alias != nil {
+		alias.Hidden = true
+	}
+	if err := root.PersistentFlags().Set(copyFlagAlias, "true"); err != nil {
+		t.Fatalf("set copy alias: %v", err)
+	}
+	if lookup := child.InheritedFlags().Lookup(copyFlagAlias); lookup == nil || !lookup.Changed {
+		t.Fatalf("expected inherited alias flag to be marked changed")
+	}
+	if flag := child.Flag(copyFlagAlias); flag == nil || !flag.Changed {
+		t.Fatalf("expected command flag lookup to report alias changed")
+	}
+	result := resolveCopyDefault(child, copyValue, boolPtr(false))
+	if !result {
+		t.Fatalf("expected copy alias to override configuration default")
+	}
+}
+
 func TestApplyStreamConfigurationUsesDefaults(t *testing.T) {
 	var pathConfiguration pathOptions
 	format := types.FormatJSON
