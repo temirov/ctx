@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Bug Fixes 🐞
+
+* Respected parent `.gitignore` and `.ignore` directives when scanning subdirectories so tree/content output no longer leaks excluded folders. (bugfix/CT-01-ignore-parent-folders)
+
 ## [v0.2.2] - 2025-10-25
 
 ### Highlights

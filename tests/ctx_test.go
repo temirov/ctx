@@ -1755,6 +1755,37 @@ func TestCTX(testingHandle *testing.T) {
 			},
 		},
 		{
+			name:      "ParentGitignoreExcluded",
+			arguments: []string{treeAlias},
+			prepare: func(t *testing.T) string {
+				layout := map[string]string{
+					gitignoreFileName: "site_data/\napp/logs/\n",
+					filepath.Join("app", "site_data", hiddenFileName): hiddenFileContent,
+					filepath.Join("app", "logs", hiddenFileName):      hiddenFileContent,
+					filepath.Join("app", visibleFileName):             visibleFileContent,
+				}
+				root := setupTestDirectory(t, layout)
+				return filepath.Join(root, "app")
+			},
+			validate: func(t *testing.T, output string) {
+				nodes := decodeJSONRoots(t, output)
+				if len(nodes) != 1 {
+					t.Fatalf("expected one root node, got %d", len(nodes))
+				}
+				rootNode := nodes[0]
+				children := childrenToSlice(rootNode.Children)
+				if len(children) != 1 || children[0].Name != visibleFileName {
+					t.Fatalf("expected only %s in output, got %#v", visibleFileName, children)
+				}
+				if strings.Contains(output, "site_data") {
+					t.Fatalf("unexpected site_data entry in output\n%s", output)
+				}
+				if strings.Contains(output, "logs") {
+					t.Fatalf("unexpected logs entry in output\n%s", output)
+				}
+			},
+		},
+		{
 			name:      "NestedGitignoreContentExcluded",
 			arguments: []string{contentAlias},
 			prepare: func(testingHandle *testing.T) string {
