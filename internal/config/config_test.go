@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	gitDirectoryPattern = utils.GitDirectoryName + "/"
-	binarySectionHeader = "[binary]"
+	gitDirectoryPattern    = utils.GitDirectoryName + "/"
+	binarySectionHeader    = "[binary]"
+	matchAllEntriesPattern = "*"
 )
 
 // writeTestFile creates a file with the specified content, failing the test on error.
@@ -185,5 +186,37 @@ func TestLoadRecursiveIgnorePatternsIncludesParentGitignore(testingHandle *testi
 	sort.Strings(binaryPatterns)
 	if !reflect.DeepEqual(binaryPatterns, expectedBinaryPatterns) {
 		testingHandle.Fatalf("unexpected binary patterns: got %v want %v", binaryPatterns, expectedBinaryPatterns)
+	}
+}
+
+func TestLoadRecursiveIgnorePatternsPreservesIgnoredRootDirectory(testingHandle *testing.T) {
+	const (
+		childDirectoryName   = "app"
+		ignoredDirectoryRule = childDirectoryName + "/"
+	)
+
+	parentDirectory := testingHandle.TempDir()
+	childDirectory := filepath.Join(parentDirectory, childDirectoryName)
+	if makeDirError := os.MkdirAll(childDirectory, 0o755); makeDirError != nil {
+		testingHandle.Fatalf("failed to create child directory: %v", makeDirError)
+	}
+
+	writeTestFile(testingHandle, filepath.Join(parentDirectory, utils.GitIgnoreFileName), ignoredDirectoryRule+"\n")
+
+	ignorePatterns, binaryPatterns, loadError := config.LoadRecursiveIgnorePatterns(childDirectory, nil, true, false, false)
+	if loadError != nil {
+		testingHandle.Fatalf("LoadRecursiveIgnorePatterns failed: %v", loadError)
+	}
+
+	expectedPatterns := []string{gitDirectoryPattern, matchAllEntriesPattern}
+
+	sort.Strings(ignorePatterns)
+	sort.Strings(expectedPatterns)
+	if !reflect.DeepEqual(ignorePatterns, expectedPatterns) {
+		testingHandle.Fatalf("unexpected patterns: got %v want %v", ignorePatterns, expectedPatterns)
+	}
+
+	if len(binaryPatterns) != 0 {
+		testingHandle.Fatalf("unexpected binary patterns: got %v want []", binaryPatterns)
 	}
 }

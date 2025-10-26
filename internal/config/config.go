@@ -18,7 +18,8 @@ const (
 	// binarySectionHeader identifies the section listing binary content patterns.
 	binarySectionHeader = "[binary]"
 	// ignoreSectionHeader identifies the section listing ignore patterns.
-	ignoreSectionHeader = "[ignore]"
+	ignoreSectionHeader    = "[ignore]"
+	matchAllEntriesPattern = "*"
 )
 
 // LoadIgnoreFilePatterns reads a specified ignore file and returns ignore patterns and binary content patterns.
@@ -281,17 +282,21 @@ func adaptPatternsForRoot(patterns []string, relativeRoot string) []string {
 			trimmed := strings.TrimPrefix(normalizedPattern, "/")
 			if strings.HasPrefix(trimmed, rootPrefix) {
 				result := strings.TrimPrefix(trimmed, rootPrefix)
-				if result != "" {
-					adapted = append(adapted, result)
+				if result == "" {
+					adapted = append(adapted, matchAllEntriesPattern)
+					continue
 				}
+				adapted = append(adapted, result)
 			}
 			continue
 		}
 		if strings.HasPrefix(normalizedPattern, rootPrefix) {
 			result := strings.TrimPrefix(normalizedPattern, rootPrefix)
-			if result != "" {
-				adapted = append(adapted, result)
+			if result == "" {
+				adapted = append(adapted, matchAllEntriesPattern)
+				continue
 			}
+			adapted = append(adapted, result)
 			continue
 		}
 		adapted = append(adapted, normalizedPattern)
