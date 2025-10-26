@@ -34,6 +34,7 @@ type StreamCommandConfiguration struct {
 	Tokens            TokenConfiguration `mapstructure:"tokens"`
 	Paths             PathConfiguration  `mapstructure:"paths"`
 	Copy              *bool              `mapstructure:"copy"`
+	CopyOnly          *bool              `mapstructure:"copy_only"`
 	LegacyClipboard   *bool              `mapstructure:"clipboard"`
 }
 
@@ -59,6 +60,7 @@ type CallChainConfiguration struct {
 	DocumentationMode string `mapstructure:"documentation_mode"`
 	DocsAttempt       *bool  `mapstructure:"docs_attempt"`
 	Copy              *bool  `mapstructure:"copy"`
+	CopyOnly          *bool  `mapstructure:"copy_only"`
 	LegacyClipboard   *bool  `mapstructure:"clipboard"`
 }
 
@@ -194,6 +196,9 @@ func (config StreamCommandConfiguration) merge(override StreamCommandConfigurati
 	if overrideNormalized.Copy != nil {
 		result.Copy = cloneBool(overrideNormalized.Copy)
 	}
+	if overrideNormalized.CopyOnly != nil {
+		result.CopyOnly = cloneBool(overrideNormalized.CopyOnly)
+	}
 	return result.normalizeCopySettings()
 }
 
@@ -245,6 +250,9 @@ func (config CallChainConfiguration) merge(override CallChainConfiguration) Call
 	}
 	if overrideNormalized.Copy != nil {
 		result.Copy = cloneBool(overrideNormalized.Copy)
+	}
+	if overrideNormalized.CopyOnly != nil {
+		result.CopyOnly = cloneBool(overrideNormalized.CopyOnly)
 	}
 	return result.normalizeCopySettings()
 }

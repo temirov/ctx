@@ -6,6 +6,10 @@
 
 * Respected parent `.gitignore` and `.ignore` directives when scanning subdirectories so tree/content output no longer leaks excluded folders. (bugfix/CT-01-ignore-parent-folders)
 
+### Improvements ⚙️
+
+* Added `--copy-only` (`--co`) to mirror clipboard output without printing to stdout, plus configuration support via `copy_only`. (improvement/CT-02-copy-only)
+
 ## [v0.2.2] - 2025-10-25
 
 ### Highlights

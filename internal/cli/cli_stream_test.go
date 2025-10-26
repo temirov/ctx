@@ -243,6 +243,7 @@ func TestRunToolCopiesOutputToClipboard(t *testing.T) {
 				&outputBuffer,
 				io.Discard,
 				true,
+				false,
 				stub,
 			)
 
@@ -263,6 +264,55 @@ func TestRunToolCopiesOutputToClipboard(t *testing.T) {
 				t.Fatalf("clipboard text mismatch\nexpected: %q\nactual: %q", outputBuffer.String(), stub.copiedText)
 			}
 		})
+	}
+}
+
+func TestRunToolCopyOnlySuppressesStdout(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "copy-only.txt")
+	if err := os.WriteFile(filePath, []byte("copy only"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	stub := &clipboardStub{}
+	var outputBuffer bytes.Buffer
+	executionError := runTool(
+		context.Background(),
+		types.CommandContent,
+		[]string{tempDir},
+		nil,
+		false,
+		false,
+		false,
+		defaultCallChainDepth,
+		types.FormatJSON,
+		types.DocumentationModeDisabled,
+		false,
+		true,
+		tokenOptions{},
+		false,
+		"",
+		&outputBuffer,
+		io.Discard,
+		false,
+		true,
+		stub,
+	)
+
+	if executionError != nil {
+		t.Fatalf("unexpected error: %v", executionError)
+	}
+	if outputBuffer.Len() != 0 {
+		t.Fatalf("expected no stdout output, got %q", outputBuffer.String())
+	}
+	if stub.invocationCount != 1 {
+		t.Fatalf("expected clipboard to be used once, got %d", stub.invocationCount)
+	}
+	if stub.copiedText == "" {
+		t.Fatalf("expected clipboard to receive content")
+	}
+	if !strings.Contains(stub.copiedText, filepath.Base(filePath)) {
+		t.Fatalf("expected clipboard content to reference %s, got %q", filepath.Base(filePath), stub.copiedText)
 	}
 }
 

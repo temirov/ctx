@@ -176,6 +176,7 @@ func executeCallChainCommand(commandContext context.Context, request mcp.Command
 		&outputBuffer,
 		&warningBuffer,
 		false,
+		false,
 		nil,
 	)
 	if executionErr != nil {
@@ -335,6 +336,7 @@ func invokeStreamCommand(commandContext context.Context, parameters streamExecut
 		parameters.docsAPIBase,
 		&outputBuffer,
 		&warningBuffer,
+		false,
 		false,
 		nil,
 	)
