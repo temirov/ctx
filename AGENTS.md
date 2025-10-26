@@ -1,6 +1,150 @@
 # AGENTS.md
 
-## Core Principles
+## Gravity Notes
+
+## Document Roles
+
+- NOTES.md: Read-only process/journal. Append-only when closing work; do not retroactively edit history.
+- ISSUES.md: Append-only log of newly discovered requests and changes. No instructive sections live here; each entry records what changed or what was discovered.
+- PLAN.md: Working plan for one concrete change/issue; ephemeral and replaced per change.
+
+### Issue Status Terms
+
+- Resolved: Completed and verified; no further action.
+- Unresolved: Needs decision and/or implementation.
+- Blocked: Requires an external dependency or policy decision.
+
+## Front-End Coding Standards (Browser ES Modules with Alpine.js + Vanilla CSS)
+
+### 1. Naming & Identifiers
+
+* No single-letter or non-descriptive names.
+* **camelCase** → variables & functions.
+* **PascalCase** → Alpine factories / classes.
+* **SCREAMING_SNAKE_CASE** → constants.
+* Event handlers named by behavior (`handleSpinButtonClick`, not `onClick`).
+
+### 2. State & Events
+
+* **Local by default**: `x-data` owns its own state.
+* **Shared state** only via `Alpine.store` when truly necessary.
+* **Events for communication**: use `$dispatch` / `$listen` to link components.
+* Prefer **DOM-scoped events** (bubbling inside a panel) over `.window`. Use scope IDs only if DOM hierarchy forces it.
+* Notifications, modals, and similar components must be event-driven; they cannot show unless triggered by a defined event.
+
+### 3. Dead Code & Duplication
+
+* No unused variables, imports, or exports.
+* No duplicate logic; extract helpers.
+* One source of truth for constants or repeated transforms.
+
+### 4. Strings & Enums
+
+* All user-facing strings live in `constants.js`.
+* Use `Object.freeze` or symbols for enums.
+* Map keys must be constants, not arbitrary strings.
+
+### 5. Code Style & Structure
+
+* ES modules (`type="module"`), strict mode.
+* Pure functions for transforms; Alpine factories (`function Foo() { return {…} }`) for stateful components.
+* No mutation of imports; no parameter mutation.
+* DOM logic in `ui/`; domain logic in `core/`; utilities in `utils/`.
+
+### 6. Dependencies & Organization
+
+* CDN-hosted dependencies only; no bundlers.
+* Node tooling is permitted for **tests only**.
+* Layout:
+
+  ```
+  /assets/{css,img,audio}  # optional, create when needed
+  /data/*.json             # optional, create when needed
+  /js/
+    constants.js
+    types.d.js
+    utils/
+    core/
+    ui/
+    app.js   # composition root
+  index.html
+  ```
+* the MDE editor is used [text](MDE.v2.19.0.md). Follow the documentation to ensure proper API usage and avoid reimplementing the functionality available through MDE API
+* marked.js documentation is available at [text](marked.js.md). Follow the documentation to ensure proper API usage and avoid reimplementing the functionality available through marked.js API
+
+### Dependencies & Versions
+
+- Alpine.js: `3.13.5` via `https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/module.esm.js`
+- EasyMDE: `2.19.0`
+- marked.js: `12.0.2`
+- DOMPurify: `3.1.7`
+- Google Identity Services: `https://accounts.google.com/gsi/client`
+- Loopaware widget: `https://loopaware.mprlab.com/widget.js` (allowed per Security policy below)
+
+### 7. Testing
+
+* Puppeteer permitted; Playwright forbidden.
+* Node test harness (`npm test`) runs browser automation.
+* Use table-driven test cases.
+* Black-box tests only: public APIs and DOM.
+* `tests/assert.js` provides `assertEqual`, `assertDeepEqual`, `assertThrows`.
+
+### 8. Documentation
+
+* JSDoc required for public functions, Alpine factories.
+* `// @ts-check` at file top.
+* `types.d.js` holds typedefs (`Note`, `NoteClassification`, etc.).
+* Each domain module has a `doc.md` or `README.md`.
+* Before changing integrations with third-party libraries (EasyMDE, marked.js, DOMPurify, etc.), read the companion docs in-repo (`MDE.v2.19.0.md`, `marked.js.md`, …) to ensure we're using the supported APIs instead of re-implementing them.
+
+### 9. Refactors
+
+* Plan changes; write bullet plan in PR description.
+* Split files >300–400 lines.
+* `app.js` wires dependencies, registers Alpine components, stores, and event bridges.
+
+### 10. Error Handling & Logging
+
+* Throw `Error`, never raw strings.
+* Catch errors at user entry points (button actions, init).
+* `utils/logging.js` wraps logging; no stray `console.log`.
+
+### 11. Performance & UX
+
+* Use `.debounce` modifiers for inputs.
+* Batch DOM writes with `requestAnimationFrame`.
+* Lazy-init heavy components (on intersection or first interaction).
+* Cache selectors and avoid forced reflows.
+* Animations must be async; no blocking waits.
+
+### 12. Linting & Formatting
+
+* ESLint run manually (Dockerized).
+* Prettier only on explicit trigger, never autosave.
+* Core enforced rules:
+
+  * `no-unused-vars`
+  * `no-implicit-globals`
+  * `no-var`
+  * `prefer-const`
+  * `eqeqeq`
+  * `no-magic-numbers` (allow 0,1,-1,100,360).
+
+### 13. Data > Logic
+
+* Validate catalogs (JSON) at boot.
+* Logic assumes valid data; fail fast on schema errors.
+
+### 14. Security & Boundaries
+
+* No `eval`, no inline `onclick`.
+* CSP is optional and low priority for now; recommended for production hardening.
+* Google Analytics snippet is the only sanctioned inline exception.
+* All external calls go through `js/core/backendClient.js` and `js/core/classifier.js` (network boundaries), both mockable in tests. Do not call `fetch` directly from UI components.
+
+## Backend (Go Language)
+
+### Core Principles
 
 * Reuse existing code first; extend or adapt before writing new code.
 * Generalize existing implementations instead of duplicating them.
@@ -18,7 +162,7 @@
 
 ---
 
-## Deliverables
+### Deliverables (for automation)
 
 * Only changed files.
 * No diffs, snippets, or examples.
@@ -27,7 +171,7 @@
 
 ---
 
-## Code Style
+### Code Style
 
 * No single-letter identifiers.
 * Long, descriptive names for all identifiers.
@@ -42,7 +186,7 @@
 
 ---
 
-## Project Structure
+### Project Structure
 
 * `cmd/` for CLI entrypoints.
 * `internal/` for private packages.
@@ -52,7 +196,7 @@
 
 ---
 
-## Configuration & CLI
+### Configuration & CLI
 
 * Use Viper + Cobra.
 * Flags optional when provided via config/env.
@@ -61,7 +205,7 @@
 
 ---
 
-## Dependencies (Approved)
+### Dependencies (Approved)
 
 * Core: `spf13/viper`, `spf13/cobra`, `uber/zap`.
 * HTTP: `gin-gonic/gin`, `gin-contrib/cors`.
@@ -73,7 +217,7 @@
 
 ---
 
-## Testing
+### Testing
 
 * No filesystem pollution.
 * Use `t.TempDir()` for temporary dirs.
@@ -84,16 +228,16 @@
 
 ---
 
-## Web/UI
+### Web/UI
 
 * Use Gin for routing.
 * Middleware for CORS, auth, logging.
-* Use Bootstrap built-ins only.
-* Header fixed top; footer fixed bottom via Bootstrap utilities.
+* Vanilla CSS; no Bootstrap.
+* Header fixed top; footer fixed bottom using CSS utilities.
 
 ---
 
-## Performance & Reliability
+### Performance & Reliability
 
 * Measure before optimizing.
 * Favor clarity first, optimize after.
@@ -103,16 +247,24 @@
 
 ---
 
-## Security
+### Security
 
 * Secrets from env.
 * Never log secrets or PII.
 * Validate all inputs.
 * Principle of least privilege.
+* CSP-friendly ES modules. Allowed third-party scripts: Google Analytics snippet, Google Identity Services, Loopaware widget. When CSP is enabled, inline scripts must be limited to GA config or guarded by nonce/hash.
 
----
+#### CSP Template (optional; use when enabling CSP)
 
-## Assistant Workflow
+- HTTP header (preferred):
+  - `Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://accounts.google.com https://www.googletagmanager.com https://loopaware.mprlab.com 'nonce-<nonce-value>'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self' https://llm-proxy.mprlab.com http://localhost:8080; font-src 'self' data:; frame-src https://accounts.google.com; base-uri 'self'; form-action 'self';`
+- Meta tag (static hosting):
+  - `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://accounts.google.com https://www.googletagmanager.com https://loopaware.mprlab.com 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self' https://llm-proxy.mprlab.com http://localhost:8080; font-src 'self' data:; frame-src https://accounts.google.com; base-uri 'self'; form-action 'self';">`
+- Replace `connect-src` endpoints when running against different backends or proxies. Prefer nonces over `'unsafe-inline'` where a server can inject them.
+- When using a local LLM proxy on a non-default port (e.g., `http://localhost:8081`), include it in `connect-src`.
+
+### Assistant Workflow
 
 * Read repo and scan existing code.
 * Plan reuse and extension.
@@ -123,7 +275,7 @@
 
 ---
 
-## Review Checklist
+### Review Checklist
 
 * [ ] Reused/extended existing code.
 * [ ] Replaced branching with data structures where appropriate.
