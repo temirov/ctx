@@ -133,13 +133,14 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--docs-attempt`      | content, callchain | When paired with `--doc full`, heuristically fetch documentation for imported GitHub modules. |
 | `--depth <number>`    | callchain          | Limit call graph traversal depth (default `1`). |
 | `--version`           | all commands       | Print ctx version and exit. |
-| `--copy`              | tree, content, callchain | Copy command output to the system clipboard after rendering completes. |
+| `--copy`, `--c`       | tree, content, callchain, doc | Copy command output to the system clipboard after rendering completes. |
+| `--copy-only`, `--co` | tree, content, callchain, doc | Copy command output to the system clipboard without writing it to stdout. |
 | `--mcp`               | root command       | Run an HTTP server that publishes ctx capabilities for MCP clients. |
 
 Boolean flags accept any of `true`, `false`, `yes`, `no`, `on`, `off`, `1`, or `0` (case-insensitive), so commands such as `--summary no` or `--copy off` work consistently across the CLI.
 
-When `--copy` is active the command writes its output to the terminal
-and copies the same text into the system clipboard. Configure persistent clipboard behaviour by setting `copy: true` under the relevant command (`tree`, `content`, or `callchain`) in `config.yaml`. If clipboard integration
+When `--copy` (or its alias `--c`) is active the command writes its output to the terminal
+and copies the same text into the system clipboard. Use `--copy-only` (or its alias `--co`) to copy the output without printing anything to stdout—ideal for keeping logs clean while still capturing results. Configure persistent clipboard behaviour by setting `copy: true` or `copy_only: true` under the relevant command (`tree`, `content`, or `callchain`) in `config.yaml`. If clipboard integration
 is requested but not supported on the current platform, the command fails with
 an explanatory error.
 
@@ -174,7 +175,7 @@ ctx doc --path jspreadsheet/ce/docs/jspreadsheet --doc full
 `ctx doc` expects enough information to identify the GitHub documentation directory.
 
 - **Required:** Provide a single `--path` value using `owner/repo[/path]` coordinates or paste a `https://github.com/owner/repo/tree/...` URL. Supplying only `owner/repo` fetches documentation from the repository root.
-- **Optional:** `--ref` selects a branch, tag, or commit; `--rules` applies a cleanup rule set; `--doc` toggles the rendered documentation mode; `--copy` copies the rendered output. Combine these with configuration defaults as needed.
+- **Optional:** `--ref` selects a branch, tag, or commit; `--rules` applies a cleanup rule set; `--doc` toggles the rendered documentation mode; `--copy`/`--c` or `--copy-only`/`--co` copies the rendered output (with `--copy-only`/`--co` suppressing stdout). Combine these with configuration defaults as needed.
 - **Heuristics:** Use `--docs-attempt` with `--doc full` on `content` or `callchain` to let ctx detect third-party Go module imports, infer GitHub repositories, and retrieve `docs/` content when available. The same GitHub fetcher powers both the doc command and docs attempts.
 
 Run `ctx doc --help` to review the command description, flag roles, and examples.

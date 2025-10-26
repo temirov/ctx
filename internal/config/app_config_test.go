@@ -9,16 +9,17 @@ import (
 )
 
 type configTestCase struct {
-	name          string
-	globalContent string
-	localContent  string
-	explicitPath  string
-	expectFormat  string
-	expectSummary *bool
-	expectTokens  *bool
-	expectModel   string
-	expectContent *bool
-	expectCopy    *bool
+	name           string
+	globalContent  string
+	localContent   string
+	explicitPath   string
+	expectFormat   string
+	expectSummary  *bool
+	expectTokens   *bool
+	expectModel    string
+	expectContent  *bool
+	expectCopy     *bool
+	expectCopyOnly *bool
 }
 
 func boolPointer(value bool) *bool {
@@ -43,27 +44,40 @@ func TestLoadApplicationConfigurationMergesSources(t *testing.T) {
 			expectCopy:    boolPointer(false),
 		},
 		{
-			name:          "explicit_path_only",
-			globalContent: "tree:\n  format: json\n",
-			localContent:  "",
-			explicitPath:  "custom.yaml",
-			expectFormat:  "raw",
-			expectSummary: nil,
-			expectTokens:  nil,
-			expectModel:   "",
-			expectContent: nil,
-			expectCopy:    nil,
+			name:           "explicit_path_only",
+			globalContent:  "tree:\n  format: json\n",
+			localContent:   "",
+			explicitPath:   "custom.yaml",
+			expectFormat:   "raw",
+			expectSummary:  nil,
+			expectTokens:   nil,
+			expectModel:    "",
+			expectContent:  nil,
+			expectCopy:     nil,
+			expectCopyOnly: nil,
 		},
 		{
-			name:          "copy_key_applies",
-			globalContent: "tree:\n  copy: true\n",
-			localContent:  "",
-			expectFormat:  "",
-			expectSummary: nil,
-			expectTokens:  nil,
-			expectModel:   "",
-			expectContent: nil,
-			expectCopy:    boolPointer(true),
+			name:           "copy_key_applies",
+			globalContent:  "tree:\n  copy: true\n",
+			localContent:   "",
+			expectFormat:   "",
+			expectSummary:  nil,
+			expectTokens:   nil,
+			expectModel:    "",
+			expectContent:  nil,
+			expectCopy:     boolPointer(true),
+			expectCopyOnly: nil,
+		},
+		{
+			name:           "copy_only_key_applies",
+			globalContent:  "tree:\n  copy_only: true\n",
+			expectFormat:   "",
+			expectSummary:  nil,
+			expectTokens:   nil,
+			expectModel:    "",
+			expectContent:  nil,
+			expectCopy:     nil,
+			expectCopyOnly: boolPointer(true),
 		},
 	}
 
@@ -146,6 +160,15 @@ func TestLoadApplicationConfigurationMergesSources(t *testing.T) {
 			} else {
 				if loadedConfig.Tree.Copy == nil || *loadedConfig.Tree.Copy != *testCase.expectCopy {
 					t.Fatalf("unexpected copy value")
+				}
+			}
+			if testCase.expectCopyOnly == nil {
+				if loadedConfig.Tree.CopyOnly != nil {
+					t.Fatalf("expected no copy_only override")
+				}
+			} else {
+				if loadedConfig.Tree.CopyOnly == nil || *loadedConfig.Tree.CopyOnly != *testCase.expectCopyOnly {
+					t.Fatalf("unexpected copy_only value")
 				}
 			}
 		})

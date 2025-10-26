@@ -6,8 +6,10 @@ Entries record newly discovered requests or changes, with their outcomes. No ins
 
 ## Improvements
 
-- [ ] [CT-02] add subcommands --copy-only, and add an abbreviated version of it, --co, which doesnt print the output of the command to STDOUT and only copies it to clipboard
-- [ ] [CT-03] abbreviate --copy subcommand to --c, both staying valid and copying to the clipboard the output
+- [x] [CT-02] add subcommands --copy-only, and add an abbreviated version of it, --co, which doesnt print the output of the command to STDOUT and only copies it to clipboard
+    - Added persistent `--copy-only`/`--co` flags plus config support so clipboard-only mode skips stdout while preserving copy semantics across commands.
+- [x] [CT-03] abbreviate --copy subcommand to --c, both staying valid and copying to the clipboard the output
+    - Registered the `--c` shorthand for `--copy`, wired configuration detection to respect the alias, and documented the new toggle.
 
 
 ## BugFixes

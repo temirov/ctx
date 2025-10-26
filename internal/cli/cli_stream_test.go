@@ -243,6 +243,7 @@ func TestRunToolCopiesOutputToClipboard(t *testing.T) {
 				&outputBuffer,
 				io.Discard,
 				true,
+				false,
 				stub,
 			)
 
@@ -263,6 +264,80 @@ func TestRunToolCopiesOutputToClipboard(t *testing.T) {
 				t.Fatalf("clipboard text mismatch\nexpected: %q\nactual: %q", outputBuffer.String(), stub.copiedText)
 			}
 		})
+	}
+}
+
+func TestRunToolCopyOnlySuppressesStdout(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "copy-only.txt")
+	if err := os.WriteFile(filePath, []byte("copy only"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	stub := &clipboardStub{}
+	var outputBuffer bytes.Buffer
+	executionError := runTool(
+		context.Background(),
+		types.CommandContent,
+		[]string{tempDir},
+		nil,
+		false,
+		false,
+		false,
+		defaultCallChainDepth,
+		types.FormatJSON,
+		types.DocumentationModeDisabled,
+		false,
+		true,
+		tokenOptions{},
+		false,
+		"",
+		&outputBuffer,
+		io.Discard,
+		false,
+		true,
+		stub,
+	)
+
+	if executionError != nil {
+		t.Fatalf("unexpected error: %v", executionError)
+	}
+	if outputBuffer.Len() != 0 {
+		t.Fatalf("expected no stdout output, got %q", outputBuffer.String())
+	}
+	if stub.invocationCount != 1 {
+		t.Fatalf("expected clipboard to be used once, got %d", stub.invocationCount)
+	}
+	if stub.copiedText == "" {
+		t.Fatalf("expected clipboard to receive content")
+	}
+	if !strings.Contains(stub.copiedText, filepath.Base(filePath)) {
+		t.Fatalf("expected clipboard content to reference %s, got %q", filepath.Base(filePath), stub.copiedText)
+	}
+}
+
+func TestResolveCopyDefaultRespectsAlias(t *testing.T) {
+	root := &cobra.Command{Use: "root"}
+	child := &cobra.Command{Use: "child"}
+	root.AddCommand(child)
+	var copyValue bool
+	registerBooleanFlag(root.PersistentFlags(), &copyValue, copyFlagName, false, "")
+	registerBooleanFlag(root.PersistentFlags(), &copyValue, copyFlagAlias, false, "")
+	if alias := root.PersistentFlags().Lookup(copyFlagAlias); alias != nil {
+		alias.Hidden = true
+	}
+	if err := root.PersistentFlags().Set(copyFlagAlias, "true"); err != nil {
+		t.Fatalf("set copy alias: %v", err)
+	}
+	if lookup := child.InheritedFlags().Lookup(copyFlagAlias); lookup == nil || !lookup.Changed {
+		t.Fatalf("expected inherited alias flag to be marked changed")
+	}
+	if flag := child.Flag(copyFlagAlias); flag == nil || !flag.Changed {
+		t.Fatalf("expected command flag lookup to report alias changed")
+	}
+	result := resolveCopyDefault(child, copyValue, boolPtr(false))
+	if !result {
+		t.Fatalf("expected copy alias to override configuration default")
 	}
 }
 
