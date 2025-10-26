@@ -140,3 +140,50 @@ func TestLoadRecursiveIgnorePatternsAddsExclusions(testingHandle *testing.T) {
 		testingHandle.Fatalf("unexpected patterns: got %v want %v", actualPatterns, expectedPatterns)
 	}
 }
+
+// TestLoadRecursiveIgnorePatternsIncludesParentGitignore verifies that ignore directives defined in ancestor directories
+// are applied relative to the requested root.
+func TestLoadRecursiveIgnorePatternsIncludesParentGitignore(testingHandle *testing.T) {
+	const (
+		childDirectoryName       = "app"
+		parentDirectoryPattern   = "site_data/"
+		parentPrefixedDirPattern = childDirectoryName + "/logs/"
+		parentPrefixedFile       = childDirectoryName + "/secret.txt"
+		parentBinaryPattern      = childDirectoryName + "/assets.bin"
+	)
+
+	parentDirectory := testingHandle.TempDir()
+	childDirectory := filepath.Join(parentDirectory, childDirectoryName)
+	if makeDirError := os.MkdirAll(childDirectory, 0o755); makeDirError != nil {
+		testingHandle.Fatalf("failed to create child directory: %v", makeDirError)
+	}
+
+	writeTestFile(testingHandle, filepath.Join(parentDirectory, utils.GitIgnoreFileName),
+		parentDirectoryPattern+"\n"+parentPrefixedDirPattern+"\n"+parentPrefixedFile+"\n")
+	writeTestFile(testingHandle, filepath.Join(parentDirectory, utils.IgnoreFileName),
+		binarySectionHeader+"\n"+parentBinaryPattern+"\n")
+
+	ignorePatterns, binaryPatterns, loadError := config.LoadRecursiveIgnorePatterns(childDirectory, nil, true, true, false)
+	if loadError != nil {
+		testingHandle.Fatalf("LoadRecursiveIgnorePatterns failed: %v", loadError)
+	}
+
+	expectedPatterns := []string{
+		gitDirectoryPattern,
+		"logs/",
+		"secret.txt",
+		parentDirectoryPattern,
+	}
+	expectedBinaryPatterns := []string{"assets.bin"}
+
+	sort.Strings(ignorePatterns)
+	sort.Strings(expectedPatterns)
+	if !reflect.DeepEqual(ignorePatterns, expectedPatterns) {
+		testingHandle.Fatalf("unexpected patterns: got %v want %v", ignorePatterns, expectedPatterns)
+	}
+
+	sort.Strings(binaryPatterns)
+	if !reflect.DeepEqual(binaryPatterns, expectedBinaryPatterns) {
+		testingHandle.Fatalf("unexpected binary patterns: got %v want %v", binaryPatterns, expectedBinaryPatterns)
+	}
+}

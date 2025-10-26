@@ -121,6 +121,20 @@ func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionPatterns []s
 	var aggregatedPatterns []string
 	var aggregatedBinaryContentPatterns []string
 
+	absoluteRootDirectory, absoluteError := filepath.Abs(rootDirectoryPath)
+	if absoluteError != nil {
+		return nil, nil, absoluteError
+	}
+
+	if useGitignore || useIgnoreFile {
+		parentPatterns, parentBinaryPatterns, parentError := collectAncestorIgnorePatterns(absoluteRootDirectory, useGitignore, useIgnoreFile)
+		if parentError != nil {
+			return nil, nil, parentError
+		}
+		aggregatedPatterns = append(aggregatedPatterns, parentPatterns...)
+		aggregatedBinaryContentPatterns = append(aggregatedBinaryContentPatterns, parentBinaryPatterns...)
+	}
+
 	walkFunction := func(currentDirectoryPath string, directoryEntry fs.DirEntry, walkError error) error {
 		if walkError != nil {
 			return walkError
@@ -132,7 +146,7 @@ func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionPatterns []s
 			return filepath.SkipDir
 		}
 
-		relativeDirectory := utils.RelativePathOrSelf(currentDirectoryPath, rootDirectoryPath)
+		relativeDirectory := utils.RelativePathOrSelf(currentDirectoryPath, absoluteRootDirectory)
 		prefix := ""
 		if relativeDirectory != "." {
 			prefix = relativeDirectory + "/"
@@ -166,7 +180,7 @@ func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionPatterns []s
 		return nil
 	}
 
-	if walkError := filepath.WalkDir(rootDirectoryPath, walkFunction); walkError != nil {
+	if walkError := filepath.WalkDir(absoluteRootDirectory, walkFunction); walkError != nil {
 		return nil, nil, walkError
 	}
 
@@ -188,4 +202,99 @@ func LoadRecursiveIgnorePatterns(rootDirectoryPath string, exclusionPatterns []s
 	}
 
 	return deduplicatedPatterns, deduplicatedBinaryPatterns, nil
+}
+
+func collectAncestorIgnorePatterns(rootDirectory string, useGitignore bool, useIgnoreFile bool) ([]string, []string, error) {
+	currentDirectory := filepath.Clean(rootDirectory)
+	var aggregatedPatterns []string
+	var aggregatedBinaryPatterns []string
+
+	for {
+		parentDirectory := filepath.Dir(currentDirectory)
+		if parentDirectory == currentDirectory {
+			break
+		}
+
+		relativeRoot, relativeError := filepath.Rel(parentDirectory, rootDirectory)
+		if relativeError != nil {
+			return nil, nil, relativeError
+		}
+		normalizedRelativeRoot := filepath.ToSlash(relativeRoot)
+
+		if useIgnoreFile {
+			ignoreFilePath := filepath.Join(parentDirectory, utils.IgnoreFileName)
+			parentIgnorePatterns, parentBinaryPatterns, loadError := LoadIgnoreFilePatterns(ignoreFilePath)
+			if loadError != nil {
+				return nil, nil, fmt.Errorf("loading %s from %s: %w", utils.IgnoreFileName, parentDirectory, loadError)
+			}
+			aggregatedPatterns = append(aggregatedPatterns, adaptPatternsForRoot(parentIgnorePatterns, normalizedRelativeRoot)...)
+			aggregatedBinaryPatterns = append(aggregatedBinaryPatterns, adaptPatternsForRoot(parentBinaryPatterns, normalizedRelativeRoot)...)
+		}
+
+		if useGitignore {
+			gitignorePath := filepath.Join(parentDirectory, utils.GitIgnoreFileName)
+			parentGitignorePatterns, _, loadError := LoadIgnoreFilePatterns(gitignorePath)
+			if loadError != nil {
+				return nil, nil, fmt.Errorf("loading %s from %s: %w", utils.GitIgnoreFileName, parentDirectory, loadError)
+			}
+			aggregatedPatterns = append(aggregatedPatterns, adaptPatternsForRoot(parentGitignorePatterns, normalizedRelativeRoot)...)
+		}
+
+		currentDirectory = parentDirectory
+	}
+
+	return aggregatedPatterns, aggregatedBinaryPatterns, nil
+}
+
+func adaptPatternsForRoot(patterns []string, relativeRoot string) []string {
+	if len(patterns) == 0 {
+		return nil
+	}
+	trimmedRelativeRoot := strings.Trim(relativeRoot, "/")
+	if trimmedRelativeRoot == "." {
+		trimmedRelativeRoot = ""
+	}
+	rootPrefix := ""
+	if trimmedRelativeRoot != "" {
+		rootPrefix = trimmedRelativeRoot + "/"
+	}
+
+	var adapted []string
+	for _, rawPattern := range patterns {
+		pattern := strings.TrimSpace(rawPattern)
+		if pattern == "" {
+			continue
+		}
+		normalizedPattern := filepath.ToSlash(pattern)
+		if strings.HasPrefix(normalizedPattern, "./") {
+			normalizedPattern = strings.TrimPrefix(normalizedPattern, "./")
+		}
+		if rootPrefix == "" {
+			adapted = append(adapted, normalizedPattern)
+			continue
+		}
+		if strings.HasPrefix(normalizedPattern, utils.ExclusionPrefix) {
+			adapted = append(adapted, normalizedPattern)
+			continue
+		}
+		if strings.HasPrefix(normalizedPattern, "/") {
+			trimmed := strings.TrimPrefix(normalizedPattern, "/")
+			if strings.HasPrefix(trimmed, rootPrefix) {
+				result := strings.TrimPrefix(trimmed, rootPrefix)
+				if result != "" {
+					adapted = append(adapted, result)
+				}
+			}
+			continue
+		}
+		if strings.HasPrefix(normalizedPattern, rootPrefix) {
+			result := strings.TrimPrefix(normalizedPattern, rootPrefix)
+			if result != "" {
+				adapted = append(adapted, result)
+			}
+			continue
+		}
+		adapted = append(adapted, normalizedPattern)
+	}
+	return adapted
 }
