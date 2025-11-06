@@ -183,6 +183,94 @@ func TestServerPropagatesExecutorStatus(t *testing.T) {
 	}
 }
 
+func TestServerRejectsNonPostCommandRequests(t *testing.T) {
+	t.Parallel()
+
+	server := NewServer(Config{
+		Address:       "127.0.0.1:0",
+		RootDirectory: "/tmp/project",
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addressChan := make(chan string, 1)
+	done := make(chan error, 1)
+
+	go func() {
+		done <- server.Run(ctx, func(address string) {
+			addressChan <- address
+		})
+	}()
+
+	address := waitForAddress(t, addressChan)
+
+	client := http.Client{Timeout: 2 * time.Second}
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+"/commands/sample", http.NoBody)
+	if requestErr != nil {
+		t.Fatalf("create request: %v", requestErr)
+	}
+
+	response, responseErr := client.Do(request)
+	if responseErr != nil {
+		t.Fatalf("execute request: %v", responseErr)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("unexpected status code: %d", response.StatusCode)
+	}
+
+	cancel()
+	if runErr := <-done; runErr != nil {
+		t.Fatalf("server shutdown: %v", runErr)
+	}
+}
+
+func TestServerRejectsInvalidCommandPaths(t *testing.T) {
+	t.Parallel()
+
+	server := NewServer(Config{
+		Address:       "127.0.0.1:0",
+		RootDirectory: "/tmp/project",
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addressChan := make(chan string, 1)
+	done := make(chan error, 1)
+
+	go func() {
+		done <- server.Run(ctx, func(address string) {
+			addressChan <- address
+		})
+	}()
+
+	address := waitForAddress(t, addressChan)
+
+	client := http.Client{Timeout: 2 * time.Second}
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+address+"/commands/invalid/path", http.NoBody)
+	if requestErr != nil {
+		t.Fatalf("create request: %v", requestErr)
+	}
+
+	response, responseErr := client.Do(request)
+	if responseErr != nil {
+		t.Fatalf("execute request: %v", responseErr)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("unexpected status code: %d", response.StatusCode)
+	}
+
+	cancel()
+	if runErr := <-done; runErr != nil {
+		t.Fatalf("server shutdown: %v", runErr)
+	}
+}
+
 func waitForAddress(t *testing.T, addressChan <-chan string) string {
 	t.Helper()
 	select {
