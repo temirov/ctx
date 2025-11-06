@@ -20,7 +20,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## Maintenance (400–499)
 
-- [ ] [CT-400] Update the documentation @README.md and focus on the usefullness to the user. Move the technical details to ARCHITECTURE.md
+- [x] [CT-400] Update the documentation @README.md and focus on the usefullness to the user. Move the technical details to ARCHITECTURE.md
+    - README now leads with user workflows and examples, while detailed architecture guidance lives in the new `ARCHITECTURE.md`.
 - [ ] [CT-401] Ensure architrecture matches the reality of code. Update @ARCHITECTURE.md when needed. Review the code and prepare a comprehensive ARCHITECTURE.md file with the overview of the app architecture, sufficient for understanding of a mid to senior software engineer.
 - [ ] [CT-402] Review @POLICY.md and verify what code areas need improvements and refactoring. Prepare a detailed plan of refactoring. Check for bugs, missing tests, poor coding practices, duplication and slop. Ensure strong encapsulation and following the principles og @AGENTS.md and policies of @POLICY.md
 

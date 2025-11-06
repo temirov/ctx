@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Docs 📚
+
+* Refocused the README around user workflows and split deep technical guidance into `ARCHITECTURE.md`. (maintenance/CT-400-readme-focus)
+
 ## [v0.3.0]
 
 ### Improvements ⚙️
