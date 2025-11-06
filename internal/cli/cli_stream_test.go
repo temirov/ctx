@@ -224,28 +224,29 @@ func TestRunToolCopiesOutputToClipboard(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			stub := &clipboardStub{errorToReturn: testCase.clipboardError}
 			var outputBuffer bytes.Buffer
-			executionError := runTool(
-				context.Background(),
-				types.CommandContent,
-				[]string{tempDir},
-				nil,
-				false,
-				false,
-				false,
-				defaultCallChainDepth,
-				types.FormatJSON,
-				types.DocumentationModeDisabled,
-				false,
-				true,
-				tokenOptions{},
-				false,
-				"",
-				&outputBuffer,
-				io.Discard,
-				true,
-				false,
-				stub,
-			)
+			descriptor := commandDescriptor{
+				ctx:                context.Background(),
+				commandName:        types.CommandContent,
+				paths:              []string{tempDir},
+				exclusionPatterns:  nil,
+				useGitignore:       false,
+				useIgnoreFile:      false,
+				includeGit:         false,
+				callChainDepth:     defaultCallChainDepth,
+				format:             types.FormatJSON,
+				documentationMode:  types.DocumentationModeDisabled,
+				summaryEnabled:     false,
+				includeContent:     true,
+				tokenConfiguration: tokenOptions{},
+				docsAttempt:        false,
+				docsAPIBase:        "",
+				outputWriter:       &outputBuffer,
+				errorWriter:        io.Discard,
+				clipboardEnabled:   true,
+				copyOnly:           false,
+				clipboard:          stub,
+			}
+			executionError := runTool(descriptor)
 
 			if testCase.expectError {
 				if executionError == nil {
@@ -276,28 +277,29 @@ func TestRunToolCopyOnlySuppressesStdout(t *testing.T) {
 
 	stub := &clipboardStub{}
 	var outputBuffer bytes.Buffer
-	executionError := runTool(
-		context.Background(),
-		types.CommandContent,
-		[]string{tempDir},
-		nil,
-		false,
-		false,
-		false,
-		defaultCallChainDepth,
-		types.FormatJSON,
-		types.DocumentationModeDisabled,
-		false,
-		true,
-		tokenOptions{},
-		false,
-		"",
-		&outputBuffer,
-		io.Discard,
-		false,
-		true,
-		stub,
-	)
+	descriptor := commandDescriptor{
+		ctx:                context.Background(),
+		commandName:        types.CommandContent,
+		paths:              []string{tempDir},
+		exclusionPatterns:  nil,
+		useGitignore:       false,
+		useIgnoreFile:      false,
+		includeGit:         false,
+		callChainDepth:     defaultCallChainDepth,
+		format:             types.FormatJSON,
+		documentationMode:  types.DocumentationModeDisabled,
+		summaryEnabled:     false,
+		includeContent:     true,
+		tokenConfiguration: tokenOptions{},
+		docsAttempt:        false,
+		docsAPIBase:        "",
+		outputWriter:       &outputBuffer,
+		errorWriter:        io.Discard,
+		clipboardEnabled:   false,
+		copyOnly:           true,
+		clipboard:          stub,
+	}
+	executionError := runTool(descriptor)
 
 	if executionError != nil {
 		t.Fatalf("unexpected error: %v", executionError)
@@ -339,6 +341,103 @@ func TestResolveCopyDefaultRespectsAlias(t *testing.T) {
 	if !result {
 		t.Fatalf("expected copy alias to override configuration default")
 	}
+}
+
+func TestResolveClipboardPreferences(t *testing.T) {
+	trueValue := boolPtr(true)
+	falseValue := boolPtr(false)
+	testCases := []struct {
+		name             string
+		cliCopy          bool
+		cliCopyOnly      bool
+		configCopy       *bool
+		configCopyOnly   *bool
+		setCopyFlag      bool
+		setCopyOnlyFlag  bool
+		expectedCopy     bool
+		expectedCopyOnly bool
+	}{
+		{
+			name:             "configuration enables copy",
+			cliCopy:          false,
+			cliCopyOnly:      false,
+			configCopy:       trueValue,
+			configCopyOnly:   nil,
+			expectedCopy:     true,
+			expectedCopyOnly: false,
+		},
+		{
+			name:             "configuration copy-only enables both flags",
+			cliCopy:          false,
+			cliCopyOnly:      false,
+			configCopy:       nil,
+			configCopyOnly:   trueValue,
+			expectedCopy:     true,
+			expectedCopyOnly: true,
+		},
+		{
+			name:             "cli copy overrides configuration default",
+			cliCopy:          true,
+			cliCopyOnly:      false,
+			configCopy:       falseValue,
+			configCopyOnly:   nil,
+			setCopyFlag:      true,
+			expectedCopy:     true,
+			expectedCopyOnly: false,
+		},
+		{
+			name:             "cli copy-only overrides configuration default",
+			cliCopy:          false,
+			cliCopyOnly:      true,
+			configCopy:       nil,
+			configCopyOnly:   falseValue,
+			setCopyOnlyFlag:  true,
+			expectedCopy:     true,
+			expectedCopyOnly: true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			command, copyValue, copyOnlyValue := newClipboardCommand()
+			*copyValue = testCase.cliCopy
+			*copyOnlyValue = testCase.cliCopyOnly
+			if testCase.setCopyFlag {
+				if err := command.Flags().Set(copyFlagName, fmt.Sprintf("%t", testCase.cliCopy)); err != nil {
+					t.Fatalf("set copy flag: %v", err)
+				}
+			}
+			if testCase.setCopyOnlyFlag {
+				if err := command.Flags().Set(copyOnlyFlagName, fmt.Sprintf("%t", testCase.cliCopyOnly)); err != nil {
+					t.Fatalf("set copy-only flag: %v", err)
+				}
+			}
+			copyEnabled, copyOnlyEnabled := resolveClipboardPreferences(command, *copyValue, *copyOnlyValue, testCase.configCopy, testCase.configCopyOnly)
+			if copyEnabled != testCase.expectedCopy {
+				t.Fatalf("expected copy=%t, got %t", testCase.expectedCopy, copyEnabled)
+			}
+			if copyOnlyEnabled != testCase.expectedCopyOnly {
+				t.Fatalf("expected copyOnly=%t, got %t", testCase.expectedCopyOnly, copyOnlyEnabled)
+			}
+		})
+	}
+}
+
+func newClipboardCommand() (*cobra.Command, *bool, *bool) {
+	command := &cobra.Command{Use: "clipboard"}
+	var copyValue bool
+	var copyOnlyValue bool
+	registerBooleanFlag(command.Flags(), &copyValue, copyFlagName, copyValue, "")
+	registerBooleanFlag(command.Flags(), &copyValue, copyFlagAlias, copyValue, "")
+	if alias := command.Flags().Lookup(copyFlagAlias); alias != nil {
+		alias.Hidden = true
+	}
+	registerBooleanFlag(command.Flags(), &copyOnlyValue, copyOnlyFlagName, copyOnlyValue, "")
+	registerBooleanFlag(command.Flags(), &copyOnlyValue, copyOnlyFlagAlias, copyOnlyValue, "")
+	if alias := command.Flags().Lookup(copyOnlyFlagAlias); alias != nil {
+		alias.Hidden = true
+	}
+	return command, &copyValue, &copyOnlyValue
 }
 
 func TestApplyStreamConfigurationUsesDefaults(t *testing.T) {
@@ -549,5 +648,22 @@ func TestApplyCallChainConfigurationUsesDefaults(t *testing.T) {
 	}
 	if documentationMode != types.DocumentationModeRelevant {
 		t.Fatalf("expected documentation mode relevant, got %s", documentationMode)
+	}
+}
+
+func TestTreeCommandRejectsInvalidFormat(t *testing.T) {
+	var copyValue bool
+	var copyOnlyValue bool
+	command := createTreeCommand(&clipboardStub{}, &copyValue, &copyOnlyValue, nil)
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+	command.SetArgs([]string{"--format", "invalid-format"})
+
+	err := command.Execute()
+	if err == nil {
+		t.Fatalf("expected error for invalid format")
+	}
+	if !strings.Contains(err.Error(), "Invalid format value") {
+		t.Fatalf("unexpected error message: %v", err)
 	}
 }

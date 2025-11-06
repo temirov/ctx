@@ -362,37 +362,37 @@ func createTreeCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyO
 			if !isSupportedFormat(outputFormatLower) {
 				return fmt.Errorf(invalidFormatMessage, outputFormatLower)
 			}
-			copyEnabledForCommand := copyFlag != nil && *copyFlag
-			copyOnlyForCommand := copyOnlyFlag != nil && *copyOnlyFlag
+			copyFlagValue := copyFlag != nil && *copyFlag
+			copyOnlyFlagValue := copyOnlyFlag != nil && *copyOnlyFlag
+			var configCopy, configCopyOnly *bool
 			if applicationConfig != nil {
-				copyEnabledForCommand = resolveCopyDefault(command, copyEnabledForCommand, applicationConfig.Tree.Copy)
-				copyOnlyForCommand = resolveCopyOnlyDefault(command, copyOnlyForCommand, applicationConfig.Tree.CopyOnly)
+				configCopy = applicationConfig.Tree.Copy
+				configCopyOnly = applicationConfig.Tree.CopyOnly
 			}
-			if copyOnlyForCommand {
-				copyEnabledForCommand = true
+			copyEnabledForCommand, copyOnlyForCommand := resolveClipboardPreferences(command, copyFlagValue, copyOnlyFlagValue, configCopy, configCopyOnly)
+			descriptor := commandDescriptor{
+				ctx:                command.Context(),
+				commandName:        types.CommandTree,
+				paths:              arguments,
+				exclusionPatterns:  pathConfiguration.exclusionPatterns,
+				useGitignore:       !pathConfiguration.disableGitignore,
+				useIgnoreFile:      !pathConfiguration.disableIgnoreFile,
+				includeGit:         pathConfiguration.includeGit,
+				callChainDepth:     defaultCallChainDepth,
+				format:             outputFormatLower,
+				documentationMode:  types.DocumentationModeDisabled,
+				summaryEnabled:     summaryEnabled,
+				includeContent:     includeContent,
+				tokenConfiguration: tokenConfiguration,
+				docsAttempt:        false,
+				docsAPIBase:        "",
+				outputWriter:       command.OutOrStdout(),
+				errorWriter:        command.ErrOrStderr(),
+				clipboardEnabled:   copyEnabledForCommand,
+				copyOnly:           copyOnlyForCommand,
+				clipboard:          clipboardProvider,
 			}
-			return runTool(
-				command.Context(),
-				types.CommandTree,
-				arguments,
-				pathConfiguration.exclusionPatterns,
-				!pathConfiguration.disableGitignore,
-				!pathConfiguration.disableIgnoreFile,
-				pathConfiguration.includeGit,
-				defaultCallChainDepth,
-				outputFormatLower,
-				types.DocumentationModeDisabled,
-				summaryEnabled,
-				includeContent,
-				tokenConfiguration,
-				false,
-				"",
-				os.Stdout,
-				os.Stderr,
-				copyEnabledForCommand,
-				copyOnlyForCommand,
-				clipboardProvider,
-			)
+			return runTool(descriptor)
 		},
 	}
 
@@ -445,37 +445,37 @@ func createContentCommand(clipboardProvider clipboard.Copier, copyFlag *bool, co
 			if documentationErr != nil {
 				return documentationErr
 			}
-			copyEnabledForCommand := copyFlag != nil && *copyFlag
-			copyOnlyForCommand := copyOnlyFlag != nil && *copyOnlyFlag
+			copyFlagValue := copyFlag != nil && *copyFlag
+			copyOnlyFlagValue := copyOnlyFlag != nil && *copyOnlyFlag
+			var configCopy, configCopyOnly *bool
 			if applicationConfig != nil {
-				copyEnabledForCommand = resolveCopyDefault(command, copyEnabledForCommand, applicationConfig.Content.Copy)
-				copyOnlyForCommand = resolveCopyOnlyDefault(command, copyOnlyForCommand, applicationConfig.Content.CopyOnly)
+				configCopy = applicationConfig.Content.Copy
+				configCopyOnly = applicationConfig.Content.CopyOnly
 			}
-			if copyOnlyForCommand {
-				copyEnabledForCommand = true
+			copyEnabledForCommand, copyOnlyForCommand := resolveClipboardPreferences(command, copyFlagValue, copyOnlyFlagValue, configCopy, configCopyOnly)
+			descriptor := commandDescriptor{
+				ctx:                command.Context(),
+				commandName:        types.CommandContent,
+				paths:              arguments,
+				exclusionPatterns:  pathConfiguration.exclusionPatterns,
+				useGitignore:       !pathConfiguration.disableGitignore,
+				useIgnoreFile:      !pathConfiguration.disableIgnoreFile,
+				includeGit:         pathConfiguration.includeGit,
+				callChainDepth:     defaultCallChainDepth,
+				format:             outputFormatLower,
+				documentationMode:  effectiveDocumentationMode,
+				summaryEnabled:     summaryEnabled,
+				includeContent:     includeContent,
+				tokenConfiguration: tokenConfiguration,
+				docsAttempt:        docsAttempt,
+				docsAPIBase:        docsAPIBase,
+				outputWriter:       command.OutOrStdout(),
+				errorWriter:        command.ErrOrStderr(),
+				clipboardEnabled:   copyEnabledForCommand,
+				copyOnly:           copyOnlyForCommand,
+				clipboard:          clipboardProvider,
 			}
-			return runTool(
-				command.Context(),
-				types.CommandContent,
-				arguments,
-				pathConfiguration.exclusionPatterns,
-				!pathConfiguration.disableGitignore,
-				!pathConfiguration.disableIgnoreFile,
-				pathConfiguration.includeGit,
-				defaultCallChainDepth,
-				outputFormatLower,
-				effectiveDocumentationMode,
-				summaryEnabled,
-				includeContent,
-				tokenConfiguration,
-				docsAttempt,
-				docsAPIBase,
-				os.Stdout,
-				os.Stderr,
-				copyEnabledForCommand,
-				copyOnlyForCommand,
-				clipboardProvider,
-			)
+			return runTool(descriptor)
 		},
 	}
 
@@ -530,37 +530,37 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, 
 			if documentationErr != nil {
 				return documentationErr
 			}
-			copyEnabledForCommand := copyFlag != nil && *copyFlag
-			copyOnlyForCommand := copyOnlyFlag != nil && *copyOnlyFlag
+			copyFlagValue := copyFlag != nil && *copyFlag
+			copyOnlyFlagValue := copyOnlyFlag != nil && *copyOnlyFlag
+			var configCopy, configCopyOnly *bool
 			if applicationConfig != nil {
-				copyEnabledForCommand = resolveCopyDefault(command, copyEnabledForCommand, applicationConfig.CallChain.Copy)
-				copyOnlyForCommand = resolveCopyOnlyDefault(command, copyOnlyForCommand, applicationConfig.CallChain.CopyOnly)
+				configCopy = applicationConfig.CallChain.Copy
+				configCopyOnly = applicationConfig.CallChain.CopyOnly
 			}
-			if copyOnlyForCommand {
-				copyEnabledForCommand = true
+			copyEnabledForCommand, copyOnlyForCommand := resolveClipboardPreferences(command, copyFlagValue, copyOnlyFlagValue, configCopy, configCopyOnly)
+			descriptor := commandDescriptor{
+				ctx:                command.Context(),
+				commandName:        types.CommandCallChain,
+				paths:              []string{arguments[0]},
+				exclusionPatterns:  nil,
+				useGitignore:       true,
+				useIgnoreFile:      true,
+				includeGit:         false,
+				callChainDepth:     callChainDepth,
+				format:             outputFormatLower,
+				documentationMode:  effectiveDocumentationMode,
+				summaryEnabled:     false,
+				includeContent:     false,
+				tokenConfiguration: tokenOptions{},
+				docsAttempt:        docsAttempt,
+				docsAPIBase:        docsAPIBase,
+				outputWriter:       command.OutOrStdout(),
+				errorWriter:        command.ErrOrStderr(),
+				clipboardEnabled:   copyEnabledForCommand,
+				copyOnly:           copyOnlyForCommand,
+				clipboard:          clipboardProvider,
 			}
-			return runTool(
-				command.Context(),
-				types.CommandCallChain,
-				[]string{arguments[0]},
-				nil,
-				true,
-				true,
-				false,
-				callChainDepth,
-				outputFormatLower,
-				effectiveDocumentationMode,
-				false,
-				false,
-				tokenOptions{},
-				docsAttempt,
-				docsAPIBase,
-				os.Stdout,
-				os.Stderr,
-				copyEnabledForCommand,
-				copyOnlyForCommand,
-				clipboardProvider,
-			)
+			return runTool(descriptor)
 		},
 	}
 
@@ -659,113 +659,165 @@ func createDocCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOn
 	return docCommand
 }
 
-// runTool executes the command with the provided configuration including call chain depth.
-func runTool(
-	commandContext context.Context,
-	commandName string,
-	paths []string,
-	exclusionPatterns []string,
-	useGitignore bool,
-	useIgnoreFile bool,
-	includeGit bool,
-	callChainDepth int,
-	format string,
-	documentationMode string,
-	summaryEnabled bool,
-	includeContent bool,
-	tokenConfiguration tokenOptions,
-	docsAttempt bool,
-	docsAPIBase string,
-	outputWriter io.Writer,
-	errorWriter io.Writer,
-	clipboardEnabled bool,
-	copyOnly bool,
-	clipboardProvider clipboard.Copier,
-) error {
+type commandDescriptor struct {
+	ctx                context.Context
+	commandName        string
+	paths              []string
+	exclusionPatterns  []string
+	useGitignore       bool
+	useIgnoreFile      bool
+	includeGit         bool
+	callChainDepth     int
+	format             string
+	documentationMode  string
+	summaryEnabled     bool
+	includeContent     bool
+	tokenConfiguration tokenOptions
+	docsAttempt        bool
+	docsAPIBase        string
+	outputWriter       io.Writer
+	errorWriter        io.Writer
+	clipboardEnabled   bool
+	copyOnly           bool
+	clipboard          clipboard.Copier
+}
+
+type executionContext struct {
+	documentationMode string
+	collector         *docs.Collector
+	tokenCounter      tokenizer.Counter
+	tokenModel        string
+	workingDirectory  string
+}
+
+// runTool executes the command described by descriptor, assembling documentation collectors,
+// token counters, and clipboard behaviour as required.
+func runTool(descriptor commandDescriptor) error {
+	commandContext := descriptor.ctx
 	if commandContext == nil {
 		commandContext = context.Background()
 	}
+
 	workingDirectory, workingDirectoryError := os.Getwd()
 	if workingDirectoryError != nil {
 		return fmt.Errorf(workingDirectoryErrorFormat, workingDirectoryError)
 	}
-	mode := documentationMode
-	if mode == "" {
-		mode = types.DocumentationModeDisabled
-	}
-	remoteEnabled := docsAttempt && mode == types.DocumentationModeFull
-	var collector *docs.Collector
-	if mode != types.DocumentationModeDisabled {
-		options := docs.CollectorOptions{}
-		if remoteEnabled {
-			options.RemoteAttempt = docs.RemoteAttemptOptions{
-				Enabled:            true,
-				APIBase:            docsAPIBase,
-				AuthorizationToken: resolveGitHubAuthorizationToken(),
-			}
-		}
-		createdCollector, collectorCreationError := docs.NewCollectorWithOptions(workingDirectory, options)
-		if collectorCreationError != nil {
-			return collectorCreationError
-		}
-		collector = createdCollector
-		if remoteEnabled {
-			collector.ActivateRemoteDocumentation(commandContext)
-		}
+
+	executionContext, contextError := buildExecutionContext(commandContext, descriptor, workingDirectory)
+	if contextError != nil {
+		return contextError
 	}
 
-	var tokenCounter tokenizer.Counter
-	var tokenModel string
-	if tokenConfiguration.enabled {
-		createdCounter, resolvedModel, counterError := tokenizer.NewCounter(tokenConfiguration.toConfig(workingDirectory))
-		if counterError != nil {
-			return counterError
-		}
-		tokenCounter = createdCounter
-		tokenModel = resolvedModel
-	}
-
+	outputWriter := descriptor.outputWriter
 	if outputWriter == nil {
 		outputWriter = os.Stdout
 	}
+	errorWriter := descriptor.errorWriter
 	if errorWriter == nil {
 		errorWriter = os.Stderr
 	}
 
 	var clipboardBuffer *bytes.Buffer
-	clipboardRequested := clipboardEnabled || copyOnly
+	clipboardRequested := descriptor.clipboardEnabled || descriptor.copyOnly
+	targetWriter := outputWriter
 	if clipboardRequested {
-		if clipboardProvider == nil {
+		if descriptor.clipboard == nil {
 			return errors.New(clipboardServiceMissingMessage)
 		}
 		clipboardBuffer = &bytes.Buffer{}
-		if copyOnly {
-			outputWriter = clipboardBuffer
+		if descriptor.copyOnly {
+			targetWriter = clipboardBuffer
 		} else {
-			outputWriter = io.MultiWriter(outputWriter, clipboardBuffer)
+			targetWriter = io.MultiWriter(targetWriter, clipboardBuffer)
 		}
 	}
 
-	switch commandName {
+	switch descriptor.commandName {
 	case types.CommandCallChain:
-		if err := runCallChain(paths[0], format, callChainDepth, mode, collector, workingDirectory, outputWriter); err != nil {
+		if len(descriptor.paths) == 0 {
+			return fmt.Errorf("call chain command requires a target function")
+		}
+		if err := runCallChain(descriptor.paths[0], descriptor.format, descriptor.callChainDepth, executionContext.documentationMode, executionContext.collector, executionContext.workingDirectory, targetWriter); err != nil {
 			return err
 		}
 	case types.CommandTree, types.CommandContent:
-		if err := runStreamCommand(commandContext, commandName, paths, exclusionPatterns, useGitignore, useIgnoreFile, includeGit, format, mode, summaryEnabled, includeContent, tokenCounter, tokenModel, collector, outputWriter, errorWriter); err != nil {
+		if err := runStreamCommand(
+			commandContext,
+			descriptor.commandName,
+			descriptor.paths,
+			descriptor.exclusionPatterns,
+			descriptor.useGitignore,
+			descriptor.useIgnoreFile,
+			descriptor.includeGit,
+			descriptor.format,
+			executionContext.documentationMode,
+			descriptor.summaryEnabled,
+			descriptor.includeContent,
+			executionContext.tokenCounter,
+			executionContext.tokenModel,
+			executionContext.collector,
+			targetWriter,
+			errorWriter,
+		); err != nil {
 			return err
 		}
 	default:
 		return fmt.Errorf(unsupportedCommandMessage)
 	}
 
-	if clipboardRequested && clipboardBuffer != nil {
-		if copyErr := clipboardProvider.Copy(clipboardBuffer.String()); copyErr != nil {
+	if clipboardBuffer != nil {
+		if copyErr := descriptor.clipboard.Copy(clipboardBuffer.String()); copyErr != nil {
 			return fmt.Errorf(clipboardCopyErrorFormat, copyErr)
 		}
 	}
 
 	return nil
+}
+
+func buildExecutionContext(commandContext context.Context, descriptor commandDescriptor, workingDirectory string) (executionContext, error) {
+	mode := descriptor.documentationMode
+	if mode == "" {
+		mode = types.DocumentationModeDisabled
+	}
+
+	result := executionContext{
+		documentationMode: mode,
+		workingDirectory:  workingDirectory,
+	}
+
+	remoteEnabled := descriptor.docsAttempt && mode == types.DocumentationModeFull
+	if mode != types.DocumentationModeDisabled {
+		options := docs.CollectorOptions{}
+		if remoteEnabled {
+			options.RemoteAttempt = docs.RemoteAttemptOptions{
+				Enabled:            true,
+				APIBase:            descriptor.docsAPIBase,
+				AuthorizationToken: resolveGitHubAuthorizationToken(),
+			}
+		}
+		collector, collectorErr := docs.NewCollectorWithOptions(workingDirectory, options)
+		if collectorErr != nil {
+			return executionContext{}, collectorErr
+		}
+		result.collector = collector
+		if remoteEnabled {
+			if commandContext == nil {
+				commandContext = context.Background()
+			}
+			collector.ActivateRemoteDocumentation(commandContext)
+		}
+	}
+
+	if descriptor.tokenConfiguration.enabled {
+		counter, resolvedModel, counterErr := tokenizer.NewCounter(descriptor.tokenConfiguration.toConfig(workingDirectory))
+		if counterErr != nil {
+			return executionContext{}, counterErr
+		}
+		result.tokenCounter = counter
+		result.tokenModel = resolvedModel
+	}
+
+	return result, nil
 }
 
 // runCallChain processes the callchain command for the specified target and depth.
@@ -1079,6 +1131,15 @@ func resolveCopyOnlyDefault(command *cobra.Command, cliValue bool, configuration
 		return cliValue
 	}
 	return *configurationValue
+}
+
+func resolveClipboardPreferences(command *cobra.Command, cliCopy bool, cliCopyOnly bool, configurationCopy *bool, configurationCopyOnly *bool) (bool, bool) {
+	copyEnabled := resolveCopyDefault(command, cliCopy, configurationCopy)
+	copyOnlyEnabled := resolveCopyOnlyDefault(command, cliCopyOnly, configurationCopyOnly)
+	if copyOnlyEnabled {
+		copyEnabled = true
+	}
+	return copyEnabled, copyOnlyEnabled
 }
 
 func booleanFlagChanged(command *cobra.Command, names ...string) bool {
