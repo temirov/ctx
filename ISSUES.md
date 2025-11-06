@@ -12,7 +12,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - Added persistent `--copy-only`/`--co` flags plus config support so clipboard-only mode skips stdout while preserving copy semantics across commands.
 - [x] [CT-03] abbreviate --copy subcommand to --c, both staying valid and copying to the clipboard the output
     - Registered the `--c` shorthand for `--copy`, wired configuration detection to respect the alias, and documented the new toggle.
-- [ ] [CT-04] integrate toons with ctx and make it a default output format https://github.com/toon-format/toon
+- [x] [CT-04] integrate toons with ctx and make it a default output format https://github.com/toon-format/toon
+    - Default output is now TOON with new renderers and documentation updates covering the format change.
 
 
 ## BugFixes (300–399)

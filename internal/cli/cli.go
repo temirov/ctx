@@ -48,7 +48,7 @@ const (
 	rootShortDescription  = "ctx command line interface"
 	rootLongDescription   = `ctx inspects project structure and source code.
 It renders directory trees, shows file content, and analyzes call chains.
-Use --format to select raw, json, or xml output. Use --doc to include documentation for supported commands, and --version to print the application version.`
+Use --format to select toon, raw, json, or xml output. Use --doc to include documentation for supported commands, and --version to print the application version.`
 	versionFlagDescription    = "display application version"
 	copyFlagName              = "copy"
 	copyFlagDescription       = "copy command output to the system clipboard"
@@ -80,7 +80,7 @@ Use --format to select raw, json, or xml output. Use --doc to include documentat
 
 	// treeLongDescription provides detailed help for the tree command.
 	treeLongDescription = `List directories and files for one or more paths.
-Use --format to select raw, json, or xml output.`
+Use --format to select toon, raw, json, or xml output.`
 	// treeUsageExample demonstrates tree command usage.
 	treeUsageExample = `  # Render the tree in XML format
   ctx tree --format xml ./cmd
@@ -90,7 +90,7 @@ Use --format to select raw, json, or xml output.`
 
 	// contentLongDescription provides detailed help for the content command.
 	contentLongDescription = `Display file content for provided paths.
-Use --format to select raw, json, or xml output and --doc to include collected documentation.`
+Use --format to select toon, raw, json, or xml output and --doc to include collected documentation.`
 	// contentUsageExample demonstrates content command usage.
 	contentUsageExample = `  # Show project files with documentation
   ctx content --doc .
@@ -194,7 +194,7 @@ Optional parameters:
 // isSupportedFormat reports whether the provided format is recognized.
 func isSupportedFormat(format string) bool {
 	switch format {
-	case types.FormatRaw, types.FormatJSON, types.FormatXML:
+	case types.FormatRaw, types.FormatToon, types.FormatJSON, types.FormatXML:
 		return true
 	default:
 		return false
@@ -338,7 +338,7 @@ func addPathFlags(command *cobra.Command, options *pathOptions) {
 // createTreeCommand returns the tree subcommand.
 func createTreeCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOnlyFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
 	var pathConfiguration pathOptions
-	var outputFormat string = types.FormatJSON
+	var outputFormat string = types.FormatToon
 	var summaryEnabled bool = true
 	var tokenConfiguration tokenOptions
 	tokenConfiguration.model = defaultTokenizerModelName
@@ -397,7 +397,7 @@ func createTreeCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyO
 	}
 
 	addPathFlags(treeCommand, &pathConfiguration)
-	treeCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
+	treeCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatToon, formatFlagDescription)
 	registerBooleanFlag(treeCommand.Flags(), &summaryEnabled, summaryFlagName, true, summaryFlagDescription)
 	registerBooleanFlag(treeCommand.Flags(), &tokenConfiguration.enabled, tokensFlagName, false, tokensFlagDescription)
 	treeCommand.Flags().StringVar(&tokenConfiguration.model, modelFlagName, defaultTokenizerModelName, modelFlagDescription)
@@ -408,7 +408,7 @@ func createTreeCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyO
 // createContentCommand returns the content subcommand.
 func createContentCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOnlyFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
 	var pathConfiguration pathOptions
-	var outputFormat string = types.FormatJSON
+	var outputFormat string = types.FormatToon
 	documentationMode := types.DocumentationModeDisabled
 	var summaryEnabled bool = true
 	var tokenConfiguration tokenOptions
@@ -480,7 +480,7 @@ func createContentCommand(clipboardProvider clipboard.Copier, copyFlag *bool, co
 	}
 
 	addPathFlags(contentCommand, &pathConfiguration)
-	contentCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
+	contentCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatToon, formatFlagDescription)
 	contentCommand.Flags().StringVar(&documentationMode, documentationFlagName, types.DocumentationModeDisabled, documentationFlagDescription)
 	if docFlag := contentCommand.Flags().Lookup(documentationFlagName); docFlag != nil {
 		docFlag.NoOptDefVal = types.DocumentationModeRelevant
@@ -499,7 +499,7 @@ func createContentCommand(clipboardProvider clipboard.Copier, copyFlag *bool, co
 
 // createCallChainCommand returns the callchain subcommand.
 func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOnlyFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
-	var outputFormat string = types.FormatJSON
+	var outputFormat string = types.FormatToon
 	documentationMode := types.DocumentationModeDisabled
 	var callChainDepth int = defaultCallChainDepth
 	var docsAttempt bool
@@ -564,7 +564,7 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, 
 		},
 	}
 
-	callChainCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatJSON, formatFlagDescription)
+	callChainCommand.Flags().StringVar(&outputFormat, formatFlagName, types.FormatToon, formatFlagDescription)
 	callChainCommand.Flags().StringVar(&documentationMode, documentationFlagName, types.DocumentationModeDisabled, documentationFlagDescription)
 	if docFlag := callChainCommand.Flags().Lookup(documentationFlagName); docFlag != nil {
 		docFlag.NoOptDefVal = types.DocumentationModeRelevant
@@ -792,6 +792,8 @@ func runCallChain(
 			return renderCallChainJSONError
 		}
 		fmt.Fprintln(outputWriter, renderedCallChainJSONOutput)
+	} else if format == types.FormatToon {
+		fmt.Fprintln(outputWriter, output.RenderCallChainToon(callChainData))
 	} else if format == types.FormatXML {
 		renderedCallChainXMLOutput, renderCallChainXMLError := output.RenderCallChainXML(callChainData)
 		if renderCallChainXMLError != nil {
@@ -844,6 +846,8 @@ func runStreamCommand(
 	switch format {
 	case types.FormatRaw:
 		renderer = output.NewRawStreamRenderer(outputWriter, errorWriter, renderCommandName, withSummary)
+	case types.FormatToon:
+		renderer = output.NewToonStreamRenderer(outputWriter, errorWriter, renderCommandName, withSummary)
 	case types.FormatJSON:
 		renderer = output.NewJSONStreamRenderer(outputWriter, errorWriter, renderCommandName, totalRootPaths, withSummary, includeContent)
 	case types.FormatXML:
