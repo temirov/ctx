@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/tyemirov/ctx/internal/commands"
 	"github.com/tyemirov/ctx/internal/docs/githubdoc"
 	"github.com/tyemirov/ctx/internal/services/mcp"
 	"github.com/tyemirov/ctx/internal/types"
@@ -175,6 +176,7 @@ func executeCallChainCommand(commandContext context.Context, request mcp.Command
 		docsAPIBase:        payload.DocsAPIBase,
 		outputWriter:       &outputBuffer,
 		errorWriter:        &warningBuffer,
+		callChainService:   commands.NewCallChainService(),
 	}
 	executionErr := runTool(descriptor)
 	if executionErr != nil {
