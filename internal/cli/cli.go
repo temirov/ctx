@@ -368,8 +368,9 @@ func createTreeCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyO
 			copyOnlyFlagValue := copyOnlyFlag != nil && *copyOnlyFlag
 			var configCopy, configCopyOnly *bool
 			if applicationConfig != nil {
-				configCopy = applicationConfig.Tree.Copy
-				configCopyOnly = applicationConfig.Tree.CopyOnly
+				copySettings := applicationConfig.Tree.CopySettings()
+				configCopy = copySettings.Copy
+				configCopyOnly = copySettings.CopyOnly
 			}
 			copyEnabledForCommand, copyOnlyForCommand := resolveClipboardPreferences(command, copyFlagValue, copyOnlyFlagValue, configCopy, configCopyOnly)
 			descriptor := commandDescriptor{
@@ -451,8 +452,9 @@ func createContentCommand(clipboardProvider clipboard.Copier, copyFlag *bool, co
 			copyOnlyFlagValue := copyOnlyFlag != nil && *copyOnlyFlag
 			var configCopy, configCopyOnly *bool
 			if applicationConfig != nil {
-				configCopy = applicationConfig.Content.Copy
-				configCopyOnly = applicationConfig.Content.CopyOnly
+				copySettings := applicationConfig.Content.CopySettings()
+				configCopy = copySettings.Copy
+				configCopyOnly = copySettings.CopyOnly
 			}
 			copyEnabledForCommand, copyOnlyForCommand := resolveClipboardPreferences(command, copyFlagValue, copyOnlyFlagValue, configCopy, configCopyOnly)
 			descriptor := commandDescriptor{
@@ -539,8 +541,9 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, 
 			copyOnlyFlagValue := copyOnlyFlag != nil && *copyOnlyFlag
 			var configCopy, configCopyOnly *bool
 			if applicationConfig != nil {
-				configCopy = applicationConfig.CallChain.Copy
-				configCopyOnly = applicationConfig.CallChain.CopyOnly
+				copySettings := applicationConfig.CallChain.CopySettings()
+				configCopy = copySettings.Copy
+				configCopyOnly = copySettings.CopyOnly
 			}
 			copyEnabledForCommand, copyOnlyForCommand := resolveClipboardPreferences(command, copyFlagValue, copyOnlyFlagValue, configCopy, configCopyOnly)
 			descriptor := commandDescriptor{

@@ -18,8 +18,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - Introduced shared command descriptors, split execution into context-building and run phases with Cobra-managed writers, and expanded clipboard/format table tests to lock behaviour.
 - [x] [CT-206] Inject callchain registry dependencies explicitly
     - Replaced the package-level registry with an injected service, wired through CLI and MCP descriptors, and added tests covering missing-service errors and stubbed analyzers.
-- [ ] [CT-207] Harden configuration merge invariants and smart constructors
-    - Priority: High. Deduplicate documentation mode assignments, create typed option builders that enforce copy/copy-only invariants, and extend unit coverage for override precedence (`internal/config/app_config.go`, `app_config_test.go`).
+- [x] [CT-207] Harden configuration merge invariants and smart constructors
+    - Added typed clipboard settings with enforced copy-only invariants, removed duplicate documentation mode assignments, and broadened unit coverage for merge precedence scenarios.
 - [ ] [CT-208] Improve stream traversal resilience and warning injection
     - Priority: Medium. Route warnings through injected callbacks, continue traversal on recoverable I/O errors, and consolidate binary/token helpers shared by tree and content streams (`internal/commands/tree_stream.go`, `content_stream.go`, tests).
 - [ ] [CT-209] Tighten remote documentation and token helper error handling
