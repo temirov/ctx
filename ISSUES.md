@@ -14,6 +14,18 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - Registered the `--c` shorthand for `--copy`, wired configuration detection to respect the alias, and documented the new toggle.
 - [x] [CT-04] integrate toons with ctx and make it a default output format https://github.com/toon-format/toon
     - Default output is now TOON with new renderers and documentation updates covering the format change.
+- [ ] [CT-205] Modularise CLI command orchestration and execution pipeline
+    - Priority: High. Introduce reusable command descriptors, split `runTool` into context-building and execution steps, switch to Cobra-managed writers, and add table-driven tests for config/flag precedence (`internal/cli/cli.go:338-769`, `cli_stream_test.go`).
+- [ ] [CT-206] Inject callchain registry dependencies explicitly
+    - Priority: Medium-High. Replace the package-level `defaultCallChainRegistry` with an injected service so CLI wiring controls analyser composition and tests can stub implementations (`internal/commands/callchain.go`, `internal/cli/cli.go`).
+- [ ] [CT-207] Harden configuration merge invariants and smart constructors
+    - Priority: High. Deduplicate documentation mode assignments, create typed option builders that enforce copy/copy-only invariants, and extend unit coverage for override precedence (`internal/config/app_config.go`, `app_config_test.go`).
+- [ ] [CT-208] Improve stream traversal resilience and warning injection
+    - Priority: Medium. Route warnings through injected callbacks, continue traversal on recoverable I/O errors, and consolidate binary/token helpers shared by tree and content streams (`internal/commands/tree_stream.go`, `content_stream.go`, tests).
+- [ ] [CT-209] Tighten remote documentation and token helper error handling
+    - Priority: Medium. Add `DocumentationOptions` value objects, centralise GitHub token resolution with contextual errors, and surface sentinel failures when tokenizer helpers are missing (`internal/cli/cli.go:693-755`, `internal/tokenizer`).
+- [ ] [CT-210] Expand integration and unit safety nets before refactors
+    - Priority: Medium-Low. Add end-to-end coverage for `--copy-only`, negative MCP scenarios, and utility helper tests to lock behaviour prior to large-scale changes (`internal/cli/cli_stream_test.go`, `internal/services/mcp/mcp_test.go`, `internal/utils`).
 
 
 ## BugFixes (300–399)
@@ -25,7 +37,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 - [x] [CT-401] Ensure architrecture matches the reality of code. Update @ARCHITECTURE.md when needed. Review the code and prepare a comprehensive ARCHITECTURE.md file with the overview of the app architecture, sufficient for understanding of a mid to senior software engineer.
     - Expanded `ARCHITECTURE.md` with package layout, subsystem responsibilities, configuration flow, and MCP/call-chain internals that mirror the current implementation.
 - [x] [CT-402] Review @POLICY.md and verify what code areas need improvements and refactoring. Prepare a detailed plan of refactoring. Check for bugs, missing tests, poor coding practices, duplication and slop. Ensure strong encapsulation and following the principles og @AGENTS.md and policies of @POLICY.md
-    - Added `REFACTORING_PLAN.md` outlining modularisation, configuration fixes, streaming resilience work, and coverage additions aligned with the confident-programming policy.
+    - Converted the refactoring roadmap into tracked issues (CT-205 – CT-210) to align with the confident-programming policy and removed the standalone plan document.
 
 ## Planning
 do not work on the issues below, not ready
