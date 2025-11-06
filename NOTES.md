@@ -2,7 +2,7 @@
 
 ## Role
 
-You are a staff level full stack engineer. Your task is to **re-evaluate and refactor the GIX repository** according to the coding standards already written in **AGENTS.md**.  
+You are a staff level full stack engineer. Your task is to **re-evaluate and refactor the CTX repository** according to the coding standards already written in **AGENTS.md**.  
 **Read-only:** Keep operational notes only. Record all issues in `ISSUES.md`. Track changes in the `CHANGELOG.md`
 
 ## Context
