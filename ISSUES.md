@@ -24,7 +24,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - README now leads with user workflows and examples, while detailed architecture guidance lives in the new `ARCHITECTURE.md`.
 - [x] [CT-401] Ensure architrecture matches the reality of code. Update @ARCHITECTURE.md when needed. Review the code and prepare a comprehensive ARCHITECTURE.md file with the overview of the app architecture, sufficient for understanding of a mid to senior software engineer.
     - Expanded `ARCHITECTURE.md` with package layout, subsystem responsibilities, configuration flow, and MCP/call-chain internals that mirror the current implementation.
-- [ ] [CT-402] Review @POLICY.md and verify what code areas need improvements and refactoring. Prepare a detailed plan of refactoring. Check for bugs, missing tests, poor coding practices, duplication and slop. Ensure strong encapsulation and following the principles og @AGENTS.md and policies of @POLICY.md
+- [x] [CT-402] Review @POLICY.md and verify what code areas need improvements and refactoring. Prepare a detailed plan of refactoring. Check for bugs, missing tests, poor coding practices, duplication and slop. Ensure strong encapsulation and following the principles og @AGENTS.md and policies of @POLICY.md
+    - Added `REFACTORING_PLAN.md` outlining modularisation, configuration fixes, streaming resilience work, and coverage additions aligned with the confident-programming policy.
 
 ## Planning
 do not work on the issues below, not ready
