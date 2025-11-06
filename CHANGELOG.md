@@ -5,6 +5,7 @@
 ### Docs 📚
 
 * Refocused the README around user workflows and split deep technical guidance into `ARCHITECTURE.md`. (maintenance/CT-400-readme-focus)
+* Expanded `ARCHITECTURE.md` with package layout, data flow, and subsystem details to match the current implementation. (maintenance/CT-401-architecture-review)
 
 ## [v0.3.0]
 
