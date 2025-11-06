@@ -47,7 +47,7 @@ Install and try ctx's core features: directory trees, file contents with optiona
 - **Embedded Documentation (`--doc`):** When the `--doc` flag is used with the `content` or `callchain` command,
   ctx embeds documentation for imported third-party packages and referenced functions in the output (*json*, *xml*, and
   *raw* formats).
-- **Output Formats:** Supports **json** output (default), **raw** text, and **xml** output using the `--format` flag for all
+- **Output Formats:** Supports **toon** output (default) alongside **json**, **raw**, and **xml** output using the `--format` flag for all
   commands.
 - **Tree Command (`tree`, `t`):**
     - *JSON format:* Outputs a JSON array where each element represents an input path. Directories include a nested
@@ -125,7 +125,7 @@ ctx <tree|t|content|c|callchain|cc> [arguments...] [flags]
 | `--no-gitignore`      | tree, content      | Disable loading of `.gitignore` files. |
 | `--no-ignore`         | tree, content      | Disable loading of `.ignore` files. |
 | `--git`               | tree, content      | Include the `.git` directory during traversal. |
-| `--format <raw|json|xml>` | all commands       | Select output format (default `json`). |
+| `--format <toon|raw|json|xml>` | all commands       | Select output format (default `toon`). |
 | `--summary`           | tree, content      | Print total file count and combined size for results (enabled by default, set to `false` to disable). |
 | `--tokens`            | tree, content      | Estimate token counts for files and surface totals in summaries. |
 | `--model <name>`      | tree, content      | Select tokenizer model (default `gpt-4o`). |
@@ -152,7 +152,7 @@ Display a raw tree view excluding `dist` folders:
 ctx tree projectA projectB -e dist --format raw
 ```
 
-Output file contents with embedded docs (JSON by default):
+Output file contents with embedded docs (Toon by default):
 
 ```shell
 ctx content main.go pkg --doc

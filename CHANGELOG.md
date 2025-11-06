@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Improvements ⚙️
+
+* Switched the CLI default output to TOON and added dedicated renderers for tree, content, and call chain results while keeping raw/json/xml options. (improvement/CT-04-toon-default)
+
 ## [v0.2.3] - 2025-10-26
 
 ### Bug Fixes 🐞

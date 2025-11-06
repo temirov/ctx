@@ -207,6 +207,15 @@ func flattenFileNodes(nodes []appTypes.TreeOutputNode) []appTypes.TreeOutputNode
 	return files
 }
 
+func withFormat(arguments []string, format string) []string {
+	formatted := append([]string{}, arguments...)
+	return append(formatted, formatFlag, format)
+}
+
+func withJSONFormat(arguments []string) []string {
+	return withFormat(arguments, appTypes.FormatJSON)
+}
+
 func TestContentJSONStreamingMatchesExpectedOutput(t *testing.T) {
 	binary := buildBinary(t)
 	workingDir := setupTestDirectory(t, map[string]string{
@@ -260,7 +269,7 @@ func TestTreeMatchesContentWithoutContentAcrossFormats(t *testing.T) {
 		"nested/readme.md": "# Nested\n",
 	})
 
-	formats := []string{appTypes.FormatRaw, appTypes.FormatJSON, appTypes.FormatXML}
+	formats := []string{appTypes.FormatToon, appTypes.FormatRaw, appTypes.FormatJSON, appTypes.FormatXML}
 	for _, format := range formats {
 		format := format
 		t.Run(format, func(t *testing.T) {
@@ -498,6 +507,8 @@ func TestCTX(testingHandle *testing.T) {
 	binary := buildBinary(testingHandle)
 
 	var explicitFilePath string
+	var defaultTreeRoot string
+	var defaultContentRoot string
 
 	testCases := []struct {
 		name            string
@@ -536,27 +547,38 @@ func TestCTX(testingHandle *testing.T) {
 			},
 		},
 		{
-			name: "DefaultFormatTreeCommandJSON",
+			name: "DefaultFormatTreeCommandToon",
 			arguments: []string{
 				appTypes.CommandTree,
 				"fileA.txt",
 				"directoryB",
 			},
 			prepare: func(t *testing.T) string {
-				return setupTestDirectory(t, map[string]string{
+				defaultTreeRoot = setupTestDirectory(t, map[string]string{
 					"fileA.txt":             "A",
 					"directoryB/":           "",
 					"directoryB/itemB1.txt": "B1",
 				})
+				return defaultTreeRoot
 			},
 			validate: func(t *testing.T, output string) {
-				roots := decodeJSONRoots(t, output)
-				if len(roots) != 2 {
-					t.Fatalf("expected two top-level nodes, got %d", len(roots))
+				trimmed := strings.TrimSpace(output)
+				if !strings.HasPrefix(trimmed, "roots[2]:") {
+					t.Fatalf("expected TOON array header, got:\n%s", output)
 				}
-				fileNode := findNodeByName(roots, "fileA.txt")
-				if fileNode == nil || fileNode.MimeType != expectedTextMimeType {
-					t.Fatalf("expected MIME type %s for fileA.txt", expectedTextMimeType)
+				filePath := filepath.Join(defaultTreeRoot, "fileA.txt")
+				if !strings.Contains(output, "- path: "+filePath) {
+					t.Fatalf("expected file node path %s in TOON output\n%s", filePath, output)
+				}
+				if !strings.Contains(output, "mimeType: "+expectedTextMimeType) && !strings.Contains(output, `mimeType: "`+expectedTextMimeType+`"`) {
+					t.Fatalf("expected mimeType %s in TOON output\n%s", expectedTextMimeType, output)
+				}
+				dirPath := filepath.Join(defaultTreeRoot, "directoryB")
+				if !strings.Contains(output, "- path: "+dirPath) {
+					t.Fatalf("expected directory node path %s in TOON output\n%s", dirPath, output)
+				}
+				if !strings.Contains(output, "children[1]:") {
+					t.Fatalf("expected children block for directory node\n%s", output)
 				}
 			},
 		},
@@ -577,41 +599,38 @@ func TestCTX(testingHandle *testing.T) {
 			},
 		},
 		{
-			name: "DefaultFormatContentCommandJSON",
+			name: "DefaultFormatContentCommandToon",
 			arguments: []string{
 				appTypes.CommandContent,
 				"fileA.txt",
 				"directoryB",
 			},
 			prepare: func(t *testing.T) string {
-				return setupTestDirectory(t, map[string]string{
+				defaultContentRoot = setupTestDirectory(t, map[string]string{
 					"fileA.txt":             "Content A",
 					"directoryB/":           "",
 					"directoryB/itemB1.txt": "Content B1",
 				})
+				return defaultContentRoot
 			},
 			validate: func(t *testing.T, output string) {
-				roots := decodeJSONRoots(t, output)
-				files := flattenFileNodes(roots)
-				if len(files) != 2 {
-					t.Fatalf("expected two files, got %d", len(files))
+				trimmed := strings.TrimSpace(output)
+				if !strings.HasPrefix(trimmed, "roots[2]:") {
+					t.Fatalf("expected TOON array header, got:\n%s", output)
 				}
-				for i := range files {
-					if files[i].MimeType != expectedTextMimeType {
-						t.Fatalf("expected MIME type %s for %s", expectedTextMimeType, files[i].Path)
-					}
-					info, err := os.Stat(files[i].Path)
-					if err != nil {
-						t.Fatalf("stat failed for %s: %v", files[i].Path, err)
-					}
-					expectedSize := utils.FormatFileSize(info.Size())
-					if files[i].Size != expectedSize {
-						t.Fatalf("expected size %s for %s, got %s", expectedSize, files[i].Path, files[i].Size)
-					}
-					expectedTimestamp := utils.FormatTimestamp(info.ModTime())
-					if files[i].LastModified != expectedTimestamp {
-						t.Fatalf("expected last modified %s for %s, got %s", expectedTimestamp, files[i].Path, files[i].LastModified)
-					}
+				filePath := filepath.Join(defaultContentRoot, "fileA.txt")
+				if !strings.Contains(output, "- path: "+filePath) {
+					t.Fatalf("expected file node path %s in TOON output\n%s", filePath, output)
+				}
+				if !strings.Contains(output, "content: \"Content A\"") {
+					t.Fatalf("expected inline file content in TOON output\n%s", output)
+				}
+				itemPath := filepath.Join(defaultContentRoot, "directoryB", "itemB1.txt")
+				if !strings.Contains(output, "- path: "+itemPath) {
+					t.Fatalf("expected nested file node path %s in TOON output\n%s", itemPath, output)
+				}
+				if !strings.Contains(output, "mimeType: "+expectedTextMimeType) && !strings.Contains(output, `mimeType: "`+expectedTextMimeType+`"`) {
+					t.Fatalf("expected mimeType %s in TOON output\n%s", expectedTextMimeType, output)
 				}
 			},
 		},
@@ -742,13 +761,13 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name: "TreeTokensJSON",
-			arguments: []string{
+			arguments: withJSONFormat([]string{
 				appTypes.CommandTree,
 				"--tokens",
 				"--model",
 				"gpt-4o",
 				"--summary",
-			},
+			}),
 			prepare: func(t *testing.T) string {
 				return setupTestDirectory(t, map[string]string{
 					"token.txt": "token counting sample",
@@ -826,13 +845,13 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name: "ContentTokensJSON",
-			arguments: []string{
+			arguments: withJSONFormat([]string{
 				appTypes.CommandContent,
 				"--tokens",
 				"--model",
 				"gpt-4o",
 				"--summary",
-			},
+			}),
 			prepare: func(t *testing.T) string {
 				return setupTestDirectory(t, map[string]string{
 					"main.go": "package main\n// hello",
@@ -892,12 +911,12 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name: "ContentTokensUVLlama",
-			arguments: []string{
+			arguments: withJSONFormat([]string{
 				appTypes.CommandContent,
 				"--tokens",
 				"--model",
 				"llama-3.1-8b",
-			},
+			}),
 			prepare: func(t *testing.T) string {
 				return setupTestDirectory(t, map[string]string{
 					"sample.txt": "llama helper integration",
@@ -1393,10 +1412,10 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name: "BinaryFileContentJSON",
-			arguments: []string{
+			arguments: withJSONFormat([]string{
 				appTypes.CommandContent,
 				".",
-			},
+			}),
 			prepare: func(t *testing.T) string {
 				binaryBytes, decodeError := base64.StdEncoding.DecodeString(onePixelPNGBase64Content)
 				if decodeError != nil {
@@ -1441,10 +1460,10 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name: "BinaryFileTreeJSON",
-			arguments: []string{
+			arguments: withJSONFormat([]string{
 				appTypes.CommandTree,
 				".",
-			},
+			}),
 			prepare: func(t *testing.T) string {
 				binaryBytes, decodeError := base64.StdEncoding.DecodeString(onePixelPNGBase64Content)
 				if decodeError != nil {
@@ -1489,10 +1508,10 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name: "BinaryFileContentIgnoreDefault",
-			arguments: []string{
+			arguments: withJSONFormat([]string{
 				appTypes.CommandContent,
 				".",
-			},
+			}),
 			prepare: func(t *testing.T) string {
 				binaryBytes, decodeError := base64.StdEncoding.DecodeString(onePixelPNGBase64Content)
 				if decodeError != nil {
@@ -1520,10 +1539,10 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name: "BinaryFileContentBinarySection",
-			arguments: []string{
+			arguments: withJSONFormat([]string{
 				appTypes.CommandContent,
 				".",
-			},
+			}),
 			prepare: func(t *testing.T) string {
 				binaryBytes, decodeError := base64.StdEncoding.DecodeString(onePixelPNGBase64Content)
 				if decodeError != nil {
@@ -1589,9 +1608,9 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name: "GitDirectoryExcludedByDefault",
-			arguments: []string{
+			arguments: withJSONFormat([]string{
 				appTypes.CommandTree,
-			},
+			}),
 			prepare: func(t *testing.T) string {
 				layout := map[string]string{
 					filepath.Join(utils.GitDirectoryName, hiddenFileName): hiddenFileContent,
@@ -1627,10 +1646,10 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name: "GitDirectoryIncludedWithFlag",
-			arguments: []string{
+			arguments: withJSONFormat([]string{
 				appTypes.CommandTree,
 				includeGitFlag,
-			},
+			}),
 			prepare: func(t *testing.T) string {
 				layout := map[string]string{
 					filepath.Join(utils.GitDirectoryName, hiddenFileName): hiddenFileContent,
@@ -1711,7 +1730,7 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name:      "NestedGitignoreExcluded",
-			arguments: []string{treeAlias},
+			arguments: withJSONFormat([]string{treeAlias}),
 			prepare: func(t *testing.T) string {
 				layout := map[string]string{
 					filepath.Join(subDirectoryName, gitignoreFileName):                      nodeModulesPattern,
@@ -1756,7 +1775,7 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name:      "ParentGitignoreExcluded",
-			arguments: []string{treeAlias},
+			arguments: withJSONFormat([]string{treeAlias}),
 			prepare: func(t *testing.T) string {
 				layout := map[string]string{
 					gitignoreFileName: "site_data/\napp/logs/\n",
@@ -1787,7 +1806,7 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name:      "NestedGitignoreContentExcluded",
-			arguments: []string{contentAlias},
+			arguments: withJSONFormat([]string{contentAlias}),
 			prepare: func(testingHandle *testing.T) string {
 				directoryLayout := map[string]string{
 					filepath.Join(subDirectoryName, gitignoreFileName):                      nodeModulesPattern + ignoredFileName + "\n",
@@ -1835,7 +1854,7 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name:      "ExcludePatternsTree",
-			arguments: []string{appTypes.CommandTree, "-e", toolsDirectoryName, "-e", githubDirectoryName, "-e", yamlPattern},
+			arguments: withJSONFormat([]string{appTypes.CommandTree, "-e", toolsDirectoryName, "-e", githubDirectoryName, "-e", yamlPattern}),
 			prepare:   setupExclusionPatternFixture,
 			validate: func(testingHandle *testing.T, output string) {
 				outputNodes := decodeJSONRoots(testingHandle, output)
@@ -1863,7 +1882,7 @@ func TestCTX(testingHandle *testing.T) {
 		},
 		{
 			name:      "ExcludePatternsContent",
-			arguments: []string{appTypes.CommandContent, "-e", toolsDirectoryName, "-e", githubDirectoryName, "-e", yamlPattern},
+			arguments: withJSONFormat([]string{appTypes.CommandContent, "-e", toolsDirectoryName, "-e", githubDirectoryName, "-e", yamlPattern}),
 			prepare:   setupExclusionPatternFixture,
 			validate: func(testingHandle *testing.T, output string) {
 				fileOutputs := decodeJSONFiles(testingHandle, output)

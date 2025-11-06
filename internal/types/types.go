@@ -14,6 +14,7 @@ const (
 	CommandDoc       = "doc"
 
 	FormatRaw  = "raw"
+	FormatToon = "toon"
 	FormatJSON = "json"
 	FormatXML  = "xml"
 

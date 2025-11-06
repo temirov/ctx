@@ -40,6 +40,7 @@ func use() {
 		"--doc=full",
 		"--docs-attempt",
 		"--docs-api-base", server.URL,
+		"--format", "json",
 		".",
 	}, workingDirectory)
 
