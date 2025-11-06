@@ -1,9 +1,11 @@
 package commands_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/tyemirov/ctx/internal/commands"
@@ -16,6 +18,14 @@ func (streamStubCounter) Name() string { return "stub" }
 
 func (streamStubCounter) CountString(input string) (int, error) {
 	return len([]rune(input)), nil
+}
+
+type streamErrorCounter struct{}
+
+func (streamErrorCounter) Name() string { return "error" }
+
+func (streamErrorCounter) CountString(string) (int, error) {
+	return 0, errors.New("token failure")
 }
 
 func TestStreamContentMatchesGetContentData(t *testing.T) {
@@ -32,7 +42,12 @@ func TestStreamContentMatchesGetContentData(t *testing.T) {
 	}
 
 	var streamed []types.FileOutput
-	err := commands.StreamContent(tempDir, nil, nil, streamStubCounter{}, "stub-model", func(output types.FileOutput) error {
+	options := commands.ContentStreamOptions{
+		Root:         tempDir,
+		TokenCounter: streamStubCounter{},
+		TokenModel:   "stub-model",
+	}
+	err := commands.StreamContent(options, func(output types.FileOutput) error {
 		streamed = append(streamed, output)
 		return nil
 	})
@@ -65,5 +80,43 @@ func TestStreamContentMatchesGetContentData(t *testing.T) {
 		if streamed[i].Model != collected[i].Model {
 			t.Fatalf("model mismatch at %d: %q vs %q", i, streamed[i].Model, collected[i].Model)
 		}
+	}
+}
+
+func TestStreamContentWarnsOnTokenErrors(t *testing.T) {
+	tempDir := t.TempDir()
+	textPath := filepath.Join(tempDir, "warn.txt")
+	if err := os.WriteFile(textPath, []byte("warn"), 0o600); err != nil {
+		t.Fatalf("write text file: %v", err)
+	}
+	var warnings []string
+	options := commands.ContentStreamOptions{
+		Root:         tempDir,
+		TokenCounter: streamErrorCounter{},
+		TokenModel:   "stub-model",
+		Warn: func(message string) {
+			warnings = append(warnings, message)
+		},
+	}
+	var outputs []types.FileOutput
+	err := commands.StreamContent(options, func(output types.FileOutput) error {
+		outputs = append(outputs, output)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("StreamContent error: %v", err)
+	}
+	if len(outputs) != 1 {
+		t.Fatalf("expected single output, got %d", len(outputs))
+	}
+	if len(warnings) == 0 {
+		t.Fatal("expected warning to be recorded")
+	}
+	firstWarning := warnings[0]
+	if !strings.Contains(firstWarning, textPath) {
+		t.Fatalf("warning does not mention file path: %s", firstWarning)
+	}
+	if !strings.Contains(firstWarning, "failed to count tokens") {
+		t.Fatalf("warning does not describe token failure: %s", firstWarning)
 	}
 }

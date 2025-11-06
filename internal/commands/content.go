@@ -1,6 +1,9 @@
 package commands
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/tyemirov/ctx/internal/tokenizer"
 	"github.com/tyemirov/ctx/internal/types"
 )
@@ -17,7 +20,17 @@ const (
 // GetContentData returns FileOutput slices for the specified directory.
 func GetContentData(rootPath string, ignorePatterns []string, binaryContentPatterns []string, tokenCounter tokenizer.Counter, tokenModel string) ([]types.FileOutput, error) {
 	var fileOutputs []types.FileOutput
-	streamErr := StreamContent(rootPath, ignorePatterns, binaryContentPatterns, tokenCounter, tokenModel, func(output types.FileOutput) error {
+	options := ContentStreamOptions{
+		Root:                  rootPath,
+		IgnorePatterns:        ignorePatterns,
+		BinaryContentPatterns: binaryContentPatterns,
+		TokenCounter:          tokenCounter,
+		TokenModel:            tokenModel,
+		Warn: func(message string) {
+			fmt.Fprint(os.Stderr, message)
+		},
+	}
+	streamErr := StreamContent(options, func(output types.FileOutput) error {
 		fileOutputs = append(fileOutputs, output)
 		return nil
 	})

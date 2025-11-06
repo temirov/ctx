@@ -1,9 +1,11 @@
 package commands_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/tyemirov/ctx/internal/commands"
@@ -40,6 +42,14 @@ func (stubCounter) Name() string { return "stub" }
 
 func (stubCounter) CountString(input string) (int, error) {
 	return len([]rune(input)), nil
+}
+
+type errorCounter struct{}
+
+func (errorCounter) Name() string { return "error" }
+
+func (errorCounter) CountString(string) (int, error) {
+	return 0, errors.New("token failure")
 }
 
 const testCaseFailureMessage = "case %d (%s): %v"
@@ -351,5 +361,45 @@ func TestGetTreeDataSummary(testingInstance *testing.T) {
 	}
 	if nestedFile.TotalSize != "" {
 		testingInstance.Fatalf("expected empty total size on nested file node, got %s", nestedFile.TotalSize)
+	}
+}
+
+func TestStreamTreeWarnsOnTokenErrors(testingInstance *testing.T) {
+	temporaryRoot := testingInstance.TempDir()
+	textPath := filepath.Join(temporaryRoot, "warn.txt")
+	if writeError := os.WriteFile(textPath, []byte("warn"), 0600); writeError != nil {
+		testingInstance.Fatalf("writing file: %v", writeError)
+	}
+	var warnings []string
+	options := commands.TreeStreamOptions{
+		Root:         temporaryRoot,
+		TokenCounter: errorCounter{},
+		TokenModel:   "stub",
+		Warn: func(message string) {
+			warnings = append(warnings, message)
+		},
+	}
+	var files []string
+	handler := func(event commands.TreeEvent) error {
+		if event.Kind == commands.TreeEventFile && event.File != nil {
+			files = append(files, event.File.Path)
+		}
+		return nil
+	}
+	if streamErr := commands.StreamTree(options, handler); streamErr != nil {
+		testingInstance.Fatalf("StreamTree error: %v", streamErr)
+	}
+	if len(files) != 1 {
+		testingInstance.Fatalf("expected single file event, got %d", len(files))
+	}
+	if len(warnings) == 0 {
+		testingInstance.Fatalf("expected warnings to be captured")
+	}
+	firstWarning := warnings[0]
+	if !strings.Contains(firstWarning, textPath) {
+		testingInstance.Fatalf("warning does not mention file path: %s", firstWarning)
+	}
+	if !strings.Contains(firstWarning, "failed to count tokens") {
+		testingInstance.Fatalf("warning does not describe token failure: %s", firstWarning)
 	}
 }

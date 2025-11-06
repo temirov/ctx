@@ -20,8 +20,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - Replaced the package-level registry with an injected service, wired through CLI and MCP descriptors, and added tests covering missing-service errors and stubbed analyzers.
 - [x] [CT-207] Harden configuration merge invariants and smart constructors
     - Added typed clipboard settings with enforced copy-only invariants, removed duplicate documentation mode assignments, and broadened unit coverage for merge precedence scenarios.
-- [ ] [CT-208] Improve stream traversal resilience and warning injection
-    - Priority: Medium. Route warnings through injected callbacks, continue traversal on recoverable I/O errors, and consolidate binary/token helpers shared by tree and content streams (`internal/commands/tree_stream.go`, `content_stream.go`, tests).
+- [x] [CT-208] Improve stream traversal resilience and warning injection
+    - Routed tree and content streams through shared file inspection helpers, funneled warnings via injected callbacks, and added tests to confirm traversal continues on token counter failures.
 - [ ] [CT-209] Tighten remote documentation and token helper error handling
     - Priority: Medium. Add `DocumentationOptions` value objects, centralise GitHub token resolution with contextual errors, and surface sentinel failures when tokenizer helpers are missing (`internal/cli/cli.go:693-755`, `internal/tokenizer`).
 - [ ] [CT-210] Expand integration and unit safety nets before refactors

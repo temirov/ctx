@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,21 +10,33 @@ import (
 	"github.com/tyemirov/ctx/internal/utils"
 )
 
-// ContentVisitor receives each FileOutput discovered during traversal.
+type ContentStreamOptions struct {
+	Root                  string
+	IgnorePatterns        []string
+	BinaryContentPatterns []string
+	TokenCounter          tokenizer.Counter
+	TokenModel            string
+	Warn                  func(string)
+}
+
 type ContentVisitor func(types.FileOutput) error
 
-// StreamContent walks rootPath and invokes visitor for every file that survives
-// ignore filtering. It mirrors GetContentData but yields results incrementally.
-func StreamContent(rootPath string, ignorePatterns []string, binaryContentPatterns []string, tokenCounter tokenizer.Counter, tokenModel string, visitor ContentVisitor) error {
-	absoluteRootPath, absolutePathError := filepath.Abs(rootPath)
+func StreamContent(options ContentStreamOptions, visitor ContentVisitor) error {
+	absoluteRootPath, absolutePathError := filepath.Abs(options.Root)
 	if absolutePathError != nil {
-		return fmt.Errorf("failed to get absolute path for %s: %w", rootPath, absolutePathError)
+		return fmt.Errorf("failed to get absolute path for %s: %w", options.Root, absolutePathError)
 	}
+
+	warn := options.Warn
+	if warn == nil {
+		warn = func(string) {}
+	}
+
 	cleanedRootPath := filepath.Clean(absoluteRootPath)
 
 	walkErr := filepath.WalkDir(cleanedRootPath, func(walkedPath string, directoryEntry os.DirEntry, accessError error) error {
 		if accessError != nil {
-			fmt.Fprintf(os.Stderr, WarningAccessPathFormat, walkedPath, accessError)
+			warn(fmt.Sprintf(WarningAccessPathFormat, walkedPath, accessError))
 			if directoryEntry != nil && directoryEntry.IsDir() {
 				return filepath.SkipDir
 			}
@@ -36,7 +47,7 @@ func StreamContent(rootPath string, ignorePatterns []string, binaryContentPatter
 		if relativePath == "." {
 			return nil
 		}
-		if utils.ShouldIgnoreByPath(relativePath, ignorePatterns) {
+		if utils.ShouldIgnoreByPath(relativePath, options.IgnorePatterns) {
 			if directoryEntry.IsDir() {
 				return filepath.SkipDir
 			}
@@ -48,50 +59,45 @@ func StreamContent(rootPath string, ignorePatterns []string, binaryContentPatter
 
 		fileInfo, infoError := directoryEntry.Info()
 		if infoError != nil {
-			fmt.Fprintf(os.Stderr, WarningAccessPathFormat, walkedPath, infoError)
+			warn(fmt.Sprintf(WarningAccessPathFormat, walkedPath, infoError))
 			return nil
 		}
 
-		fileBytes, fileReadError := os.ReadFile(walkedPath)
-		if fileReadError != nil {
-			fmt.Fprintf(os.Stderr, WarningFileReadFormat, walkedPath, fileReadError)
+		result, ok := inspectFile(walkedPath, fileInfo, fileInspectionConfig{
+			RelativePath:             relativePath,
+			IncludeContent:           true,
+			BinaryPatterns:           options.BinaryContentPatterns,
+			TokenCounter:             options.TokenCounter,
+			TokenModel:               options.TokenModel,
+			Warn:                     warn,
+			AllowBinaryTokenCounting: false,
+		})
+		if !ok {
 			return nil
 		}
 
-		fileType := types.NodeTypeFile
-		fileContent := string(fileBytes)
-		mimeType := utils.DetectMimeType(walkedPath)
-		if utils.IsBinary(fileBytes) {
-			fileType = types.NodeTypeBinary
-			if utils.ShouldDisplayBinaryContentByPath(relativePath, binaryContentPatterns) {
-				fileContent = base64.StdEncoding.EncodeToString(fileBytes)
-			} else {
-				fileContent = utils.EmptyString
-			}
-		}
-
-		var tokenCount int
-		if tokenCounter != nil && fileType != types.NodeTypeBinary {
-			countResult, tokenErr := tokenizer.CountBytes(tokenCounter, fileBytes)
-			if tokenErr != nil {
-				fmt.Fprintf(os.Stderr, WarningTokenCountFormat, walkedPath, tokenErr)
-			} else if countResult.Counted {
-				tokenCount = countResult.Tokens
+		nodeType := types.NodeTypeFile
+		content := result.Content
+		if result.IsBinary {
+			nodeType = types.NodeTypeBinary
+			if result.ContentEncoding == "" {
+				content = utils.EmptyString
 			}
 		}
 
 		output := types.FileOutput{
 			Path:         walkedPath,
-			Type:         fileType,
-			Content:      fileContent,
+			Type:         nodeType,
+			Content:      content,
 			Size:         utils.FormatFileSize(fileInfo.Size()),
 			SizeBytes:    fileInfo.Size(),
 			LastModified: utils.FormatTimestamp(fileInfo.ModTime()),
-			MimeType:     mimeType,
-			Tokens:       tokenCount,
+			MimeType:     result.MimeType,
+			Tokens:       result.Tokens,
+			Model:        result.Model,
 		}
-		if tokenCount > 0 {
-			output.Model = tokenModel
+		if output.Tokens > 0 && output.Model == "" && options.TokenModel != "" {
+			output.Model = options.TokenModel
 		}
 
 		if visitor != nil {
