@@ -221,6 +221,8 @@ func createRootCommand(clipboardProvider clipboard.Copier) *cobra.Command {
 	var configurationLoaded bool
 	var runMCP bool
 
+	callChainService := commands.NewCallChainService()
+
 	rootCommand := &cobra.Command{
 		Use:          rootUse,
 		Short:        rootShortDescription,
@@ -299,7 +301,7 @@ func createRootCommand(clipboardProvider clipboard.Copier) *cobra.Command {
 	rootCommand.AddCommand(
 		createTreeCommand(clipboardProvider, &copyFlagValue, &copyOnlyFlagValue, &applicationConfig),
 		createContentCommand(clipboardProvider, &copyFlagValue, &copyOnlyFlagValue, &applicationConfig),
-		createCallChainCommand(clipboardProvider, &copyFlagValue, &copyOnlyFlagValue, &applicationConfig),
+		createCallChainCommand(clipboardProvider, &copyFlagValue, &copyOnlyFlagValue, &applicationConfig, callChainService),
 		createDocCommand(clipboardProvider, &copyFlagValue, &copyOnlyFlagValue),
 	)
 	rootCommand.InitDefaultHelpCmd()
@@ -498,7 +500,10 @@ func createContentCommand(clipboardProvider clipboard.Copier, copyFlag *bool, co
 }
 
 // createCallChainCommand returns the callchain subcommand.
-func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOnlyFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
+func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOnlyFlag *bool, applicationConfig *config.ApplicationConfiguration, callChainService commands.CallChainService) *cobra.Command {
+	if callChainService == nil {
+		callChainService = commands.NewCallChainService()
+	}
 	var outputFormat string = types.FormatToon
 	documentationMode := types.DocumentationModeDisabled
 	var callChainDepth int = defaultCallChainDepth
@@ -559,6 +564,7 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, 
 				clipboardEnabled:   copyEnabledForCommand,
 				copyOnly:           copyOnlyForCommand,
 				clipboard:          clipboardProvider,
+				callChainService:   callChainService,
 			}
 			return runTool(descriptor)
 		},
@@ -680,6 +686,7 @@ type commandDescriptor struct {
 	clipboardEnabled   bool
 	copyOnly           bool
 	clipboard          clipboard.Copier
+	callChainService   commands.CallChainService
 }
 
 type executionContext struct {
@@ -737,7 +744,10 @@ func runTool(descriptor commandDescriptor) error {
 		if len(descriptor.paths) == 0 {
 			return fmt.Errorf("call chain command requires a target function")
 		}
-		if err := runCallChain(descriptor.paths[0], descriptor.format, descriptor.callChainDepth, executionContext.documentationMode, executionContext.collector, executionContext.workingDirectory, targetWriter); err != nil {
+		if descriptor.callChainService == nil {
+			return fmt.Errorf("call chain service is not configured")
+		}
+		if err := runCallChain(descriptor.paths[0], descriptor.format, descriptor.callChainDepth, executionContext.documentationMode, executionContext.collector, executionContext.workingDirectory, targetWriter, descriptor.callChainService); err != nil {
 			return err
 		}
 	case types.CommandTree, types.CommandContent:
@@ -821,6 +831,7 @@ func buildExecutionContext(commandContext context.Context, descriptor commandDes
 }
 
 // runCallChain processes the callchain command for the specified target and depth.
+
 func runCallChain(
 	target string,
 	format string,
@@ -829,9 +840,10 @@ func runCallChain(
 	collector *docs.Collector,
 	moduleRoot string,
 	outputWriter io.Writer,
+	service commands.CallChainService,
 ) error {
 	withDocumentation := documentationMode != types.DocumentationModeDisabled
-	callChainData, callChainDataError := commands.GetCallChainData(target, callChainDepth, withDocumentation, collector, moduleRoot)
+	callChainData, callChainDataError := service.GetCallChainData(target, callChainDepth, withDocumentation, collector, moduleRoot)
 	if callChainDataError != nil {
 		return callChainDataError
 	}

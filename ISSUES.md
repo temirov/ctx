@@ -16,8 +16,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - Default output is now TOON with new renderers and documentation updates covering the format change.
 - [x] [CT-205] Modularise CLI command orchestration and execution pipeline
     - Introduced shared command descriptors, split execution into context-building and run phases with Cobra-managed writers, and expanded clipboard/format table tests to lock behaviour.
-- [ ] [CT-206] Inject callchain registry dependencies explicitly
-    - Priority: Medium-High. Replace the package-level `defaultCallChainRegistry` with an injected service so CLI wiring controls analyser composition and tests can stub implementations (`internal/commands/callchain.go`, `internal/cli/cli.go`).
+- [x] [CT-206] Inject callchain registry dependencies explicitly
+    - Replaced the package-level registry with an injected service, wired through CLI and MCP descriptors, and added tests covering missing-service errors and stubbed analyzers.
 - [ ] [CT-207] Harden configuration merge invariants and smart constructors
     - Priority: High. Deduplicate documentation mode assignments, create typed option builders that enforce copy/copy-only invariants, and extend unit coverage for override precedence (`internal/config/app_config.go`, `app_config_test.go`).
 - [ ] [CT-208] Improve stream traversal resilience and warning injection

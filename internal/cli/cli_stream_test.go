@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tyemirov/ctx/internal/config"
+	"github.com/tyemirov/ctx/internal/docs"
 	"github.com/tyemirov/ctx/internal/types"
 	"github.com/tyemirov/ctx/internal/utils"
 )
@@ -35,6 +36,23 @@ func (stub *clipboardStub) Copy(text string) error {
 	stub.invocationCount++
 	stub.copiedText = text
 	return stub.errorToReturn
+}
+
+type callChainServiceStub struct {
+	output          *types.CallChainOutput
+	returnedError   error
+	invocationCount int
+}
+
+func (stub *callChainServiceStub) GetCallChainData(targetFunctionQualifiedName string, callChainDepth int, includeDocumentation bool, documentationCollector *docs.Collector, repositoryRootDirectory string) (*types.CallChainOutput, error) {
+	stub.invocationCount++
+	if stub.returnedError != nil {
+		return nil, stub.returnedError
+	}
+	if stub.output != nil {
+		return stub.output, nil
+	}
+	return &types.CallChainOutput{TargetFunction: targetFunctionQualifiedName}, nil
 }
 
 func boolPtr(value bool) *bool {
@@ -420,6 +438,53 @@ func TestResolveClipboardPreferences(t *testing.T) {
 				t.Fatalf("expected copyOnly=%t, got %t", testCase.expectedCopyOnly, copyOnlyEnabled)
 			}
 		})
+	}
+}
+
+func TestRunToolCallChainRequiresService(t *testing.T) {
+	descriptor := commandDescriptor{
+		ctx:               context.Background(),
+		commandName:       types.CommandCallChain,
+		paths:             []string{"fmt.Println"},
+		callChainDepth:    defaultCallChainDepth,
+		format:            types.FormatJSON,
+		documentationMode: types.DocumentationModeDisabled,
+		outputWriter:      io.Discard,
+		errorWriter:       io.Discard,
+	}
+
+	err := runTool(descriptor)
+	if err == nil {
+		t.Fatalf("expected error when call chain service is missing")
+	}
+	if !strings.Contains(err.Error(), "call chain service") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunToolCallChainUsesInjectedService(t *testing.T) {
+	stub := &callChainServiceStub{}
+	var outputBuffer bytes.Buffer
+	descriptor := commandDescriptor{
+		ctx:               context.Background(),
+		commandName:       types.CommandCallChain,
+		paths:             []string{"fmt.Println"},
+		callChainDepth:    1,
+		format:            types.FormatRaw,
+		documentationMode: types.DocumentationModeDisabled,
+		outputWriter:      &outputBuffer,
+		errorWriter:       io.Discard,
+		callChainService:  stub,
+	}
+
+	if err := runTool(descriptor); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stub.invocationCount != 1 {
+		t.Fatalf("expected service to be invoked once, got %d", stub.invocationCount)
+	}
+	if outputBuffer.Len() == 0 {
+		t.Fatalf("expected output to be rendered")
 	}
 }
 
