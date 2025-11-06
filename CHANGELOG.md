@@ -8,6 +8,12 @@
 * Expanded `ARCHITECTURE.md` with package layout, data flow, and subsystem details to match the current implementation. (maintenance/CT-401-architecture-review)
 * Broke the refactoring roadmap into tracked backlog issues (CT-205–CT-210) covering CLI modularisation, configuration invariants, streaming resilience, and safety-net tests. (maintenance/CT-402-refactor-plan)
 
+### Improvements ⚙️
+
+* Rebuilt CLI command orchestration around shared descriptors, context-aware execution, and Cobra-managed writers, with expanded coverage for clipboard and format validation. (improvement/CT-205-cli-orchestration)
+* Injected an explicit call chain service so CLI and MCP flows configure analyzers without hidden globals, with tests covering service wiring. (improvement/CT-206-callchain-service)
+* Hardened configuration copy invariants with typed clipboard settings and expanded coverage for merge precedence. (improvement/CT-207-config-invariants)
+
 ## [v0.3.0]
 
 ### Improvements ⚙️

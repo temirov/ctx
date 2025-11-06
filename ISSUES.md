@@ -14,12 +14,12 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - Registered the `--c` shorthand for `--copy`, wired configuration detection to respect the alias, and documented the new toggle.
 - [x] [CT-04] integrate toons with ctx and make it a default output format https://github.com/toon-format/toon
     - Default output is now TOON with new renderers and documentation updates covering the format change.
-- [ ] [CT-205] Modularise CLI command orchestration and execution pipeline
-    - Priority: High. Introduce reusable command descriptors, split `runTool` into context-building and execution steps, switch to Cobra-managed writers, and add table-driven tests for config/flag precedence (`internal/cli/cli.go:338-769`, `cli_stream_test.go`).
-- [ ] [CT-206] Inject callchain registry dependencies explicitly
-    - Priority: Medium-High. Replace the package-level `defaultCallChainRegistry` with an injected service so CLI wiring controls analyser composition and tests can stub implementations (`internal/commands/callchain.go`, `internal/cli/cli.go`).
-- [ ] [CT-207] Harden configuration merge invariants and smart constructors
-    - Priority: High. Deduplicate documentation mode assignments, create typed option builders that enforce copy/copy-only invariants, and extend unit coverage for override precedence (`internal/config/app_config.go`, `app_config_test.go`).
+- [x] [CT-205] Modularise CLI command orchestration and execution pipeline
+    - Introduced shared command descriptors, split execution into context-building and run phases with Cobra-managed writers, and expanded clipboard/format table tests to lock behaviour.
+- [x] [CT-206] Inject callchain registry dependencies explicitly
+    - Replaced the package-level registry with an injected service, wired through CLI and MCP descriptors, and added tests covering missing-service errors and stubbed analyzers.
+- [x] [CT-207] Harden configuration merge invariants and smart constructors
+    - Added typed clipboard settings with enforced copy-only invariants, removed duplicate documentation mode assignments, and broadened unit coverage for merge precedence scenarios.
 - [ ] [CT-208] Improve stream traversal resilience and warning injection
     - Priority: Medium. Route warnings through injected callbacks, continue traversal on recoverable I/O errors, and consolidate binary/token helpers shared by tree and content streams (`internal/commands/tree_stream.go`, `content_stream.go`, tests).
 - [ ] [CT-209] Tighten remote documentation and token helper error handling

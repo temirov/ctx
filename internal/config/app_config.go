@@ -38,6 +38,15 @@ type StreamCommandConfiguration struct {
 	LegacyClipboard   *bool              `mapstructure:"clipboard"`
 }
 
+// CopySettings extracts clipboard preferences with invariants applied.
+func (config StreamCommandConfiguration) CopySettings() CopySettings {
+	normalized := config.normalizeCopySettings()
+	return CopySettings{
+		Copy:     cloneBool(normalized.Copy),
+		CopyOnly: cloneBool(normalized.CopyOnly),
+	}
+}
+
 // TokenConfiguration controls token counting defaults.
 type TokenConfiguration struct {
 	Enabled *bool  `mapstructure:"enabled"`
@@ -52,6 +61,12 @@ type PathConfiguration struct {
 	IncludeGit    *bool    `mapstructure:"include_git"`
 }
 
+// CopySettings captures clipboard preferences resolved from configuration.
+type CopySettings struct {
+	Copy     *bool
+	CopyOnly *bool
+}
+
 // CallChainConfiguration defines defaults for the callchain command.
 type CallChainConfiguration struct {
 	Format            string `mapstructure:"format"`
@@ -62,6 +77,15 @@ type CallChainConfiguration struct {
 	Copy              *bool  `mapstructure:"copy"`
 	CopyOnly          *bool  `mapstructure:"copy_only"`
 	LegacyClipboard   *bool  `mapstructure:"clipboard"`
+}
+
+// CopySettings extracts clipboard preferences for call chain commands.
+func (config CallChainConfiguration) CopySettings() CopySettings {
+	normalized := config.normalizeCopySettings()
+	return CopySettings{
+		Copy:     cloneBool(normalized.Copy),
+		CopyOnly: cloneBool(normalized.CopyOnly),
+	}
 }
 
 // LoadApplicationConfiguration loads configuration from global and local files.
@@ -182,9 +206,6 @@ func (config StreamCommandConfiguration) merge(override StreamCommandConfigurati
 	if override.DocumentationMode != "" {
 		result.DocumentationMode = override.DocumentationMode
 	}
-	if override.DocumentationMode != "" {
-		result.DocumentationMode = override.DocumentationMode
-	}
 	if override.IncludeContent != nil {
 		result.IncludeContent = cloneBool(override.IncludeContent)
 	}
@@ -262,6 +283,11 @@ func (config StreamCommandConfiguration) normalizeCopySettings() StreamCommandCo
 	if result.Copy == nil && result.LegacyClipboard != nil {
 		result.Copy = cloneBool(result.LegacyClipboard)
 	}
+	if result.CopyOnly != nil && *result.CopyOnly {
+		if result.Copy == nil || !*result.Copy {
+			result.Copy = boolPtr(true)
+		}
+	}
 	result.LegacyClipboard = nil
 	return result
 }
@@ -271,8 +297,18 @@ func (config CallChainConfiguration) normalizeCopySettings() CallChainConfigurat
 	if result.Copy == nil && result.LegacyClipboard != nil {
 		result.Copy = cloneBool(result.LegacyClipboard)
 	}
+	if result.CopyOnly != nil && *result.CopyOnly {
+		if result.Copy == nil || !*result.Copy {
+			result.Copy = boolPtr(true)
+		}
+	}
 	result.LegacyClipboard = nil
 	return result
+}
+
+func boolPtr(value bool) *bool {
+	cloned := value
+	return &cloned
 }
 
 func cloneBool(value *bool) *bool {

@@ -76,7 +76,7 @@ func TestLoadApplicationConfigurationMergesSources(t *testing.T) {
 			expectTokens:   nil,
 			expectModel:    "",
 			expectContent:  nil,
-			expectCopy:     nil,
+			expectCopy:     boolPointer(true),
 			expectCopyOnly: boolPointer(true),
 		},
 	}
@@ -172,5 +172,38 @@ func TestLoadApplicationConfigurationMergesSources(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestStreamCopySettingsEnforcesCopyOnlyImpliesCopy(t *testing.T) {
+	configuration := StreamCommandConfiguration{
+		CopyOnly: boolPointer(true),
+	}
+	settings := configuration.CopySettings()
+	if settings.Copy == nil || !*settings.Copy {
+		t.Fatalf("expected copy to be enabled when copyOnly is true")
+	}
+	if settings.CopyOnly == nil || !*settings.CopyOnly {
+		t.Fatalf("expected copyOnly to remain true")
+	}
+}
+
+func TestCallChainCopySettingsIncludesLegacyClipboard(t *testing.T) {
+	configuration := CallChainConfiguration{
+		LegacyClipboard: boolPointer(true),
+	}
+	settings := configuration.CopySettings()
+	if settings.Copy == nil || !*settings.Copy {
+		t.Fatalf("expected legacy clipboard to enable copy")
+	}
+}
+
+func TestStreamCommandMergePreservesCopyOnlyInvariant(t *testing.T) {
+	base := StreamCommandConfiguration{}
+	override := StreamCommandConfiguration{CopyOnly: boolPointer(true)}
+	merged := base.merge(override)
+	settings := merged.CopySettings()
+	if settings.Copy == nil || !*settings.Copy {
+		t.Fatalf("expected copy to be enforced when copyOnly is true")
 	}
 }

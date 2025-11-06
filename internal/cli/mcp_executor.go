@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/tyemirov/ctx/internal/commands"
 	"github.com/tyemirov/ctx/internal/docs/githubdoc"
 	"github.com/tyemirov/ctx/internal/services/mcp"
 	"github.com/tyemirov/ctx/internal/types"
@@ -157,28 +158,27 @@ func executeCallChainCommand(commandContext context.Context, request mcp.Command
 	}
 	var outputBuffer bytes.Buffer
 	var warningBuffer bytes.Buffer
-	executionErr := runTool(
-		commandContext,
-		types.CommandCallChain,
-		[]string{target},
-		nil,
-		true,
-		true,
-		false,
-		depth,
-		format,
-		documentationMode,
-		false,
-		false,
-		tokenOptions{},
-		docsAttempt,
-		payload.DocsAPIBase,
-		&outputBuffer,
-		&warningBuffer,
-		false,
-		false,
-		nil,
-	)
+	descriptor := commandDescriptor{
+		ctx:                commandContext,
+		commandName:        types.CommandCallChain,
+		paths:              []string{target},
+		exclusionPatterns:  nil,
+		useGitignore:       true,
+		useIgnoreFile:      true,
+		includeGit:         false,
+		callChainDepth:     depth,
+		format:             format,
+		documentationMode:  documentationMode,
+		summaryEnabled:     false,
+		includeContent:     false,
+		tokenConfiguration: tokenOptions{},
+		docsAttempt:        docsAttempt,
+		docsAPIBase:        payload.DocsAPIBase,
+		outputWriter:       &outputBuffer,
+		errorWriter:        &warningBuffer,
+		callChainService:   commands.NewCallChainService(),
+	}
+	executionErr := runTool(descriptor)
 	if executionErr != nil {
 		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("execute callchain: %w", executionErr))
 	}
@@ -318,28 +318,26 @@ func parseStreamRequest(payload json.RawMessage, defaults streamConfigurationDef
 func invokeStreamCommand(commandContext context.Context, parameters streamExecutionParameters) (mcp.CommandResponse, error) {
 	var outputBuffer bytes.Buffer
 	var warningBuffer bytes.Buffer
-	executionErr := runTool(
-		commandContext,
-		parameters.commandName,
-		parameters.paths,
-		parameters.exclusionPatterns,
-		parameters.useGitignore,
-		parameters.useIgnoreFile,
-		parameters.includeGit,
-		defaultCallChainDepth,
-		parameters.format,
-		parameters.documentationMode,
-		parameters.summaryEnabled,
-		parameters.includeContent,
-		parameters.tokenConfiguration,
-		parameters.docsAttempt,
-		parameters.docsAPIBase,
-		&outputBuffer,
-		&warningBuffer,
-		false,
-		false,
-		nil,
-	)
+	descriptor := commandDescriptor{
+		ctx:                commandContext,
+		commandName:        parameters.commandName,
+		paths:              parameters.paths,
+		exclusionPatterns:  parameters.exclusionPatterns,
+		useGitignore:       parameters.useGitignore,
+		useIgnoreFile:      parameters.useIgnoreFile,
+		includeGit:         parameters.includeGit,
+		callChainDepth:     defaultCallChainDepth,
+		format:             parameters.format,
+		documentationMode:  parameters.documentationMode,
+		summaryEnabled:     parameters.summaryEnabled,
+		includeContent:     parameters.includeContent,
+		tokenConfiguration: parameters.tokenConfiguration,
+		docsAttempt:        parameters.docsAttempt,
+		docsAPIBase:        parameters.docsAPIBase,
+		outputWriter:       &outputBuffer,
+		errorWriter:        &warningBuffer,
+	}
+	executionErr := runTool(descriptor)
 	if executionErr != nil {
 		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("execute %s: %w", parameters.commandName, executionErr))
 	}
