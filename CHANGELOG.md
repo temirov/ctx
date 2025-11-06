@@ -13,6 +13,7 @@
 * Rebuilt CLI command orchestration around shared descriptors, context-aware execution, and Cobra-managed writers, with expanded coverage for clipboard and format validation. (improvement/CT-205-cli-orchestration)
 * Injected an explicit call chain service so CLI and MCP flows configure analyzers without hidden globals, with tests covering service wiring. (improvement/CT-206-callchain-service)
 * Hardened configuration copy invariants with typed clipboard settings and expanded coverage for merge precedence. (improvement/CT-207-config-invariants)
+* Added documentation option value objects, centralized GitHub token resolution, and tokenizer helper sentinel errors so remote docs/token flows emit contextual failures backed by new CLI/tokenizer tests. (improvement/CT-209-docs-token-handling)
 
 ## [v0.3.0]
 

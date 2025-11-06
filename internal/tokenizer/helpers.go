@@ -30,11 +30,11 @@ func materializeHelperScripts(targetDir string) (string, error) {
 	for _, scriptName := range entries {
 		content, readErr := fs.ReadFile(embeddedHelperScripts, filepath.Join("helpers", scriptName))
 		if readErr != nil {
-			return "", fmt.Errorf("read embedded helper %s: %w", scriptName, readErr)
+			return "", fmt.Errorf("%w: read embedded helper %s: %w", ErrHelperUnavailable, scriptName, readErr)
 		}
 		scriptPath := filepath.Join(tempDir, scriptName)
 		if writeErr := os.WriteFile(scriptPath, content, 0o700); writeErr != nil {
-			return "", fmt.Errorf("write helper %s: %w", scriptName, writeErr)
+			return "", fmt.Errorf("%w: write helper %s: %w", ErrHelperUnavailable, scriptName, writeErr)
 		}
 	}
 

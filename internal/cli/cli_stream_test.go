@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tyemirov/ctx/internal/config"
 	"github.com/tyemirov/ctx/internal/docs"
+	"github.com/tyemirov/ctx/internal/tokenizer"
 	"github.com/tyemirov/ctx/internal/types"
 	"github.com/tyemirov/ctx/internal/utils"
 )
@@ -252,12 +253,10 @@ func TestRunToolCopiesOutputToClipboard(t *testing.T) {
 				includeGit:         false,
 				callChainDepth:     defaultCallChainDepth,
 				format:             types.FormatJSON,
-				documentationMode:  types.DocumentationModeDisabled,
+				documentation:      documentationOptions{},
 				summaryEnabled:     false,
 				includeContent:     true,
 				tokenConfiguration: tokenOptions{},
-				docsAttempt:        false,
-				docsAPIBase:        "",
 				outputWriter:       &outputBuffer,
 				errorWriter:        io.Discard,
 				clipboardEnabled:   true,
@@ -305,12 +304,10 @@ func TestRunToolCopyOnlySuppressesStdout(t *testing.T) {
 		includeGit:         false,
 		callChainDepth:     defaultCallChainDepth,
 		format:             types.FormatJSON,
-		documentationMode:  types.DocumentationModeDisabled,
+		documentation:      documentationOptions{},
 		summaryEnabled:     false,
 		includeContent:     true,
 		tokenConfiguration: tokenOptions{},
-		docsAttempt:        false,
-		docsAPIBase:        "",
 		outputWriter:       &outputBuffer,
 		errorWriter:        io.Discard,
 		clipboardEnabled:   false,
@@ -443,14 +440,14 @@ func TestResolveClipboardPreferences(t *testing.T) {
 
 func TestRunToolCallChainRequiresService(t *testing.T) {
 	descriptor := commandDescriptor{
-		ctx:               context.Background(),
-		commandName:       types.CommandCallChain,
-		paths:             []string{"fmt.Println"},
-		callChainDepth:    defaultCallChainDepth,
-		format:            types.FormatJSON,
-		documentationMode: types.DocumentationModeDisabled,
-		outputWriter:      io.Discard,
-		errorWriter:       io.Discard,
+		ctx:            context.Background(),
+		commandName:    types.CommandCallChain,
+		paths:          []string{"fmt.Println"},
+		callChainDepth: defaultCallChainDepth,
+		format:         types.FormatJSON,
+		documentation:  documentationOptions{},
+		outputWriter:   io.Discard,
+		errorWriter:    io.Discard,
 	}
 
 	err := runTool(descriptor)
@@ -466,15 +463,15 @@ func TestRunToolCallChainUsesInjectedService(t *testing.T) {
 	stub := &callChainServiceStub{}
 	var outputBuffer bytes.Buffer
 	descriptor := commandDescriptor{
-		ctx:               context.Background(),
-		commandName:       types.CommandCallChain,
-		paths:             []string{"fmt.Println"},
-		callChainDepth:    1,
-		format:            types.FormatRaw,
-		documentationMode: types.DocumentationModeDisabled,
-		outputWriter:      &outputBuffer,
-		errorWriter:       io.Discard,
-		callChainService:  stub,
+		ctx:              context.Background(),
+		commandName:      types.CommandCallChain,
+		paths:            []string{"fmt.Println"},
+		callChainDepth:   1,
+		format:           types.FormatRaw,
+		documentation:    documentationOptions{},
+		outputWriter:     &outputBuffer,
+		errorWriter:      io.Discard,
+		callChainService: stub,
 	}
 
 	if err := runTool(descriptor); err != nil {
@@ -485,6 +482,25 @@ func TestRunToolCallChainUsesInjectedService(t *testing.T) {
 	}
 	if outputBuffer.Len() == 0 {
 		t.Fatalf("expected output to be rendered")
+	}
+}
+
+func TestBuildExecutionContextSurfacesHelperSentinel(t *testing.T) {
+	t.Setenv("CTX_UV", filepath.Join(os.TempDir(), "missing-uv"))
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+	descriptor := commandDescriptor{
+		documentation: documentationOptions{},
+		tokenConfiguration: tokenOptions{
+			enabled: true,
+			model:   "claude-3-5-sonnet",
+		},
+	}
+	_, err := buildExecutionContext(context.Background(), descriptor, t.TempDir())
+	if err == nil {
+		t.Fatalf("expected error when helpers are unavailable")
+	}
+	if !errors.Is(err, tokenizer.ErrHelperUnavailable) {
+		t.Fatalf("expected helper unavailable error, got %v", err)
 	}
 }
 

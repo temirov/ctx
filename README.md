@@ -91,6 +91,8 @@ Provide repository coordinates (`owner/repo[/path]`) or a GitHub URL. Combine `-
 needed. Use `--doc relevant` to limit output to referenced symbols or `--doc full` to include entire documentation
 bundles.
 
+Remote documentation calls require authentication. Export `GITHUB_TOKEN` (preferred) or `GITHUB_API_TOKEN` before running `ctx doc` or enabling `--docs-attempt`. When targeting a custom API base (for example, a mock server in tests), any placeholder token value is sufficient.
+
 ## Helpful Flags at a Glance
 
 ```shell

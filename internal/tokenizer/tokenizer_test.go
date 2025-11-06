@@ -1,6 +1,7 @@
 package tokenizer
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -67,6 +68,9 @@ func TestNewCounterUVDetectionFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "CTX_UV") {
 		t.Fatalf("expected error to mention CTX_UV, got %v", err)
+	}
+	if !errors.Is(err, ErrHelperUnavailable) {
+		t.Fatalf("expected ErrHelperUnavailable, got %v", err)
 	}
 }
 

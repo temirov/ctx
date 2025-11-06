@@ -383,12 +383,10 @@ func createTreeCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyO
 				includeGit:         pathConfiguration.includeGit,
 				callChainDepth:     defaultCallChainDepth,
 				format:             outputFormatLower,
-				documentationMode:  types.DocumentationModeDisabled,
+				documentation:      documentationOptions{},
 				summaryEnabled:     summaryEnabled,
 				includeContent:     includeContent,
 				tokenConfiguration: tokenConfiguration,
-				docsAttempt:        false,
-				docsAPIBase:        "",
 				outputWriter:       command.OutOrStdout(),
 				errorWriter:        command.ErrOrStderr(),
 				clipboardEnabled:   copyEnabledForCommand,
@@ -446,7 +444,17 @@ func createContentCommand(clipboardProvider clipboard.Copier, copyFlag *bool, co
 			}
 			effectiveDocumentationMode, documentationErr := normalizeDocumentationMode(documentationMode)
 			if documentationErr != nil {
-				return documentationErr
+				return fmt.Errorf("configure documentation: %w", documentationErr)
+			}
+			tokenResolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvFallback)
+			documentationOptions, documentationOptionsErr := newDocumentationOptions(documentationOptionsParameters{
+				Mode:          effectiveDocumentationMode,
+				RemoteEnabled: docsAttempt,
+				RemoteAPIBase: docsAPIBase,
+				TokenResolver: tokenResolver,
+			})
+			if documentationOptionsErr != nil {
+				return fmt.Errorf("configure documentation: %w", documentationOptionsErr)
 			}
 			copyFlagValue := copyFlag != nil && *copyFlag
 			copyOnlyFlagValue := copyOnlyFlag != nil && *copyOnlyFlag
@@ -467,12 +475,10 @@ func createContentCommand(clipboardProvider clipboard.Copier, copyFlag *bool, co
 				includeGit:         pathConfiguration.includeGit,
 				callChainDepth:     defaultCallChainDepth,
 				format:             outputFormatLower,
-				documentationMode:  effectiveDocumentationMode,
+				documentation:      documentationOptions,
 				summaryEnabled:     summaryEnabled,
 				includeContent:     includeContent,
 				tokenConfiguration: tokenConfiguration,
-				docsAttempt:        docsAttempt,
-				docsAPIBase:        docsAPIBase,
 				outputWriter:       command.OutOrStdout(),
 				errorWriter:        command.ErrOrStderr(),
 				clipboardEnabled:   copyEnabledForCommand,
@@ -537,6 +543,16 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, 
 			if documentationErr != nil {
 				return documentationErr
 			}
+			tokenResolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvFallback)
+			documentationOptions, documentationOptionsErr := newDocumentationOptions(documentationOptionsParameters{
+				Mode:          effectiveDocumentationMode,
+				RemoteEnabled: docsAttempt,
+				RemoteAPIBase: docsAPIBase,
+				TokenResolver: tokenResolver,
+			})
+			if documentationOptionsErr != nil {
+				return fmt.Errorf("configure documentation: %w", documentationOptionsErr)
+			}
 			copyFlagValue := copyFlag != nil && *copyFlag
 			copyOnlyFlagValue := copyOnlyFlag != nil && *copyOnlyFlag
 			var configCopy, configCopyOnly *bool
@@ -556,12 +572,10 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, 
 				includeGit:         false,
 				callChainDepth:     callChainDepth,
 				format:             outputFormatLower,
-				documentationMode:  effectiveDocumentationMode,
+				documentation:      documentationOptions,
 				summaryEnabled:     false,
 				includeContent:     false,
 				tokenConfiguration: tokenOptions{},
-				docsAttempt:        docsAttempt,
-				docsAPIBase:        docsAPIBase,
 				outputWriter:       command.OutOrStdout(),
 				errorWriter:        command.ErrOrStderr(),
 				clipboardEnabled:   copyEnabledForCommand,
@@ -635,17 +649,23 @@ func createDocCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOn
 			if copyOnlyEnabled {
 				copyEnabled = true
 			}
-			authorizationToken := resolveGitHubAuthorizationToken()
+			tokenResolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvFallback)
+			documentationOptions, documentationErr := newDocumentationOptions(documentationOptionsParameters{
+				Mode:          mode,
+				TokenResolver: tokenResolver,
+			})
+			if documentationErr != nil {
+				return documentationErr
+			}
 			options := docCommandOptions{
-				Coordinates:        coordinates,
-				RuleSet:            ruleSet,
-				Mode:               mode,
-				APIBase:            apiBase,
-				AuthorizationToken: authorizationToken,
-				ClipboardEnabled:   copyEnabled,
-				CopyOnly:           copyOnlyEnabled,
-				Clipboard:          clipboardProvider,
-				Writer:             writer,
+				Coordinates:      coordinates,
+				RuleSet:          ruleSet,
+				Documentation:    documentationOptions,
+				APIBase:          apiBase,
+				ClipboardEnabled: copyEnabled,
+				CopyOnly:         copyOnlyEnabled,
+				Clipboard:        clipboardProvider,
+				Writer:           writer,
 			}
 			if runErr := runDocCommand(command.Context(), options); runErr != nil {
 				return runErr
@@ -678,12 +698,10 @@ type commandDescriptor struct {
 	includeGit         bool
 	callChainDepth     int
 	format             string
-	documentationMode  string
+	documentation      documentationOptions
 	summaryEnabled     bool
 	includeContent     bool
 	tokenConfiguration tokenOptions
-	docsAttempt        bool
-	docsAPIBase        string
 	outputWriter       io.Writer
 	errorWriter        io.Writer
 	clipboardEnabled   bool
@@ -788,32 +806,19 @@ func runTool(descriptor commandDescriptor) error {
 }
 
 func buildExecutionContext(commandContext context.Context, descriptor commandDescriptor, workingDirectory string) (executionContext, error) {
-	mode := descriptor.documentationMode
-	if mode == "" {
-		mode = types.DocumentationModeDisabled
-	}
-
+	mode := descriptor.documentation.Mode()
 	result := executionContext{
 		documentationMode: mode,
 		workingDirectory:  workingDirectory,
 	}
 
-	remoteEnabled := descriptor.docsAttempt && mode == types.DocumentationModeFull
 	if mode != types.DocumentationModeDisabled {
-		options := docs.CollectorOptions{}
-		if remoteEnabled {
-			options.RemoteAttempt = docs.RemoteAttemptOptions{
-				Enabled:            true,
-				APIBase:            descriptor.docsAPIBase,
-				AuthorizationToken: resolveGitHubAuthorizationToken(),
-			}
-		}
-		collector, collectorErr := docs.NewCollectorWithOptions(workingDirectory, options)
+		collector, collectorErr := docs.NewCollectorWithOptions(workingDirectory, descriptor.documentation.CollectorOptions())
 		if collectorErr != nil {
 			return executionContext{}, collectorErr
 		}
 		result.collector = collector
-		if remoteEnabled {
+		if descriptor.documentation.RemoteDocumentationEnabled() {
 			if commandContext == nil {
 				commandContext = context.Background()
 			}
@@ -824,6 +829,9 @@ func buildExecutionContext(commandContext context.Context, descriptor commandDes
 	if descriptor.tokenConfiguration.enabled {
 		counter, resolvedModel, counterErr := tokenizer.NewCounter(descriptor.tokenConfiguration.toConfig(workingDirectory))
 		if counterErr != nil {
+			if errors.Is(counterErr, tokenizer.ErrHelperUnavailable) {
+				return executionContext{}, fmt.Errorf("token helper unavailable: %w", counterErr)
+			}
 			return executionContext{}, counterErr
 		}
 		result.tokenCounter = counter
@@ -1229,15 +1237,14 @@ func resolveAndValidatePaths(inputs []string) ([]types.ValidatedPath, error) {
 }
 
 type docCommandOptions struct {
-	Coordinates        repositoryCoordinates
-	RuleSet            githubdoc.RuleSet
-	Mode               string
-	APIBase            string
-	AuthorizationToken string
-	ClipboardEnabled   bool
-	CopyOnly           bool
-	Clipboard          clipboard.Copier
-	Writer             io.Writer
+	Coordinates      repositoryCoordinates
+	RuleSet          githubdoc.RuleSet
+	Documentation    documentationOptions
+	APIBase          string
+	ClipboardEnabled bool
+	CopyOnly         bool
+	Clipboard        clipboard.Copier
+	Writer           io.Writer
 }
 
 func runDocCommand(ctx context.Context, options docCommandOptions) error {
@@ -1245,16 +1252,13 @@ func runDocCommand(ctx context.Context, options docCommandOptions) error {
 	if outputWriter == nil {
 		outputWriter = os.Stdout
 	}
-	mode, modeErr := normalizeDocumentationMode(options.Mode)
-	if modeErr != nil {
-		return modeErr
-	}
+	mode := options.Documentation.Mode()
 	fetcher := githubdoc.NewFetcher(nil)
 	if options.APIBase != "" {
 		fetcher = fetcher.WithAPIBase(options.APIBase)
 	}
-	if options.AuthorizationToken != "" {
-		fetcher = fetcher.WithAuthorizationToken(options.AuthorizationToken)
+	if authorizationToken := options.Documentation.AuthorizationToken(); authorizationToken != "" {
+		fetcher = fetcher.WithAuthorizationToken(authorizationToken)
 	}
 	documents, fetchErr := fetcher.Fetch(ctx, githubdoc.FetchOptions{
 		Owner:      options.Coordinates.Owner,
@@ -1486,18 +1490,6 @@ func renderDocumentationOutput(coordinates repositoryCoordinates, documents []gi
 	}
 	builder.WriteString("\n")
 	return builder.String()
-}
-
-func resolveGitHubAuthorizationToken() string {
-	primary := strings.TrimSpace(os.Getenv(githubTokenEnvPrimary))
-	if primary != "" {
-		return primary
-	}
-	fallback := strings.TrimSpace(os.Getenv(githubTokenEnvFallback))
-	if fallback != "" {
-		return fallback
-	}
-	return ""
 }
 
 func mcpCapabilities() []mcp.Capability {
