@@ -7,6 +7,7 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 ## Features (100–199)
 
 - [ ] [CT-100] Add a `discover` subcommand under doc command. The output of the command ctx doc discover will be a doc folder with the documentation of major dependencies in place.
+Examples (generalize these)
 1. If the frontend depends on beercss or bootsrtap 5 then documentation for these libraries will be extracted and saved under doc as md files, one per library (similarly to how --doc works now)
 2. If the backend depends on gorm and viper then the documentation for these libraries will be extracted and saved under doc as md files, one per library (similarly to how --doc works now)
 
