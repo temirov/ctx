@@ -33,7 +33,7 @@ func newPyPIRegistry(base string) pypiRegistryClient {
 
 func newPyPIRegistryWithClient(base string, client httpClient) pypiRegistryClient {
 	if base == "" {
-		base = "https://pypi.org/p"
+		base = "https://pypi.org/pypi"
 	}
 	if client == nil {
 		client = &http.Client{Timeout: 20 * time.Second}
