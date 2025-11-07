@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Docs 📚
+
+* Added `docs/doc_discover_plan.md`, capturing the CLI contract, architecture, dependency detection heuristics, and phased rollout strategy for the upcoming `ctx doc discover` feature (CT-100).
+
 ## [v0.3.1]
 
 ### Docs 📚
