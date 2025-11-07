@@ -333,6 +333,42 @@ func TestRunToolCopyOnlySuppressesStdout(t *testing.T) {
 	}
 }
 
+func TestContentCommandCopyOnlyWritesClipboard(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "copy-only.txt")
+	if err := os.WriteFile(filePath, []byte("copy-only-data"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	stub := &clipboardStub{}
+	var copyFlag bool
+	var copyOnlyFlag bool
+	root := &cobra.Command{Use: "ctx"}
+	registerBooleanFlag(root.PersistentFlags(), &copyFlag, copyFlagName, false, "")
+	registerBooleanFlag(root.PersistentFlags(), &copyFlag, copyFlagAlias, false, "")
+	registerBooleanFlag(root.PersistentFlags(), &copyOnlyFlag, copyOnlyFlagName, false, "")
+	registerBooleanFlag(root.PersistentFlags(), &copyOnlyFlag, copyOnlyFlagAlias, false, "")
+	command := createContentCommand(stub, &copyFlag, &copyOnlyFlag, nil)
+	root.AddCommand(command)
+	var outputBuffer bytes.Buffer
+	var errorBuffer bytes.Buffer
+	root.SetOut(&outputBuffer)
+	root.SetErr(&errorBuffer)
+	root.SetArgs([]string{"content", "--copy-only", tempDir})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute content command: %v\nstderr: %s", err, errorBuffer.String())
+	}
+	if outputBuffer.Len() != 0 {
+		t.Fatalf("expected copy-only command to suppress stdout, got %q", outputBuffer.String())
+	}
+	if stub.invocationCount != 1 {
+		t.Fatalf("expected clipboard to be invoked once, got %d", stub.invocationCount)
+	}
+	if !strings.Contains(stub.copiedText, filepath.Base(filePath)) {
+		t.Fatalf("expected clipboard text to include %s, got %q", filepath.Base(filePath), stub.copiedText)
+	}
+}
+
 func TestResolveCopyDefaultRespectsAlias(t *testing.T) {
 	root := &cobra.Command{Use: "root"}
 	child := &cobra.Command{Use: "child"}

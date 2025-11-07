@@ -25,8 +25,8 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 - [x] [CT-209] Tighten remote documentation and token helper error handling
     - Added a shared `documentationOptions` value object plus an environment-backed GitHub token resolver so CLI, MCP, and `ctx doc` share normalization, API base handling, and contextual errors when tokens are missing.
     - Introduced tokenizer helper sentinel errors (`tokenizer.ErrHelperUnavailable`), surfaced them through the CLI with regression tests, and updated docs-attempt integration coverage to pin the new token requirement.
-- [ ] [CT-210] Expand integration and unit safety nets before refactors
-    - Priority: Medium-Low. Add end-to-end coverage for `--copy-only`, negative MCP scenarios, and utility helper tests to lock behaviour prior to large-scale changes (`internal/cli/cli_stream_test.go`, `internal/services/mcp/mcp_test.go`, `internal/utils`).
+- [x] [CT-210] Expand integration and unit safety nets before refactors
+    - Added a Cobra-driven `content --copy-only` test, new MCP negative-path tests (method validation and nested command paths), and regression coverage for size/time/mime helpers in `internal/utils` so safety nets exist before broader refactors.
 
 
 ## BugFixes (300–399)
