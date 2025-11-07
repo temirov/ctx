@@ -178,25 +178,50 @@ func (runner Runner) fetchDependencyDocuments(ctx context.Context, dependency De
 	if len(docPaths) == 0 {
 		docPaths = defaultDocPaths()
 	}
-	for _, docPath := range docPaths {
+	attempted := map[string]struct{}{}
+	var rootReadme string
+	fetchPath := func(docPath string) error {
+		normalized := strings.TrimSpace(docPath)
+		if normalized == "" {
+			return nil
+		}
+		key := strings.ToLower(normalized)
+		if _, ok := attempted[key]; ok {
+			return nil
+		}
+		attempted[key] = struct{}{}
 		options := githubdoc.FetchOptions{
 			Owner:      dependency.Source.Owner,
 			Repository: dependency.Source.Repository,
 			Reference:  dependency.Source.Reference,
-			RootPath:   docPath,
+			RootPath:   normalized,
 			RuleSet:    runner.options.RuleSet,
 		}
 		documents, err := runner.fetcher.Fetch(ctx, options)
 		if err != nil {
 			if strings.Contains(err.Error(), "status 404") {
-				continue
+				return nil
 			}
-			return nil, fmt.Errorf("fetch documentation for %s: %w", dependency.Name, err)
+			return fmt.Errorf("fetch documentation for %s: %w", dependency.Name, err)
 		}
 		if len(documents) == 0 {
-			continue
+			return nil
 		}
 		aggregated = append(aggregated, documents...)
+		if strings.EqualFold(normalized, "README.md") && rootReadme == "" {
+			rootReadme = documents[0].Content
+		}
+		return nil
+	}
+	for _, docPath := range docPaths {
+		if err := fetchPath(docPath); err != nil {
+			return nil, err
+		}
+	}
+	for _, hint := range extractDocPathsFromReadme(rootReadme) {
+		if err := fetchPath(hint); err != nil {
+			return nil, err
+		}
 	}
 	return aggregated, nil
 }
