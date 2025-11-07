@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -160,57 +159,17 @@ func (ctx *treeStreamContext) walkDirectory(path string, root string, depth int)
 }
 
 func (ctx *treeStreamContext) emitFile(path string, relativePath string, info os.FileInfo, depth int) (TreeSummary, error) {
-	mimeType := utils.DetectMimeType(path)
-	isBinary := false
-	var fileBytes []byte
-	var fileContent string
-	var contentEncoding string
-
-	if ctx.options.IncludeContent {
-		bytesRead, readError := os.ReadFile(path)
-		if readError != nil {
-			ctx.options.Warn(fmt.Sprintf(WarningFileReadFormat, path, readError))
-		} else {
-			fileBytes = bytesRead
-			isBinary = utils.IsBinary(fileBytes)
-		}
-	}
-	if !ctx.options.IncludeContent || fileBytes == nil {
-		isBinary = utils.IsFileBinary(path)
-	}
-	if ctx.options.IncludeContent && fileBytes == nil {
+	result, ok := inspectFile(path, info, fileInspectionConfig{
+		RelativePath:             relativePath,
+		IncludeContent:           ctx.options.IncludeContent,
+		BinaryPatterns:           ctx.options.BinaryContentPatterns,
+		TokenCounter:             ctx.options.TokenCounter,
+		TokenModel:               ctx.options.TokenModel,
+		Warn:                     ctx.options.Warn,
+		AllowBinaryTokenCounting: ctx.options.IncludeContent,
+	})
+	if !ok {
 		return TreeSummary{}, nil
-	}
-
-	if ctx.options.IncludeContent && fileBytes != nil {
-		if isBinary {
-			if utils.ShouldDisplayBinaryContentByPath(relativePath, ctx.options.BinaryContentPatterns) {
-				fileContent = base64.StdEncoding.EncodeToString(fileBytes)
-				contentEncoding = "base64"
-			} else {
-				fileContent = ""
-				contentEncoding = ""
-			}
-		} else {
-			fileContent = string(fileBytes)
-			contentEncoding = "utf-8"
-		}
-	}
-
-	tokens := 0
-	if ctx.options.TokenCounter != nil && (!isBinary || ctx.options.IncludeContent) {
-		var result tokenizer.CountResult
-		var tokenErr error
-		if ctx.options.IncludeContent && fileBytes != nil {
-			result, tokenErr = tokenizer.CountBytes(ctx.options.TokenCounter, fileBytes)
-		} else {
-			result, tokenErr = tokenizer.CountFile(ctx.options.TokenCounter, path)
-		}
-		if tokenErr != nil {
-			ctx.options.Warn(fmt.Sprintf("Warning: failed to count tokens for %s: %v\n", path, tokenErr))
-		} else if result.Counted {
-			tokens = result.Tokens
-		}
 	}
 
 	fileEvent := TreeFileEvent{
@@ -219,13 +178,14 @@ func (ctx *treeStreamContext) emitFile(path string, relativePath string, info os
 		Depth:           depth,
 		SizeBytes:       info.Size(),
 		LastModified:    utils.FormatTimestamp(info.ModTime()),
-		MimeType:        mimeType,
-		IsBinary:        isBinary,
-		Tokens:          tokens,
-		Content:         fileContent,
-		ContentEncoding: contentEncoding,
+		MimeType:        result.MimeType,
+		IsBinary:        result.IsBinary,
+		Tokens:          result.Tokens,
+		Content:         result.Content,
+		ContentEncoding: result.ContentEncoding,
+		Model:           result.Model,
 	}
-	if tokens > 0 {
+	if fileEvent.Tokens > 0 && fileEvent.Model == "" && ctx.options.TokenModel != "" {
 		fileEvent.Model = ctx.options.TokenModel
 	}
 
@@ -233,5 +193,5 @@ func (ctx *treeStreamContext) emitFile(path string, relativePath string, info os
 		return TreeSummary{}, err
 	}
 
-	return TreeSummary{Files: 1, Bytes: info.Size(), Tokens: tokens}, nil
+	return TreeSummary{Files: 1, Bytes: info.Size(), Tokens: fileEvent.Tokens}, nil
 }

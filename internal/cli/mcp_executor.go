@@ -156,6 +156,20 @@ func executeCallChainCommand(commandContext context.Context, request mcp.Command
 	if docsAttempt && documentationMode != types.DocumentationModeFull && len(payload.Documentation) == 0 {
 		documentationMode = types.DocumentationModeFull
 	}
+	tokenResolver := newEnvironmentGitHubTokenResolver(
+		githubTokenEnvPrimary,
+		githubTokenEnvSecondary,
+		githubTokenEnvTertiary,
+	)
+	documentationOptions, documentationOptionsErr := newDocumentationOptions(documentationOptionsParameters{
+		Mode:          documentationMode,
+		RemoteEnabled: docsAttempt,
+		RemoteAPIBase: payload.DocsAPIBase,
+		TokenResolver: tokenResolver,
+	})
+	if documentationOptionsErr != nil {
+		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("configure documentation: %w", documentationOptionsErr))
+	}
 	var outputBuffer bytes.Buffer
 	var warningBuffer bytes.Buffer
 	descriptor := commandDescriptor{
@@ -168,12 +182,10 @@ func executeCallChainCommand(commandContext context.Context, request mcp.Command
 		includeGit:         false,
 		callChainDepth:     depth,
 		format:             format,
-		documentationMode:  documentationMode,
+		documentation:      documentationOptions,
 		summaryEnabled:     false,
 		includeContent:     false,
 		tokenConfiguration: tokenOptions{},
-		docsAttempt:        docsAttempt,
-		docsAPIBase:        payload.DocsAPIBase,
 		outputWriter:       &outputBuffer,
 		errorWriter:        &warningBuffer,
 		callChainService:   commands.NewCallChainService(),
@@ -229,11 +241,23 @@ func executeDocCommand(commandContext context.Context, request mcp.CommandReques
 		}
 		ruleSet = loadedRuleSet
 	}
+	tokenResolver := newEnvironmentGitHubTokenResolver(
+		githubTokenEnvPrimary,
+		githubTokenEnvSecondary,
+		githubTokenEnvTertiary,
+	)
+	documentationOptions, documentationOptionsErr := newDocumentationOptions(documentationOptionsParameters{
+		Mode:          mode,
+		TokenResolver: tokenResolver,
+	})
+	if documentationOptionsErr != nil {
+		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("configure documentation: %w", documentationOptionsErr))
+	}
 	var outputBuffer bytes.Buffer
 	options := docCommandOptions{
 		Coordinates:      coordinates,
 		RuleSet:          ruleSet,
-		Mode:             mode,
+		Documentation:    documentationOptions,
 		APIBase:          payload.APIBase,
 		ClipboardEnabled: false,
 		Clipboard:        nil,
@@ -318,6 +342,20 @@ func parseStreamRequest(payload json.RawMessage, defaults streamConfigurationDef
 func invokeStreamCommand(commandContext context.Context, parameters streamExecutionParameters) (mcp.CommandResponse, error) {
 	var outputBuffer bytes.Buffer
 	var warningBuffer bytes.Buffer
+	tokenResolver := newEnvironmentGitHubTokenResolver(
+		githubTokenEnvPrimary,
+		githubTokenEnvSecondary,
+		githubTokenEnvTertiary,
+	)
+	documentationOptions, documentationOptionsErr := newDocumentationOptions(documentationOptionsParameters{
+		Mode:          parameters.documentationMode,
+		RemoteEnabled: parameters.docsAttempt,
+		RemoteAPIBase: parameters.docsAPIBase,
+		TokenResolver: tokenResolver,
+	})
+	if documentationOptionsErr != nil {
+		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("configure documentation: %w", documentationOptionsErr))
+	}
 	descriptor := commandDescriptor{
 		ctx:                commandContext,
 		commandName:        parameters.commandName,
@@ -328,12 +366,10 @@ func invokeStreamCommand(commandContext context.Context, parameters streamExecut
 		includeGit:         parameters.includeGit,
 		callChainDepth:     defaultCallChainDepth,
 		format:             parameters.format,
-		documentationMode:  parameters.documentationMode,
+		documentation:      documentationOptions,
 		summaryEnabled:     parameters.summaryEnabled,
 		includeContent:     parameters.includeContent,
 		tokenConfiguration: parameters.tokenConfiguration,
-		docsAttempt:        parameters.docsAttempt,
-		docsAPIBase:        parameters.docsAPIBase,
 		outputWriter:       &outputBuffer,
 		errorWriter:        &warningBuffer,
 	}

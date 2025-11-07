@@ -20,12 +20,13 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
     - Replaced the package-level registry with an injected service, wired through CLI and MCP descriptors, and added tests covering missing-service errors and stubbed analyzers.
 - [x] [CT-207] Harden configuration merge invariants and smart constructors
     - Added typed clipboard settings with enforced copy-only invariants, removed duplicate documentation mode assignments, and broadened unit coverage for merge precedence scenarios.
-- [ ] [CT-208] Improve stream traversal resilience and warning injection
-    - Priority: Medium. Route warnings through injected callbacks, continue traversal on recoverable I/O errors, and consolidate binary/token helpers shared by tree and content streams (`internal/commands/tree_stream.go`, `content_stream.go`, tests).
-- [ ] [CT-209] Tighten remote documentation and token helper error handling
-    - Priority: Medium. Add `DocumentationOptions` value objects, centralise GitHub token resolution with contextual errors, and surface sentinel failures when tokenizer helpers are missing (`internal/cli/cli.go:693-755`, `internal/tokenizer`).
-- [ ] [CT-210] Expand integration and unit safety nets before refactors
-    - Priority: Medium-Low. Add end-to-end coverage for `--copy-only`, negative MCP scenarios, and utility helper tests to lock behaviour prior to large-scale changes (`internal/cli/cli_stream_test.go`, `internal/services/mcp/mcp_test.go`, `internal/utils`).
+- [x] [CT-208] Improve stream traversal resilience and warning injection
+    - Routed tree and content streams through shared file inspection helpers, funneled warnings via injected callbacks, and added tests to confirm traversal continues on token counter failures.
+- [x] [CT-209] Tighten remote documentation and token helper error handling
+    - Added a shared `documentationOptions` value object plus an environment-backed GitHub token resolver so CLI, MCP, and `ctx doc` share normalization, API base handling, and contextual errors when tokens are missing.
+    - Introduced tokenizer helper sentinel errors (`tokenizer.ErrHelperUnavailable`), surfaced them through the CLI with regression tests, and updated docs-attempt integration coverage to pin the new token requirement.
+- [x] [CT-210] Expand integration and unit safety nets before refactors
+    - Added a Cobra-driven `content --copy-only` test, new MCP negative-path tests (method validation and nested command paths), and regression coverage for size/time/mime helpers in `internal/utils` so safety nets exist before broader refactors.
 
 
 ## BugFixes (300–399)

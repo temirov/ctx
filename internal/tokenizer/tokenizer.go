@@ -41,6 +41,8 @@ const (
 	defaultUVTimeout    = 120 * time.Second
 )
 
+var ErrHelperUnavailable = errors.New("tokenizer helper unavailable")
+
 // NewCounter returns a Counter implementation for the requested model.
 func NewCounter(cfg Config) (Counter, string, error) {
 	model := strings.TrimSpace(cfg.Model)
@@ -78,7 +80,7 @@ func NewCounter(cfg Config) (Counter, string, error) {
 		}
 		uvExecutable, detectErr := detectUVExecutable()
 		if detectErr != nil {
-			return nil, "", detectErr
+			return nil, "", fmt.Errorf("%w: %w", ErrHelperUnavailable, detectErr)
 		}
 		directory, err := materializeHelperScripts("")
 		if err != nil {
@@ -95,7 +97,7 @@ func NewCounter(cfg Config) (Counter, string, error) {
 	case strings.HasPrefix(lowerModel, "llama-"):
 		uvExecutable, detectErr := detectUVExecutable()
 		if detectErr != nil {
-			return nil, "", detectErr
+			return nil, "", fmt.Errorf("%w: %w", ErrHelperUnavailable, detectErr)
 		}
 		directory, err := materializeHelperScripts("")
 		if err != nil {

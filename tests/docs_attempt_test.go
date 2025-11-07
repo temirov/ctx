@@ -12,6 +12,8 @@ func TestContentDocsAttemptFetchesRemoteDocumentation(t *testing.T) {
 		t.Skip("skip docs attempt test in short mode")
 	}
 
+	t.Setenv("GITHUB_TOKEN", "test-token")
+
 	binary := buildBinary(t)
 
 	server := startGitHubMockServer(t, "remotedocs", "lib", "v1.2.3", "docs", map[string]string{

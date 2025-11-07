@@ -239,7 +239,8 @@ func TestContentJSONStreamingMatchesExpectedOutput(t *testing.T) {
 	}
 
 	var collected []appTypes.FileOutput
-	if err := commands.StreamContent(workingDir, nil, nil, nil, "", func(file appTypes.FileOutput) error {
+	streamOptions := commands.ContentStreamOptions{Root: workingDir}
+	if err := commands.StreamContent(streamOptions, func(file appTypes.FileOutput) error {
 		collected = append(collected, file)
 		return nil
 	}); err != nil {
