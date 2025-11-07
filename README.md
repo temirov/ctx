@@ -11,6 +11,7 @@ documentation, analyse call chains, or fetch documentation straight from GitHubâ
 - **Human-friendly or machine-ready output.** Toon (default), raw text, JSON, and XML renderers share the same data.
 - **Clipboard and automation built in.** Copy results, run in MCP server mode, or integrate with scripts.
 - **Optional documentation enrichment.** Embed local symbol docs or pull curated GitHub documentation alongside output.
+- **Automated dependency documentation.** `ctx doc discover` scans Go/npm/Python dependencies, fetches their upstream docs, and writes curated bundles to `doc/dependencies`.
 
 ## Quick Start
 
@@ -90,6 +91,18 @@ ctx doc --path example/project/docs --doc full
 Provide repository coordinates (`owner/repo[/path]`) or a GitHub URL. Combine `--ref`, `--rules`, and clipboard flags as
 needed. Use `--doc relevant` to limit output to referenced symbols or `--doc full` to include entire documentation
 bundles.
+
+### Generate dependency documentation
+
+Trace the dependencies used in your project and hydrate a local `doc/dependencies` tree (one Markdown file per package):
+
+```shell
+ctx doc discover . --output-dir doc/dependencies
+```
+
+- Supports Go modules (`go.mod`), npm (`package.json`), and Python (`requirements*.txt`, `pyproject.toml`) at once.
+- Toggle ecosystems with `--ecosystems go,js,python`, include dev tooling via `--include-dev`, and capture indirect Go modules with `--include-indirect`.
+- Emit machine-readable manifests for automation with `--format json`.
 
 Remote documentation calls support anonymous access for public repositories. Export `GH_TOKEN`, `GITHUB_TOKEN`, or `GITHUB_API_TOKEN` to authenticate when working with private sources or to raise rate limits. When targeting a custom API base (for example, a mock server in tests), any placeholder token value is sufficient.
 

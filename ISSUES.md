@@ -6,13 +6,15 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## Features (100–199)
 
-- [ ] [CT-100] Add a `discover` subcommand under doc command. The output of the command ctx doc discover will be a doc folder with the documentation of major dependencies in place.
+- [x] [CT-100] Add a `discover` subcommand under doc command. The output of the command ctx doc discover will be a doc folder with the documentation of major dependencies in place.
 Examples (generalize these)
 1. If the frontend depends on beercss or bootsrtap 5 then documentation for these libraries will be extracted and saved under doc as md files, one per library (similarly to how --doc works now)
 2. If the backend depends on gorm and viper then the documentation for these libraries will be extracted and saved under doc as md files, one per library (similarly to how --doc works now)
 
 Plan the execution and consider the discovery phase (we can use an llm client or some other method to figure out where to search for documentation, starting with github). The deliverable is an implementation plan, not the code.
-- [ ] [CT-101] Implement the technical tasks delivered by CT-100. Consider integration tests with real data and ensure that the documentation for the 3rd party dependncies is pulled, processed and saved indeed
+    - Documented the CLI, architecture, detection heuristics, and testing strategy for `ctx doc discover` in `docs/doc_discover_plan.md`, detailing Go/JS/Python discovery flows, repository/website/LLM resolvers, persistence layout, and rollout phases to unblock CT-101.
+- [x] [CT-101] Implement the technical tasks delivered by CT-100. Consider integration tests with real data and ensure that the documentation for the 3rd party dependncies is pulled, processed and saved indeed
+    - Implemented `ctx doc discover` with Go/npm/Python detectors, registry clients, Markdown writers, configuration support, clipboard integration, and fresh CLI/runner/unit/integration tests that verify real-world flows through mocked GitHub/npm/PyPI servers.
 
 ## Improvements (200–299)
 
@@ -50,3 +52,6 @@ Plan the execution and consider the discovery phase (we can use an llm client or
 
 ## Planning
 do not work on the issues below, not ready
+- JS discovery improvements:
+  - Allow recursive manifest detection (e.g., `**/package.json` outside `node_modules/`) so repos with nested web apps get documented in one pass. Needs glob/ignore support, caching, and CLI flags (`--package-json-glob`?) to keep large workspaces manageable. Must dedupe dependencies discovered in multiple subtrees and keep output directories stable.
+  - Optional LLM/search-backed hinting phase for “no docs found” cases. Prompt model with README text + directory listing to suggest candidate doc paths or external doc URLs (validated before fetch). Requires provider flag (`--llm-provider`), caching responses per dependency, domain allowlist for external fetches, and clear user-facing opt-in because of latency/cost.

@@ -18,9 +18,10 @@ type LoadOptions struct {
 
 // ApplicationConfiguration holds command-specific configuration defaults.
 type ApplicationConfiguration struct {
-	Tree      StreamCommandConfiguration `mapstructure:"tree"`
-	Content   StreamCommandConfiguration `mapstructure:"content"`
-	CallChain CallChainConfiguration     `mapstructure:"callchain"`
+	Tree        StreamCommandConfiguration `mapstructure:"tree"`
+	Content     StreamCommandConfiguration `mapstructure:"content"`
+	CallChain   CallChainConfiguration     `mapstructure:"callchain"`
+	DocDiscover DocDiscoverConfiguration   `mapstructure:"doc_discover"`
 }
 
 // StreamCommandConfiguration defines options shared by tree and content commands.
@@ -88,6 +89,91 @@ func (config CallChainConfiguration) CopySettings() CopySettings {
 	}
 }
 
+// DocDiscoverConfiguration defines defaults for the doc discover command.
+type DocDiscoverConfiguration struct {
+	OutputDir       string   `mapstructure:"output_dir"`
+	Ecosystems      []string `mapstructure:"ecosystems"`
+	Include         []string `mapstructure:"include"`
+	Exclude         []string `mapstructure:"exclude"`
+	IncludeDev      *bool    `mapstructure:"include_dev"`
+	IncludeIndirect *bool    `mapstructure:"include_indirect"`
+	Rules           string   `mapstructure:"rules"`
+	Concurrency     *int     `mapstructure:"concurrency"`
+	NPMRegistry     string   `mapstructure:"npm_registry"`
+	PyPIRegistry    string   `mapstructure:"pypi_registry"`
+	Copy            *bool    `mapstructure:"copy"`
+	CopyOnly        *bool    `mapstructure:"copy_only"`
+	LegacyClipboard *bool    `mapstructure:"clipboard"`
+}
+
+func (config DocDiscoverConfiguration) merge(override DocDiscoverConfiguration) DocDiscoverConfiguration {
+	result := config.normalizeCopySettings()
+	overrideNormalized := override.normalizeCopySettings()
+	if override.OutputDir != "" {
+		result.OutputDir = override.OutputDir
+	}
+	if len(override.Ecosystems) > 0 {
+		result.Ecosystems = append([]string(nil), override.Ecosystems...)
+	}
+	if len(override.Include) > 0 {
+		result.Include = append([]string(nil), override.Include...)
+	}
+	if len(override.Exclude) > 0 {
+		result.Exclude = append([]string(nil), override.Exclude...)
+	}
+	if override.IncludeDev != nil {
+		result.IncludeDev = cloneBool(override.IncludeDev)
+	}
+	if override.IncludeIndirect != nil {
+		result.IncludeIndirect = cloneBool(override.IncludeIndirect)
+	}
+	if override.Rules != "" {
+		result.Rules = override.Rules
+	}
+	if override.Concurrency != nil {
+		result.Concurrency = cloneInt(override.Concurrency)
+	}
+	if override.NPMRegistry != "" {
+		result.NPMRegistry = override.NPMRegistry
+	}
+	if override.PyPIRegistry != "" {
+		result.PyPIRegistry = override.PyPIRegistry
+	}
+	if overrideNormalized.Copy != nil {
+		result.Copy = cloneBool(overrideNormalized.Copy)
+	}
+	if overrideNormalized.CopyOnly != nil {
+		result.CopyOnly = cloneBool(overrideNormalized.CopyOnly)
+	}
+	if overrideNormalized.LegacyClipboard != nil {
+		result.LegacyClipboard = cloneBool(overrideNormalized.LegacyClipboard)
+	}
+	return result
+}
+
+// CopySettings extracts clipboard preferences.
+func (config DocDiscoverConfiguration) CopySettings() CopySettings {
+	normalized := config.normalizeCopySettings()
+	return CopySettings{
+		Copy:     cloneBool(normalized.Copy),
+		CopyOnly: cloneBool(normalized.CopyOnly),
+	}
+}
+
+func (config DocDiscoverConfiguration) normalizeCopySettings() DocDiscoverConfiguration {
+	result := config
+	if result.Copy == nil && result.LegacyClipboard != nil {
+		result.Copy = cloneBool(result.LegacyClipboard)
+	}
+	if result.CopyOnly != nil && *result.CopyOnly {
+		if result.Copy == nil || !*result.Copy {
+			result.Copy = boolPtr(true)
+		}
+	}
+	result.LegacyClipboard = nil
+	return result
+}
+
 // LoadApplicationConfiguration loads configuration from global and local files.
 func LoadApplicationConfiguration(options LoadOptions) (ApplicationConfiguration, error) {
 	workingDirectory := options.WorkingDirectory
@@ -124,6 +210,8 @@ func LoadApplicationConfiguration(options LoadOptions) (ApplicationConfiguration
 
 	merged.Tree.Paths.Exclude = utils.DeduplicatePatterns(merged.Tree.Paths.Exclude)
 	merged.Content.Paths.Exclude = utils.DeduplicatePatterns(merged.Content.Paths.Exclude)
+	merged.DocDiscover.Include = utils.DeduplicatePatterns(merged.DocDiscover.Include)
+	merged.DocDiscover.Exclude = utils.DeduplicatePatterns(merged.DocDiscover.Exclude)
 
 	return merged.normalizeCopySettings(), nil
 }
@@ -181,6 +269,7 @@ func (config ApplicationConfiguration) Merge(override ApplicationConfiguration) 
 	result.Tree = result.Tree.merge(override.Tree)
 	result.Content = result.Content.merge(override.Content)
 	result.CallChain = result.CallChain.merge(override.CallChain)
+	result.DocDiscover = result.DocDiscover.merge(override.DocDiscover)
 	return result.normalizeCopySettings()
 }
 
@@ -188,6 +277,7 @@ func (config ApplicationConfiguration) normalizeCopySettings() ApplicationConfig
 	config.Tree = config.Tree.normalizeCopySettings()
 	config.Content = config.Content.normalizeCopySettings()
 	config.CallChain = config.CallChain.normalizeCopySettings()
+	config.DocDiscover = config.DocDiscover.normalizeCopySettings()
 	return config
 }
 
