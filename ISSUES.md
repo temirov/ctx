@@ -52,3 +52,6 @@ Plan the execution and consider the discovery phase (we can use an llm client or
 
 ## Planning
 do not work on the issues below, not ready
+- JS discovery improvements:
+  - Allow recursive manifest detection (e.g., `**/package.json` outside `node_modules/`) so repos with nested web apps get documented in one pass. Needs glob/ignore support, caching, and CLI flags (`--package-json-glob`?) to keep large workspaces manageable. Must dedupe dependencies discovered in multiple subtrees and keep output directories stable.
+  - Optional LLM/search-backed hinting phase for “no docs found” cases. Prompt model with README text + directory listing to suggest candidate doc paths or external doc URLs (validated before fetch). Requires provider flag (`--llm-provider`), caching responses per dependency, domain allowlist for external fetches, and clear user-facing opt-in because of latency/cost.
