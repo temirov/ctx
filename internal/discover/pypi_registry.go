@@ -27,25 +27,25 @@ type pypiHTTPRegistry struct {
 	mutex  sync.Mutex
 }
 
-func newPyPIRegistry(base string) pypiHTTPRegistry {
+func newPyPIRegistry(base string) pypiRegistryClient {
 	return newPyPIRegistryWithClient(base, &http.Client{Timeout: 20 * time.Second})
 }
 
-func newPyPIRegistryWithClient(base string, client httpClient) pypiHTTPRegistry {
+func newPyPIRegistryWithClient(base string, client httpClient) pypiRegistryClient {
 	if base == "" {
 		base = "https://pypi.org/p"
 	}
 	if client == nil {
 		client = &http.Client{Timeout: 20 * time.Second}
 	}
-	return pypiHTTPRegistry{
+	return &pypiHTTPRegistry{
 		client: client,
 		base:   strings.TrimRight(base, "/"),
 		cache:  map[string]pypiPackageMetadata{},
 	}
 }
 
-func (registry pypiHTTPRegistry) Metadata(ctx context.Context, name string) (pypiPackageMetadata, error) {
+func (registry *pypiHTTPRegistry) Metadata(ctx context.Context, name string) (pypiPackageMetadata, error) {
 	registry.mutex.Lock()
 	if metadata, ok := registry.cache[name]; ok {
 		registry.mutex.Unlock()

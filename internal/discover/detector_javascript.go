@@ -15,8 +15,7 @@ type javaScriptDetector struct {
 
 func newJavaScriptDetector(client npmRegistryClient) javaScriptDetector {
 	if client == nil {
-		registry := newNPMRegistry("")
-		return javaScriptDetector{client: registry}
+		client = newNPMRegistry("")
 	}
 	return javaScriptDetector{client: client}
 }

@@ -15,8 +15,7 @@ type pythonDetector struct {
 
 func newPythonDetector(client pypiRegistryClient) pythonDetector {
 	if client == nil {
-		registry := newPyPIRegistry("")
-		return pythonDetector{client: registry}
+		client = newPyPIRegistry("")
 	}
 	return pythonDetector{client: client}
 }

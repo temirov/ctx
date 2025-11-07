@@ -31,25 +31,25 @@ type npmHTTPRegistry struct {
 	mutex  sync.Mutex
 }
 
-func newNPMRegistry(base string) npmHTTPRegistry {
+func newNPMRegistry(base string) npmRegistryClient {
 	return newNPMRegistryWithClient(base, &http.Client{Timeout: 20 * time.Second})
 }
 
-func newNPMRegistryWithClient(base string, client httpClient) npmHTTPRegistry {
+func newNPMRegistryWithClient(base string, client httpClient) npmRegistryClient {
 	if base == "" {
 		base = "https://registry.npmjs.org"
 	}
 	if client == nil {
 		client = &http.Client{Timeout: 20 * time.Second}
 	}
-	return npmHTTPRegistry{
+	return &npmHTTPRegistry{
 		client: client,
 		base:   strings.TrimRight(base, "/"),
 		cache:  map[string]npmPackageMetadata{},
 	}
 }
 
-func (registry npmHTTPRegistry) Metadata(ctx context.Context, name string) (npmPackageMetadata, error) {
+func (registry *npmHTTPRegistry) Metadata(ctx context.Context, name string) (npmPackageMetadata, error) {
 	registry.mutex.Lock()
 	if metadata, ok := registry.cache[name]; ok {
 		registry.mutex.Unlock()
