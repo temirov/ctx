@@ -1,20 +1,20 @@
 # Changelog
 
-## [Unreleased]
+## [v0.3.1]
 
 ### Docs 📚
 
-* Refocused the README around user workflows and split deep technical guidance into `ARCHITECTURE.md`. (maintenance/CT-400-readme-focus)
-* Expanded `ARCHITECTURE.md` with package layout, data flow, and subsystem details to match the current implementation. (maintenance/CT-401-architecture-review)
-* Broke the refactoring roadmap into tracked backlog issues (CT-205–CT-210) covering CLI modularisation, configuration invariants, streaming resilience, and safety-net tests. (maintenance/CT-402-refactor-plan)
+* Refocused the README around user workflows and split deep technical guidance into `ARCHITECTURE.md`.
+* Expanded `ARCHITECTURE.md` with package layout, data flow, and subsystem details to match the current implementation. 
+* Broke the refactoring roadmap into tracked backlog issues (CT-205–CT-210) covering CLI modularisation, configuration invariants, streaming resilience, and safety-net tests.
 
 ### Improvements ⚙️
 
-* Rebuilt CLI command orchestration around shared descriptors, context-aware execution, and Cobra-managed writers, with expanded coverage for clipboard and format validation. (improvement/CT-205-cli-orchestration)
-* Injected an explicit call chain service so CLI and MCP flows configure analyzers without hidden globals, with tests covering service wiring. (improvement/CT-206-callchain-service)
-* Hardened configuration copy invariants with typed clipboard settings and expanded coverage for merge precedence. (improvement/CT-207-config-invariants)
-* Added documentation option value objects, centralized GitHub token resolution, and tokenizer helper sentinel errors so remote docs/token flows emit contextual failures backed by new CLI/tokenizer tests. (improvement/CT-209-docs-token-handling)
-* Extended safety nets with a Cobra-driven `--copy-only` test, new MCP negative HTTP scenarios, and fresh utility coverage for size/time/mime helpers. (improvement/CT-210-safety-nets)
+* Rebuilt CLI command orchestration around shared descriptors, context-aware execution, and Cobra-managed writers, with expanded coverage for clipboard and format validation.
+* Injected an explicit call chain service so CLI and MCP flows configure analyzers without hidden globals, with tests covering service wiring.
+* Hardened configuration copy invariants with typed clipboard settings and expanded coverage for merge precedence.
+* Added documentation option value objects, centralized GitHub token resolution, and tokenizer helper sentinel errors so remote docs/token flows emit contextual failures backed by new CLI/tokenizer tests.
+* Extended safety nets with a Cobra-driven `--copy-only` test, new MCP negative HTTP scenarios, and fresh utility coverage for size/time/mime helpers.
 
 ## [v0.3.0]
 
