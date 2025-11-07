@@ -6,6 +6,12 @@ Read @AGENTS.md, @ARCHITECTURE.md, @POLICY.md, @NOTES.md, @README.md and @ISSUES
 
 ## Features (100–199)
 
+- [ ] [CT-100] Add a `discover` subcommand under doc command. The output of the command ctx doc discover will be a doc folder with the documentation of major dependencies in place.
+1. If the frontend depends on beercss or bootsrtap 5 then documentation for these libraries will be extracted and saved under doc as md files, one per library (similarly to how --doc works now)
+2. If the backend depends on gorm and viper then the documentation for these libraries will be extracted and saved under doc as md files, one per library (similarly to how --doc works now)
+
+Plan the execution and consider the discovery phase (we can use an llm client or some other method to figure out where to search for documentation, starting with github). The deliverable is an implementation plan, not the code.
+
 ## Improvements (200–299)
 
 - [x] [CT-02] add subcommands --copy-only, and add an abbreviated version of it, --co, which doesnt print the output of the command to STDOUT and only copies it to clipboard
