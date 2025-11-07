@@ -198,6 +198,50 @@ func TestCallChainCopySettingsIncludesLegacyClipboard(t *testing.T) {
 	}
 }
 
+func TestDocDiscoverConfigurationMergeOverridesSlices(t *testing.T) {
+	base := DocDiscoverConfiguration{
+		OutputDir:  "docs",
+		Ecosystems: []string{"go"},
+		Include:    []string{"go:*"},
+		Exclude:    []string{"js:*"},
+	}
+	override := DocDiscoverConfiguration{
+		OutputDir:   "doc/deps",
+		Ecosystems:  []string{"js"},
+		IncludeDev:  boolPointer(true),
+		Concurrency: func() *int { value := 6; return &value }(),
+	}
+	result := base.merge(override)
+	if result.OutputDir != "doc/deps" {
+		t.Fatalf("expected output dir override, got %s", result.OutputDir)
+	}
+	if len(result.Ecosystems) != 1 || result.Ecosystems[0] != "js" {
+		t.Fatalf("expected ecosystems override, got %+v", result.Ecosystems)
+	}
+	if result.IncludeDev == nil || !*result.IncludeDev {
+		t.Fatalf("expected dev flag override")
+	}
+	if result.Concurrency == nil || *result.Concurrency != 6 {
+		t.Fatalf("expected concurrency override")
+	}
+	if len(result.Include) != 1 || result.Include[0] != "go:*" {
+		t.Fatalf("expected include slice preserved")
+	}
+}
+
+func TestDocDiscoverCopySettingsEnsureCopyOnlyImpliesCopy(t *testing.T) {
+	config := DocDiscoverConfiguration{
+		CopyOnly: boolPointer(true),
+	}
+	settings := config.CopySettings()
+	if settings.Copy == nil || !*settings.Copy {
+		t.Fatalf("expected copy to be enabled")
+	}
+	if settings.CopyOnly == nil || !*settings.CopyOnly {
+		t.Fatalf("expected copyOnly to remain true")
+	}
+}
+
 func TestStreamCommandMergePreservesCopyOnlyInvariant(t *testing.T) {
 	base := StreamCommandConfiguration{}
 	override := StreamCommandConfiguration{CopyOnly: boolPointer(true)}

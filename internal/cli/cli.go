@@ -4,6 +4,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tyemirov/ctx/internal/commands"
 	"github.com/tyemirov/ctx/internal/config"
+	"github.com/tyemirov/ctx/internal/discover"
 	"github.com/tyemirov/ctx/internal/docs"
 	"github.com/tyemirov/ctx/internal/docs/githubdoc"
 	"github.com/tyemirov/ctx/internal/output"
@@ -129,6 +132,29 @@ Optional parameters:
 
   # Derive coordinates from a repository URL
   ctx doc --path https://github.com/example/project/tree/main/docs`
+	docDiscoverUse              = "discover [path]"
+	docDiscoverShortDescription = "generate local dependency documentation"
+	docDiscoverLongDescription  = `Scan a project for dependencies (Go modules, npm packages, Python requirements) and write curated documentation bundles to doc/dependencies.
+
+Provide an optional path argument or --root to set the project directory. Use --format json to emit a manifest instead of human-readable output.`
+	docDiscoverFormatText              = "text"
+	docDiscoverFormatJSON              = "json"
+	docDiscoverRootFlagName            = "root"
+	docDiscoverOutputFlagName          = "output-dir"
+	docDiscoverEcosystemsFlag          = "ecosystems"
+	docDiscoverIncludeFlagName         = "include"
+	docDiscoverExcludeFlagName         = "exclude"
+	docDiscoverIncludeDevFlag          = "include-dev"
+	docDiscoverIncludeIndirectFlagName = "include-indirect"
+	docDiscoverRulesFlagName           = "rules"
+	docDiscoverConcurrencyFlag         = "concurrency"
+	docDiscoverFormatFlagName          = "format"
+	docDiscoverAPIBaseFlagName         = "api-base"
+	docDiscoverNPMBaseFlagName         = "npm-registry-base"
+	docDiscoverPyPIBaseFlagName        = "pypi-registry-base"
+	docDiscoverFormatDescription       = "output format (text|json)"
+	docDiscoverSummaryTemplate         = "Dependencies processed: %d (written: %d, skipped: %d, failed: %d)\n"
+
 	docsAttemptFlagName        = "docs-attempt"
 	docsAttemptFlagDescription = "attempt to retrieve GitHub documentation for imported modules"
 	docsAPIBaseFlagName        = "docs-api-base"
@@ -303,7 +329,7 @@ func createRootCommand(clipboardProvider clipboard.Copier) *cobra.Command {
 		createTreeCommand(clipboardProvider, &copyFlagValue, &copyOnlyFlagValue, &applicationConfig),
 		createContentCommand(clipboardProvider, &copyFlagValue, &copyOnlyFlagValue, &applicationConfig),
 		createCallChainCommand(clipboardProvider, &copyFlagValue, &copyOnlyFlagValue, &applicationConfig, callChainService),
-		createDocCommand(clipboardProvider, &copyFlagValue, &copyOnlyFlagValue),
+		createDocCommand(clipboardProvider, &copyFlagValue, &copyOnlyFlagValue, &applicationConfig),
 	)
 	rootCommand.InitDefaultHelpCmd()
 	rootCommand.InitDefaultCompletionCmd()
@@ -610,7 +636,7 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, 
 	return callChainCommand
 }
 
-func createDocCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOnlyFlag *bool) *cobra.Command {
+func createDocCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOnlyFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
 	var repositoryPathSpec string
 	var repositoryReference string
 	var rulesPath string
@@ -698,7 +724,180 @@ func createDocCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOn
 	if apiFlag := docCommand.Flags().Lookup(repositoryAPIBaseFlagName); apiFlag != nil {
 		apiFlag.Hidden = true
 	}
+	docCommand.AddCommand(createDocDiscoverCommand(clipboardProvider, copyFlag, copyOnlyFlag, applicationConfig))
 	return docCommand
+}
+
+func createDocDiscoverCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOnlyFlag *bool, applicationConfig *config.ApplicationConfiguration) *cobra.Command {
+	var rootPath string
+	var outputDir string
+	var ecosystems []string
+	var includePatterns []string
+	var excludePatterns []string
+	var includeDev bool
+	var includeIndirect bool
+	var rulesPath string
+	var concurrency int
+	var format string
+	var apiBase string
+	var npmRegistryBase string
+	var pypiRegistryBase string
+
+	command := &cobra.Command{
+		Use:   docDiscoverUse,
+		Short: docDiscoverShortDescription,
+		Long:  docDiscoverLongDescription,
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, arguments []string) error {
+			var configDefaults config.DocDiscoverConfiguration
+			if applicationConfig != nil {
+				configDefaults = applicationConfig.DocDiscover
+			}
+			if len(arguments) > 0 {
+				rootPath = arguments[0]
+			}
+			if rootPath == "" {
+				rootPath = defaultPath
+			}
+			selectedOutputDir := resolveStringOption(cmd, docDiscoverOutputFlagName, outputDir, configDefaults.OutputDir)
+			selectedRules := resolveStringOption(cmd, docDiscoverRulesFlagName, rulesPath, configDefaults.Rules)
+			selectedInclude := resolveSliceOption(cmd, docDiscoverIncludeFlagName, includePatterns, configDefaults.Include)
+			selectedExclude := resolveSliceOption(cmd, docDiscoverExcludeFlagName, excludePatterns, configDefaults.Exclude)
+			selectedEcosystems := resolveSliceOption(cmd, docDiscoverEcosystemsFlag, ecosystems, configDefaults.Ecosystems)
+			selectedFormat := format
+			if selectedFormat == "" {
+				selectedFormat = docDiscoverFormatText
+			}
+			selectedConcurrency := resolveIntOption(cmd, docDiscoverConcurrencyFlag, concurrency, configDefaults.Concurrency)
+			selectedIncludeDev := resolveBoolOption(cmd, docDiscoverIncludeDevFlag, includeDev, configDefaults.IncludeDev)
+			selectedIncludeIndirect := resolveBoolOption(cmd, docDiscoverIncludeIndirectFlagName, includeIndirect, configDefaults.IncludeIndirect)
+			selectedNPM := resolveStringOption(cmd, docDiscoverNPMBaseFlagName, npmRegistryBase, configDefaults.NPMRegistry)
+			selectedPyPI := resolveStringOption(cmd, docDiscoverPyPIBaseFlagName, pypiRegistryBase, configDefaults.PyPIRegistry)
+			selectedAPIBase := strings.TrimSpace(apiBase)
+
+			ruleSet, ruleErr := loadRuleSet(selectedRules)
+			if ruleErr != nil {
+				return ruleErr
+			}
+			ecosystemSet, ecosystemErr := parseEcosystemSelection(selectedEcosystems)
+			if ecosystemErr != nil {
+				return ecosystemErr
+			}
+
+			tokenResolver := newEnvironmentGitHubTokenResolver(
+				githubTokenEnvPrimary,
+				githubTokenEnvSecondary,
+				githubTokenEnvTertiary,
+			)
+			authorizationToken, tokenErr := tokenResolver.Resolve()
+			if tokenErr != nil && !errors.Is(tokenErr, errGitHubTokenMissing) {
+				return fmt.Errorf("resolve GitHub token: %w", tokenErr)
+			}
+
+			copySettings := configDefaults.CopySettings()
+			var configCopy, configCopyOnly *bool
+			if copySettings.Copy != nil {
+				configCopy = copySettings.Copy
+			}
+			if copySettings.CopyOnly != nil {
+				configCopyOnly = copySettings.CopyOnly
+			}
+
+			cliCopy := copyFlag != nil && *copyFlag
+			cliCopyOnly := copyOnlyFlag != nil && *copyOnlyFlag
+			copyEnabled, copyOnlyEnabled := resolveClipboardPreferences(cmd, cliCopy, cliCopyOnly, configCopy, configCopyOnly)
+
+			options := discover.Options{
+				RootPath:           rootPath,
+				OutputDir:          selectedOutputDir,
+				Ecosystems:         ecosystemSet,
+				IncludePatterns:    utils.DeduplicatePatterns(selectedInclude),
+				ExcludePatterns:    utils.DeduplicatePatterns(selectedExclude),
+				IncludeDev:         selectedIncludeDev,
+				IncludeIndirect:    selectedIncludeIndirect,
+				RuleSet:            ruleSet,
+				Concurrency:        selectedConcurrency,
+				APIBase:            selectedAPIBase,
+				AuthorizationToken: authorizationToken,
+				NPMRegistryBase:    selectedNPM,
+				PyPIRegistryBase:   selectedPyPI,
+			}
+			runner := discover.NewRunner(options)
+			summary, runErr := runner.Run(cmd.Context())
+			if runErr != nil {
+				return runErr
+			}
+			formattedOutput, renderErr := renderDocDiscoverOutput(summary, selectedFormat)
+			if renderErr != nil {
+				return renderErr
+			}
+
+			writer := cmd.OutOrStdout()
+			var clipboardBuffer *bytes.Buffer
+			clipboardRequested := copyEnabled || copyOnlyEnabled
+			if clipboardRequested {
+				if clipboardProvider == nil {
+					return errors.New(clipboardServiceMissingMessage)
+				}
+				clipboardBuffer = &bytes.Buffer{}
+				if copyOnlyEnabled {
+					writer = clipboardBuffer
+				} else {
+					writer = io.MultiWriter(writer, clipboardBuffer)
+				}
+			}
+			if formattedOutput != "" && !copyOnlyEnabled {
+				if _, writeErr := fmt.Fprint(writer, formattedOutput); writeErr != nil {
+					return writeErr
+				}
+				if !strings.HasSuffix(formattedOutput, "\n") {
+					if _, writeErr := fmt.Fprintln(writer); writeErr != nil {
+						return writeErr
+					}
+				}
+			} else if formattedOutput != "" && copyOnlyEnabled {
+				if _, writeErr := fmt.Fprint(writer, formattedOutput); writeErr != nil {
+					return writeErr
+				}
+			} else if !copyOnlyEnabled {
+				if _, writeErr := fmt.Fprintln(writer); writeErr != nil {
+					return writeErr
+				}
+			}
+			if clipboardRequested && clipboardBuffer != nil {
+				if copyErr := clipboardProvider.Copy(clipboardBuffer.String()); copyErr != nil {
+					return fmt.Errorf(clipboardCopyErrorFormat, copyErr)
+				}
+			}
+			return nil
+		},
+	}
+
+	command.Flags().StringVar(&rootPath, docDiscoverRootFlagName, "", "project root path (defaults to current directory)")
+	command.Flags().StringSliceVar(&ecosystems, docDiscoverEcosystemsFlag, nil, "comma-separated ecosystems to process (go,js,python)")
+	command.Flags().StringSliceVar(&includePatterns, docDiscoverIncludeFlagName, nil, "dependency patterns to include (glob syntax)")
+	command.Flags().StringSliceVar(&excludePatterns, docDiscoverExcludeFlagName, nil, "dependency patterns to exclude (glob syntax)")
+	registerBooleanFlag(command.Flags(), &includeDev, docDiscoverIncludeDevFlag, false, "include dev dependencies")
+	registerBooleanFlag(command.Flags(), &includeIndirect, docDiscoverIncludeIndirectFlagName, false, "include indirect Go modules")
+	command.Flags().StringVar(&rulesPath, docDiscoverRulesFlagName, "", docRulesFlagDescription)
+	command.Flags().IntVar(&concurrency, docDiscoverConcurrencyFlag, 0, "maximum concurrent fetches (default derived from CPU)")
+	command.Flags().StringVar(&format, docDiscoverFormatFlagName, docDiscoverFormatText, docDiscoverFormatDescription)
+	command.Flags().StringVar(&apiBase, docDiscoverAPIBaseFlagName, "", "GitHub API base URL override")
+	command.Flags().StringVar(&npmRegistryBase, docDiscoverNPMBaseFlagName, "", "npm registry base URL")
+	command.Flags().StringVar(&pypiRegistryBase, docDiscoverPyPIBaseFlagName, "", "PyPI registry base URL")
+	command.Flags().StringVar(&outputDir, docDiscoverOutputFlagName, "", "output directory for generated documentation")
+
+	if apiFlag := command.Flags().Lookup(docDiscoverAPIBaseFlagName); apiFlag != nil {
+		apiFlag.Hidden = true
+	}
+	if npmFlag := command.Flags().Lookup(docDiscoverNPMBaseFlagName); npmFlag != nil {
+		npmFlag.Hidden = true
+	}
+	if pypiFlag := command.Flags().Lookup(docDiscoverPyPIBaseFlagName); pypiFlag != nil {
+		pypiFlag.Hidden = true
+	}
+
+	return command
 }
 
 type commandDescriptor struct {
@@ -1318,6 +1517,135 @@ func runDocCommand(ctx context.Context, options docCommandOptions) error {
 		}
 	}
 	return nil
+}
+
+func resolveStringOption(command *cobra.Command, flagName string, flagValue string, configValue string) string {
+	if command.Flags().Changed(flagName) {
+		return strings.TrimSpace(flagValue)
+	}
+	if flagValue != "" {
+		return strings.TrimSpace(flagValue)
+	}
+	return strings.TrimSpace(configValue)
+}
+
+func resolveSliceOption(command *cobra.Command, flagName string, flagValues []string, configValues []string) []string {
+	if command.Flags().Changed(flagName) {
+		return append([]string(nil), flagValues...)
+	}
+	if len(flagValues) > 0 {
+		return append([]string(nil), flagValues...)
+	}
+	if len(configValues) == 0 {
+		return nil
+	}
+	return append([]string(nil), configValues...)
+}
+
+func resolveBoolOption(command *cobra.Command, flagName string, flagValue bool, configValue *bool) bool {
+	if command.Flags().Changed(flagName) {
+		return flagValue
+	}
+	if configValue != nil {
+		return *configValue
+	}
+	return flagValue
+}
+
+func resolveIntOption(command *cobra.Command, flagName string, flagValue int, configValue *int) int {
+	if command.Flags().Changed(flagName) {
+		return flagValue
+	}
+	if configValue != nil {
+		return *configValue
+	}
+	return flagValue
+}
+
+func loadRuleSet(path string) (githubdoc.RuleSet, error) {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return githubdoc.RuleSet{}, nil
+	}
+	ruleSet, err := githubdoc.LoadRuleSet(trimmed)
+	if err != nil {
+		return githubdoc.RuleSet{}, fmt.Errorf("load rules from %s: %w", trimmed, err)
+	}
+	return ruleSet, nil
+}
+
+func parseEcosystemSelection(values []string) (map[discover.Ecosystem]bool, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	result := map[discover.Ecosystem]bool{}
+	for _, value := range values {
+		normalized := strings.ToLower(strings.TrimSpace(value))
+		switch normalized {
+		case "":
+			continue
+		case "go":
+			result[discover.EcosystemGo] = true
+		case "js", "javascript", "node":
+			result[discover.EcosystemJavaScript] = true
+		case "python", "py":
+			result[discover.EcosystemPython] = true
+		default:
+			return nil, fmt.Errorf("unsupported ecosystem %s", value)
+		}
+	}
+	if len(result) == 0 {
+		return nil, nil
+	}
+	return result, nil
+}
+
+func renderDocDiscoverOutput(summary discover.Summary, format string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "", docDiscoverFormatText:
+		return renderDocDiscoverText(summary), nil
+	case docDiscoverFormatJSON:
+		encoded, err := json.MarshalIndent(summary, "", "  ")
+		if err != nil {
+			return "", fmt.Errorf("encode manifest: %w", err)
+		}
+		return string(encoded) + "\n", nil
+	default:
+		return "", fmt.Errorf("unsupported format %s", format)
+	}
+}
+
+func renderDocDiscoverText(summary discover.Summary) string {
+	builder := &strings.Builder{}
+	total := len(summary.Entries)
+	written := summary.Count(discover.StatusWritten)
+	skipped := summary.Count(discover.StatusSkipped)
+	failed := summary.Count(discover.StatusFailed)
+	fmt.Fprintf(builder, docDiscoverSummaryTemplate, total, written, skipped, failed)
+	entries := append([]discover.ManifestEntry(nil), summary.Entries...)
+	sort.Slice(entries, func(i, j int) bool {
+		left := strings.ToLower(entries[i].Name)
+		right := strings.ToLower(entries[j].Name)
+		if left == right {
+			return entries[i].Ecosystem < entries[j].Ecosystem
+		}
+		return left < right
+	})
+	for _, entry := range entries {
+		line := fmt.Sprintf("- [%s] %s (%s)", entry.Status, entry.Name, entry.Repository)
+		if entry.OutputPath != "" {
+			line += fmt.Sprintf(" -> %s", entry.OutputPath)
+		}
+		if entry.DocFileCount > 0 {
+			line += fmt.Sprintf(" [%d files]", entry.DocFileCount)
+		}
+		if entry.Status != discover.StatusWritten && entry.Reason != "" {
+			line += fmt.Sprintf(" (%s)", entry.Reason)
+		}
+		builder.WriteString(line)
+		builder.WriteByte('\n')
+	}
+	return builder.String()
 }
 
 type repositoryCoordinates struct {

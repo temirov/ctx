@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Features ✨
+
+* Added `ctx doc discover`, a dependency-aware documentation generator that scans Go/npm/Python manifests, fetches upstream docs via the shared GitHub client, and writes Markdown bundles plus JSON manifests, complete with new configuration knobs (`doc_discover`), clipboard integration, and test-backed registry/GitHub stubs (CT-101).
+
 ### Docs 📚
 
 * Added `docs/doc_discover_plan.md`, capturing the CLI contract, architecture, dependency detection heuristics, and phased rollout strategy for the upcoming `ctx doc discover` feature (CT-100).

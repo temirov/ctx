@@ -46,6 +46,14 @@ callchain:
   format: json
   depth: 1
   documentation: false
+doc_discover:
+  output_dir: doc/dependencies
+  ecosystems: []
+  include: []
+  exclude: []
+  include_dev: false
+  include_indirect: false
+  concurrency: 4
 `
 )
 

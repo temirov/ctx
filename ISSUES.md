@@ -13,7 +13,8 @@ Examples (generalize these)
 
 Plan the execution and consider the discovery phase (we can use an llm client or some other method to figure out where to search for documentation, starting with github). The deliverable is an implementation plan, not the code.
     - Documented the CLI, architecture, detection heuristics, and testing strategy for `ctx doc discover` in `docs/doc_discover_plan.md`, detailing Go/JS/Python discovery flows, repository/website/LLM resolvers, persistence layout, and rollout phases to unblock CT-101.
-- [ ] [CT-101] Implement the technical tasks delivered by CT-100. Consider integration tests with real data and ensure that the documentation for the 3rd party dependncies is pulled, processed and saved indeed
+- [x] [CT-101] Implement the technical tasks delivered by CT-100. Consider integration tests with real data and ensure that the documentation for the 3rd party dependncies is pulled, processed and saved indeed
+    - Implemented `ctx doc discover` with Go/npm/Python detectors, registry clients, Markdown writers, configuration support, clipboard integration, and fresh CLI/runner/unit/integration tests that verify real-world flows through mocked GitHub/npm/PyPI servers.
 
 ## Improvements (200–299)
 

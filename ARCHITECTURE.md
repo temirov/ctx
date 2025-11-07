@@ -16,6 +16,7 @@ how the CLI is assembled or when you are extending the codebase.
 - `internal/output`: Toon, JSON, XML, and raw renderers that subscribe to stream events.
 - `internal/docs` and `internal/docs/githubdoc`: documentation collector plus GitHub fetcher used by `ctx doc` and docs
   attempts.
+- `internal/discover`: dependency detectors (Go, JavaScript, Python), registry clients, and documentation writers used by `ctx doc discover`.
 - `internal/callchain`: analyser registry and language-specific call-chain analysers for Go, Python, and JavaScript.
 - `internal/tokenizer`: token counting backends, helper process orchestration, and CLI adapters.
 - `internal/config`: configuration discovery/merging and `ctx --init` scaffolding.
@@ -36,6 +37,7 @@ how the CLI is assembled or when you are extending the codebase.
 - `internal/services/stream` defines the event schema and helper functions for building tree/content streams.
 - `internal/output` renders events to Toon, JSON, XML, or raw text while keeping the schemas aligned.
 - `internal/docs` orchestrates documentation collection from local analysis and GitHub fetches.
+- `internal/discover` scans dependency manifests, resolves repositories via npm/PyPI metadata, fetches upstream documentation through the shared GitHub client, and writes Markdown bundles plus manifests for `ctx doc discover`.
 - `internal/tokenizer` chooses a token backend based on the configured model and runs helper processes when required.
 - `internal/services/mcp` wraps the CLI surface in an HTTP server for MCP clients.
 
@@ -75,6 +77,21 @@ attach these entries to files and call-chain nodes when documentation modes dema
 
 Documentation mode (`--doc disabled|relevant|full`) controls what gets embedded: `relevant` includes only locally
 referenced symbols; `full` augments with GitHub documentation bundles.
+
+## Dependency Documentation Discovery
+
+`ctx doc discover` reuses the same GitHub fetcher but adds a discovery layer:
+
+- `internal/discover/detector_go` parses `go.mod`, filters indirect modules (unless `--include-indirect`), and maps GitHub
+  module paths to repositories.
+- `internal/discover/detector_js` reads `package.json`, queries the npm registry (override with `--npm-registry-base`),
+  and extracts GitHub repositories from package metadata. Dev dependencies opt in via `--include-dev`.
+- `internal/discover/detector_python` parses `requirements*.txt` and `pyproject.toml`, resolves projects through the
+  PyPI JSON API (override with `--pypi-registry-base`), and maps `project_urls` to GitHub.
+- `discover.Runner` fans out over dependencies with bounded concurrency, fetches documentation from GitHub (respecting
+  `--rules` cleanup and hidden `--api-base` overrides), and writes Markdown bundles to `doc/dependencies/<ecosystem>/`.
+- A manifest (text summary or `--format json`) records status, output paths, and failure reasons so automation can
+  consume the results or feed them into CI.
 
 ## Call Chain Analysis
 
@@ -136,6 +153,8 @@ These tests verify event ordering and renderer behaviour.
 - Global configuration lives at `$HOME/.ctx/config.yaml`; local configuration defaults to `<project>/config.yaml`.
 - `config.LoadApplicationConfiguration` merges global, then local, then command-line overrides. `normalizeCopySettings`
   keeps legacy `clipboard` fields compatible with `copy`/`copy_only`.
+- The `doc_discover` block configures discovery defaults (output dir, ecosystems, include/exclude patterns, concurrency,
+  registry overrides, and clipboard preferences) so CI pipelines can run `ctx doc discover` without flags.
 - `config.InitializeConfiguration` (`ctx --init [local|global]`) scaffolds a template configuration and honours
   `--force`.
 - `config.StreamCommandConfiguration` stores per-command defaults for format, documentation mode, docs attempts, token
