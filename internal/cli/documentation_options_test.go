@@ -30,14 +30,21 @@ func TestDocumentationOptionsRemoteRequiresFullMode(t *testing.T) {
 	}
 }
 
-func TestDocumentationOptionsRemoteRequiresToken(t *testing.T) {
-	_, err := newDocumentationOptions(documentationOptionsParameters{
+func TestDocumentationOptionsRemoteAllowsMissingToken(t *testing.T) {
+	options, err := newDocumentationOptions(documentationOptionsParameters{
 		Mode:          types.DocumentationModeFull,
 		RemoteEnabled: true,
 		TokenResolver: staticTokenResolver{err: errGitHubTokenMissing},
 	})
-	if err == nil || !errors.Is(err, errGitHubTokenMissing) {
-		t.Fatalf("expected missing token error, got %v", err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	collectorOptions := options.CollectorOptions()
+	if !collectorOptions.RemoteAttempt.Enabled {
+		t.Fatalf("expected remote attempt to remain enabled")
+	}
+	if collectorOptions.RemoteAttempt.AuthorizationToken != "" {
+		t.Fatalf("expected empty token, got %q", collectorOptions.RemoteAttempt.AuthorizationToken)
 	}
 }
 
@@ -81,9 +88,10 @@ func TestDocumentationOptionsAllowsMissingTokenWhenRemoteDisabled(t *testing.T) 
 }
 
 func TestEnvironmentGitHubTokenResolverPrefersPrimary(t *testing.T) {
-	resolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvFallback)
+	resolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvSecondary, githubTokenEnvTertiary)
 	t.Setenv(githubTokenEnvPrimary, " primary-token ")
-	t.Setenv(githubTokenEnvFallback, " fallback-token ")
+	t.Setenv(githubTokenEnvSecondary, " secondary-token ")
+	t.Setenv(githubTokenEnvTertiary, " tertiary-token ")
 	token, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("unexpected error resolving token: %v", err)
@@ -94,24 +102,40 @@ func TestEnvironmentGitHubTokenResolverPrefersPrimary(t *testing.T) {
 }
 
 func TestEnvironmentGitHubTokenResolverFallsBack(t *testing.T) {
-	resolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvFallback)
+	resolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvSecondary, githubTokenEnvTertiary)
 	t.Setenv(githubTokenEnvPrimary, "   ")
-	t.Setenv(githubTokenEnvFallback, " fallback-token ")
+	t.Setenv(githubTokenEnvSecondary, " secondary-token ")
+	t.Setenv(githubTokenEnvTertiary, " tertiary-token ")
 	token, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("unexpected error resolving token: %v", err)
 	}
-	if token != "fallback-token" {
-		t.Fatalf("expected fallback token, got %q", token)
+	if token != "secondary-token" {
+		t.Fatalf("expected secondary token, got %q", token)
 	}
 }
 
 func TestEnvironmentGitHubTokenResolverSignalsMissingToken(t *testing.T) {
-	resolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvFallback)
+	resolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvSecondary, githubTokenEnvTertiary)
 	t.Setenv(githubTokenEnvPrimary, "")
-	t.Setenv(githubTokenEnvFallback, "")
+	t.Setenv(githubTokenEnvSecondary, "")
+	t.Setenv(githubTokenEnvTertiary, "")
 	_, err := resolver.Resolve()
 	if err == nil || !errors.Is(err, errGitHubTokenMissing) {
 		t.Fatalf("expected missing token error, got %v", err)
+	}
+}
+
+func TestEnvironmentGitHubTokenResolverUsesTertiaryFallback(t *testing.T) {
+	resolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvSecondary, githubTokenEnvTertiary)
+	t.Setenv(githubTokenEnvPrimary, "")
+	t.Setenv(githubTokenEnvSecondary, "   ")
+	t.Setenv(githubTokenEnvTertiary, " tertiary-token ")
+	token, err := resolver.Resolve()
+	if err != nil {
+		t.Fatalf("unexpected error resolving token: %v", err)
+	}
+	if token != "tertiary-token" {
+		t.Fatalf("expected tertiary token, got %q", token)
 	}
 }

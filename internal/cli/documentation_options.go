@@ -41,7 +41,7 @@ func newDocumentationOptions(params documentationOptionsParameters) (documentati
 	if params.TokenResolver != nil {
 		token, tokenErr := params.TokenResolver.Resolve()
 		if tokenErr != nil {
-			if params.RemoteEnabled || !errors.Is(tokenErr, errGitHubTokenMissing) {
+			if !errors.Is(tokenErr, errGitHubTokenMissing) {
 				return documentationOptions{}, fmt.Errorf("resolve GitHub token: %w", tokenErr)
 			}
 		} else {
@@ -57,9 +57,6 @@ func newDocumentationOptions(params documentationOptionsParameters) (documentati
 	if params.RemoteEnabled {
 		if normalizedMode != types.DocumentationModeFull {
 			return documentationOptions{}, fmt.Errorf("remote documentation requires %s mode", types.DocumentationModeFull)
-		}
-		if authorizationToken == "" {
-			return documentationOptions{}, fmt.Errorf("resolve GitHub token: %w", errGitHubTokenMissing)
 		}
 		result.remote = documentationRemoteOptions{
 			enabled:            true,
@@ -104,25 +101,21 @@ type githubTokenResolver interface {
 }
 
 type environmentGitHubTokenResolver struct {
-	primaryEnv  string
-	fallbackEnv string
+	environmentVariables []string
 }
 
-func newEnvironmentGitHubTokenResolver(primaryEnv string, fallbackEnv string) environmentGitHubTokenResolver {
+func newEnvironmentGitHubTokenResolver(environmentVariables ...string) environmentGitHubTokenResolver {
 	return environmentGitHubTokenResolver{
-		primaryEnv:  primaryEnv,
-		fallbackEnv: fallbackEnv,
+		environmentVariables: append([]string(nil), environmentVariables...),
 	}
 }
 
 func (resolver environmentGitHubTokenResolver) Resolve() (string, error) {
-	primary := strings.TrimSpace(os.Getenv(resolver.primaryEnv))
-	if primary != "" {
-		return primary, nil
-	}
-	fallback := strings.TrimSpace(os.Getenv(resolver.fallbackEnv))
-	if fallback != "" {
-		return fallback, nil
+	for _, name := range resolver.environmentVariables {
+		trimmed := strings.TrimSpace(os.Getenv(name))
+		if trimmed != "" {
+			return trimmed, nil
+		}
 	}
 	return "", errGitHubTokenMissing
 }

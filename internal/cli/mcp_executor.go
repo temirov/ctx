@@ -156,7 +156,11 @@ func executeCallChainCommand(commandContext context.Context, request mcp.Command
 	if docsAttempt && documentationMode != types.DocumentationModeFull && len(payload.Documentation) == 0 {
 		documentationMode = types.DocumentationModeFull
 	}
-	tokenResolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvFallback)
+	tokenResolver := newEnvironmentGitHubTokenResolver(
+		githubTokenEnvPrimary,
+		githubTokenEnvSecondary,
+		githubTokenEnvTertiary,
+	)
 	documentationOptions, documentationOptionsErr := newDocumentationOptions(documentationOptionsParameters{
 		Mode:          documentationMode,
 		RemoteEnabled: docsAttempt,
@@ -237,7 +241,11 @@ func executeDocCommand(commandContext context.Context, request mcp.CommandReques
 		}
 		ruleSet = loadedRuleSet
 	}
-	tokenResolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvFallback)
+	tokenResolver := newEnvironmentGitHubTokenResolver(
+		githubTokenEnvPrimary,
+		githubTokenEnvSecondary,
+		githubTokenEnvTertiary,
+	)
 	documentationOptions, documentationOptionsErr := newDocumentationOptions(documentationOptionsParameters{
 		Mode:          mode,
 		TokenResolver: tokenResolver,
@@ -334,7 +342,11 @@ func parseStreamRequest(payload json.RawMessage, defaults streamConfigurationDef
 func invokeStreamCommand(commandContext context.Context, parameters streamExecutionParameters) (mcp.CommandResponse, error) {
 	var outputBuffer bytes.Buffer
 	var warningBuffer bytes.Buffer
-	tokenResolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvFallback)
+	tokenResolver := newEnvironmentGitHubTokenResolver(
+		githubTokenEnvPrimary,
+		githubTokenEnvSecondary,
+		githubTokenEnvTertiary,
+	)
 	documentationOptions, documentationOptionsErr := newDocumentationOptions(documentationOptionsParameters{
 		Mode:          parameters.documentationMode,
 		RemoteEnabled: parameters.docsAttempt,

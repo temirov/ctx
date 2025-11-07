@@ -148,8 +148,9 @@ Optional parameters:
 	repositoryPathFlagName    = "path"
 	repositoryRulesFlagName   = "rules"
 	repositoryAPIBaseFlagName = "api-base"
-	githubTokenEnvPrimary     = "GITHUB_TOKEN"
-	githubTokenEnvFallback    = "GITHUB_API_TOKEN"
+	githubTokenEnvPrimary     = "GH_TOKEN"
+	githubTokenEnvSecondary   = "GITHUB_TOKEN"
+	githubTokenEnvTertiary    = "GITHUB_API_TOKEN"
 
 	docTitleTemplate    = "# Documentation for %s/%s (%s)\n\n"
 	docHeaderTemplate   = "## %s\n\n"
@@ -446,7 +447,11 @@ func createContentCommand(clipboardProvider clipboard.Copier, copyFlag *bool, co
 			if documentationErr != nil {
 				return fmt.Errorf("configure documentation: %w", documentationErr)
 			}
-			tokenResolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvFallback)
+			tokenResolver := newEnvironmentGitHubTokenResolver(
+				githubTokenEnvPrimary,
+				githubTokenEnvSecondary,
+				githubTokenEnvTertiary,
+			)
 			documentationOptions, documentationOptionsErr := newDocumentationOptions(documentationOptionsParameters{
 				Mode:          effectiveDocumentationMode,
 				RemoteEnabled: docsAttempt,
@@ -543,7 +548,11 @@ func createCallChainCommand(clipboardProvider clipboard.Copier, copyFlag *bool, 
 			if documentationErr != nil {
 				return documentationErr
 			}
-			tokenResolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvFallback)
+			tokenResolver := newEnvironmentGitHubTokenResolver(
+				githubTokenEnvPrimary,
+				githubTokenEnvSecondary,
+				githubTokenEnvTertiary,
+			)
 			documentationOptions, documentationOptionsErr := newDocumentationOptions(documentationOptionsParameters{
 				Mode:          effectiveDocumentationMode,
 				RemoteEnabled: docsAttempt,
@@ -649,7 +658,11 @@ func createDocCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOn
 			if copyOnlyEnabled {
 				copyEnabled = true
 			}
-			tokenResolver := newEnvironmentGitHubTokenResolver(githubTokenEnvPrimary, githubTokenEnvFallback)
+			tokenResolver := newEnvironmentGitHubTokenResolver(
+				githubTokenEnvPrimary,
+				githubTokenEnvSecondary,
+				githubTokenEnvTertiary,
+			)
 			documentationOptions, documentationErr := newDocumentationOptions(documentationOptionsParameters{
 				Mode:          mode,
 				TokenResolver: tokenResolver,
