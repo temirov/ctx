@@ -89,7 +89,7 @@ referenced symbols; `full` augments with GitHub documentation bundles.
 - `internal/discover/detector_python` parses `requirements*.txt` and `pyproject.toml`, resolves projects through the
   PyPI JSON API (override with `--pypi-registry-base`), and maps `project_urls` to GitHub.
 - `discover.Runner` fans out over dependencies with bounded concurrency, fetches documentation from GitHub (respecting
-  `--rules` cleanup and hidden `--api-base` overrides), and writes Markdown bundles to `doc/dependencies/<ecosystem>/`.
+  `--rules` cleanup and hidden `--api-base` overrides), and writes Markdown bundles to `docs/dependencies/<ecosystem>/`.
 - A manifest (text summary or `--format json`) records status, output paths, and failure reasons so automation can
   consume the results or feed them into CI.
 

@@ -134,7 +134,7 @@ Optional parameters:
   ctx doc --path https://github.com/example/project/tree/main/docs`
 	docDiscoverUse              = "discover [path]"
 	docDiscoverShortDescription = "generate local dependency documentation"
-	docDiscoverLongDescription  = `Scan a project for dependencies (Go modules, npm packages, Python requirements) and write curated documentation bundles to doc/dependencies.
+	docDiscoverLongDescription  = `Scan a project for dependencies (Go modules, npm packages, Python requirements) and write curated documentation bundles to docs/dependencies.
 
 Provide an optional path argument or --root to set the project directory. Use --format json to emit a manifest instead of human-readable output.`
 	docDiscoverFormatText              = "text"

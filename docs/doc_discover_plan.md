@@ -2,7 +2,7 @@
 
 ## Objectives
 
-- Introduce `ctx doc discover`, a subcommand that inspects a project, identifies its major dependencies across supported ecosystems, and writes curated documentation bundles into a local `doc/dependencies` tree.
+- Introduce `ctx doc discover`, a subcommand that inspects a project, identifies its major dependencies across supported ecosystems, and writes curated documentation bundles into a local `docs/dependencies` tree.
 - Reuse existing streaming/documentation infrastructure (`internal/docs`, `internal/docs/githubdoc`, `internal/output`) while adding a discovery layer that can evolve independently.
 - Keep the plan implementation-ready for CT-101 by outlining UX, architecture, heuristics, validation, and testing.
 
@@ -12,7 +12,7 @@
   - Local project analysis (default `.` or `--path <dir>`).
   - Dependency discovery for Go (via `go.mod`/`go.sum`), JavaScript/TypeScript/CSS (via `package.json`, import maps, CDN manifests), and Python (via `pyproject.toml`/`requirements.txt`).
   - Mapping dependencies to canonical documentation sources (prefer GitHub repositories, fall back to official doc sites).
-  - Fetching documentation with concurrent HTTP calls, applying cleanup rules, and persisting Markdown files under `doc/dependencies/<ecosystem>/<name>.md`.
+  - Fetching documentation with concurrent HTTP calls, applying cleanup rules, and persisting Markdown files under `docs/dependencies/<ecosystem>/<name>.md`.
   - Configuration and flag plumbing so discovery rules are fully deterministic and reproducible.
 - **Out of scope for CT-100**
   - Actual implementation, CLI wiring, or tests (deferred to CT-101).
@@ -23,7 +23,7 @@
 - Command shape: `ctx doc discover [PATH]`.
   - `PATH` defaults to `.`.
   - Flags:
-    - `--output-dir` (default `doc/dependencies`).
+    - `--output-dir` (default `docs/dependencies`).
     - `--ecosystems` (comma-separated subset of `go,js,python`). Defaults to auto-detect all supported ones.
     - `--include` / `--exclude` glob patterns for dependency names (optional).
     - `--rules` path for cleanup rules applied to fetched docs (reusing existing doc-rule format).
@@ -57,7 +57,7 @@ cmd/ctx -> internal/cli (doc discover Cobra command)
   - `fetcher` orchestrates downloads:
     - Reuse `internal/docs/githubdoc.Fetcher` for GitHub repositories.
     - Add `httpdoc.Fetcher` for non-GitHub doc sites (simple GET with Markdown/HTML conversion using `goquery` or `bluemonday` when needed).
-  - `writer` generates files, ensures deterministic names (e.g., `doc/dependencies/go/github.com-spf13-viper.md`), and records a manifest.
+  - `writer` generates files, ensures deterministic names (e.g., `docs/dependencies/go/github.com-spf13-viper.md`), and records a manifest.
   - `summary` collects successes/failures for CLI output and JSON manifest.
 
 ## Discovery Strategies by Ecosystem
