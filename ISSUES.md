@@ -43,6 +43,15 @@ Plan the execution and consider the discovery phase (we can use an llm client or
 
 ## BugFixes (300–399)
 
+- [ ] [CT-300] `ctx doc discover` does not process JS even when package.json is right at the root of the repo. Ensure we have tests for such cases
+```
+17:02:06 tyemirov@computercat:~/Development/mpr-ui [improvement/MU-108-custom-element-docs] $ ll package*
+-rw-rw-r-- 1 tyemirov tyemirov 482 Nov  7 16:59 package.json
+-rw-rw-r-- 1 tyemirov tyemirov 40K Nov  7 16:28 package-lock.json
+17:02:13 tyemirov@computercat:~/Development/mpr-ui [improvement/MU-108-custom-element-docs] $ ctx doc discover
+Dependencies processed: 0 (written: 0, skipped: 0, failed: 0)
+```
+
 ## Maintenance (400–499)
 
 - [x] [CT-400] Update the documentation @README.md and focus on the usefullness to the user. Move the technical details to ARCHITECTURE.md
