@@ -11,7 +11,7 @@ documentation, analyse call chains, or fetch documentation straight from GitHubâ
 - **Human-friendly or machine-ready output.** Toon (default), raw text, JSON, and XML renderers share the same data.
 - **Clipboard and automation built in.** Copy results, run in MCP server mode, or integrate with scripts.
 - **Optional documentation enrichment.** Embed local symbol docs or pull curated GitHub documentation alongside output.
-- **Automated dependency documentation.** `ctx doc discover` scans Go/npm/Python dependencies, fetches their upstream docs, and writes curated bundles to `doc/dependencies`.
+- **Automated dependency documentation.** `ctx doc discover` scans Go/npm/Python dependencies, fetches their upstream docs, and writes curated bundles to `docs/dependencies`.
 
 ## Quick Start
 
@@ -94,10 +94,10 @@ bundles.
 
 ### Generate dependency documentation
 
-Trace the dependencies used in your project and hydrate a local `doc/dependencies` tree (one Markdown file per package):
+Trace the dependencies used in your project and hydrate a local `docs/dependencies` tree (one Markdown file per package):
 
 ```shell
-ctx doc discover . --output-dir doc/dependencies
+ctx doc discover . --output-dir docs/dependencies
 ```
 
 - Supports Go modules (`go.mod`), npm (`package.json`), and Python (`requirements*.txt`, `pyproject.toml`) at once.

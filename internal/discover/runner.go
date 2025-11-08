@@ -30,7 +30,7 @@ func NewRunner(options Options) Runner {
 	}
 	outputDir := options.OutputDir
 	if outputDir == "" {
-		outputDir = filepath.Join(rootPath, "doc", "dependencies")
+		outputDir = filepath.Join(rootPath, "docs", "dependencies")
 	} else if !filepath.IsAbs(outputDir) {
 		outputDir = filepath.Join(rootPath, outputDir)
 	}

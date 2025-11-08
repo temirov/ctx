@@ -47,7 +47,7 @@ callchain:
   depth: 1
   documentation: false
 doc_discover:
-  output_dir: doc/dependencies
+  output_dir: docs/dependencies
   ecosystems: []
   include: []
   exclude: []

@@ -37,7 +37,8 @@ Plan the execution and consider the discovery phase (we can use an llm client or
     - Introduced tokenizer helper sentinel errors (`tokenizer.ErrHelperUnavailable`), surfaced them through the CLI with regression tests, and updated docs-attempt integration coverage to pin the new token requirement.
 - [x] [CT-210] Expand integration and unit safety nets before refactors
     - Added a Cobra-driven `content --copy-only` test, new MCP negative-path tests (method validation and nested command paths), and regression coverage for size/time/mime helpers in `internal/utils` so safety nets exist before broader refactors.
-- [ ] [CT-211] Change the folder to save discovered documentation from `doc` to `docs`
+- [x] [CT-211] Change the folder to save discovered documentation from `doc` to `docs`
+    - Default `ctx doc discover` output now targets `docs/dependencies`, including the runner default, CLI help, configuration scaffolding, docs, and tests verifying the new path.
 
 
 ## BugFixes (300–399)

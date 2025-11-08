@@ -10,6 +10,10 @@
 
 * Added `docs/doc_discover_plan.md`, capturing the CLI contract, architecture, dependency detection heuristics, and phased rollout strategy for the upcoming `ctx doc discover` feature (CT-100).
 
+### Improvements ⚙️
+
+* Switched the default `ctx doc discover` output directory from `doc/dependencies` to `docs/dependencies` so generated bundles align with standard documentation layouts (CT-211).
+
 ## [v0.3.1]
 
 ### Docs 📚
