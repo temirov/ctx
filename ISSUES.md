@@ -16,6 +16,8 @@ Plan the execution and consider the discovery phase (we can use an llm client or
 - [x] [CT-101] Implement the technical tasks delivered by CT-100. Consider integration tests with real data and ensure that the documentation for the 3rd party dependncies is pulled, processed and saved indeed
     - Implemented `ctx doc discover` with Go/npm/Python detectors, registry clients, Markdown writers, configuration support, clipboard integration, and fresh CLI/runner/unit/integration tests that verify real-world flows through mocked GitHub/npm/PyPI servers.
 
+- [ ] [CT-102] Extract documentation from a web page. Only one flavor is allowed: a provided path and a depth. The depth by default is 1 which means all links on a page will be retrieved. We consider the initial URL as the first page and we then add relevant links on the page to the extracted documentation, sanitize them and stitch together. Use https://developers.google.com/identity/sign-in/web/sign-in as an example.
+
 ## Improvements (200–299)
 
 - [x] [CT-02] add subcommands --copy-only, and add an abbreviated version of it, --co, which doesnt print the output of the command to STDOUT and only copies it to clipboard
