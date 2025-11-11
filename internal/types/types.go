@@ -12,7 +12,6 @@ const (
 	CommandContent   = "content"
 	CommandCallChain = "callchain"
 	CommandDoc       = "doc"
-	CommandDocWeb    = "doc_web"
 
 	FormatRaw  = "raw"
 	FormatToon = "toon"

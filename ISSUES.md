@@ -44,7 +44,8 @@ Plan the execution and consider the discovery phase (we can use an llm client or
     - Added a Cobra-driven `content --copy-only` test, new MCP negative-path tests (method validation and nested command paths), and regression coverage for size/time/mime helpers in `internal/utils` so safety nets exist before broader refactors.
 - [x] [CT-211] Change the folder to save discovered documentation from `doc` to `docs`
     - Default `ctx doc discover` output now targets `docs/dependencies`, including the runner default, CLI help, configuration scaffolding, docs, and tests verifying the new path.
-
+- [x] [CT-212] Remove the dedicated `doc web` subcommand and make `ctx doc` automatically fall back to the web fetcher when `--path` points to a non-GitHub HTTP(S) URL, preserving the depth control and MCP/clipboard integrations.
+    - Unified `ctx doc` so that HTTP(S) URLs trigger the existing web crawler (with a new `--web-depth` flag and MCP parity), retired the `doc web` subcommand, refreshed docs, and added helper/tests covering the detection path.
 
 ## BugFixes (300–399)
 
@@ -57,6 +58,13 @@ Plan the execution and consider the discovery phase (we can use an llm client or
 Dependencies processed: 0 (written: 0, skipped: 0, failed: 0)
 ```
     - Automatically fall back to JavaScript `devDependencies` when runtime dependencies are absent and added regression coverage for the fallback plus the explicit `--include-dev` path so dev-only repos surface documentation.
+- [ ] [CT-301] `go run ./...` shall work and invoke our cmd/ctx/main.go. Eliminate the duplication and make sure that it works
+```
+12:11:44 tyemirov@Vadyms-MacBook-Pro:~/Development/tyemirov/ctx - [bugfix/CT-300-js-discover-root] $ go run ./...
+go: pattern ./... matches multiple packages:
+        github.com/tyemirov/ctx
+        github.com/tyemirov/ctx/cmd/ctx
+```
 
 ## Maintenance (400–499)
 

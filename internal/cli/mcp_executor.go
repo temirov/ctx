@@ -10,7 +10,6 @@ import (
 
 	"github.com/tyemirov/ctx/internal/commands"
 	"github.com/tyemirov/ctx/internal/docs/githubdoc"
-	"github.com/tyemirov/ctx/internal/docs/webdoc"
 	"github.com/tyemirov/ctx/internal/services/mcp"
 	"github.com/tyemirov/ctx/internal/types"
 )
@@ -76,11 +75,7 @@ type docRequest struct {
 	Rules         string          `json:"rules"`
 	Documentation json.RawMessage `json:"documentation"`
 	APIBase       string          `json:"apiBase"`
-}
-
-type docWebRequest struct {
-	Path  string `json:"path"`
-	Depth *int   `json:"depth"`
+	WebDepth      *int            `json:"webDepth"`
 }
 
 func mcpCommandExecutors() map[string]mcp.CommandExecutor {
@@ -89,7 +84,6 @@ func mcpCommandExecutors() map[string]mcp.CommandExecutor {
 		types.CommandContent:   mcp.CommandExecutorFunc(executeContentCommand),
 		types.CommandCallChain: mcp.CommandExecutorFunc(executeCallChainCommand),
 		types.CommandDoc:       mcp.CommandExecutorFunc(executeDocCommand),
-		types.CommandDocWeb:    mcp.CommandExecutorFunc(executeDocWebCommand),
 	}
 }
 
@@ -236,6 +230,29 @@ func executeDocCommand(commandContext context.Context, request mcp.CommandReques
 	if pathSpec == "" && !hasExplicitCoordinates {
 		pathSpec = trimmedPath
 	}
+	webPathCandidate := strings.TrimSpace(pathSpec)
+	if webPathCandidate == "" {
+		webPathCandidate = trimmedPath
+	}
+	if isWebDocumentationPath(webPathCandidate) {
+		depth := 1
+		if payload.WebDepth != nil {
+			depth = *payload.WebDepth
+		}
+		var outputBuffer bytes.Buffer
+		options := docWebCommandOptions{
+			Path:   webPathCandidate,
+			Depth:  depth,
+			Writer: &outputBuffer,
+		}
+		if runErr := runDocWebCommand(commandContext, options); runErr != nil {
+			return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("execute doc web fetcher: %w", runErr))
+		}
+		return mcp.CommandResponse{
+			Output: outputBuffer.String(),
+			Format: types.FormatRaw,
+		}, nil
+	}
 	coordinates, coordinatesErr := resolveRepositoryCoordinates(pathSpec, payload.Owner, payload.Repository, payload.Reference, rootPath)
 	if coordinatesErr != nil {
 		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("resolve repository: %w", coordinatesErr))
@@ -272,37 +289,6 @@ func executeDocCommand(commandContext context.Context, request mcp.CommandReques
 	}
 	if runErr := runDocCommand(commandContext, options); runErr != nil {
 		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("execute doc: %w", runErr))
-	}
-	return mcp.CommandResponse{
-		Output: outputBuffer.String(),
-		Format: types.FormatRaw,
-	}, nil
-}
-
-func executeDocWebCommand(commandContext context.Context, request mcp.CommandRequest) (mcp.CommandResponse, error) {
-	var payload docWebRequest
-	if len(request.Payload) > 0 {
-		if err := json.Unmarshal(request.Payload, &payload); err != nil {
-			return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("decode doc web request: %w", err))
-		}
-	}
-	path := strings.TrimSpace(payload.Path)
-	if path == "" {
-		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("path is required"))
-	}
-	depth := 1
-	if payload.Depth != nil {
-		depth = *payload.Depth
-	}
-	var outputBuffer bytes.Buffer
-	options := docWebCommandOptions{
-		Path:    path,
-		Depth:   depth,
-		Writer:  &outputBuffer,
-		Fetcher: webdoc.NewFetcher(nil),
-	}
-	if runErr := runDocWebCommand(commandContext, options); runErr != nil {
-		return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("execute doc web: %w", runErr))
 	}
 	return mcp.CommandResponse{
 		Output: outputBuffer.String(),

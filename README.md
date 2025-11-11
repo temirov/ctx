@@ -80,9 +80,9 @@ Trace callers and callees across Go, Python, and JavaScript.
 ctx callchain fmt.Println --depth 2 --format json
 ```
 
-### Fetch GitHub documentation
+### Fetch documentation
 
-Render docs stored in remote repositories:
+Render documentation from GitHub repositories or public web pages:
 
 ```shell
 ctx doc --path example/project/docs --doc full
@@ -90,7 +90,12 @@ ctx doc --path example/project/docs --doc full
 
 Provide repository coordinates (`owner/repo[/path]`) or a GitHub URL. Combine `--ref`, `--rules`, and clipboard flags as
 needed. Use `--doc relevant` to limit output to referenced symbols or `--doc full` to include entire documentation
-bundles.
+bundles. When `--path` points to a non-GitHub `https://` URL, `ctx doc` automatically switches to the web crawler; use
+`--web-depth` (`0`–`3`, default `1`) to control how many same-host links are followed. Example:
+
+```shell
+ctx doc --path https://getbootstrap.com/docs/5.0/getting-started/introduction/ --web-depth 1
+```
 
 ### Generate dependency documentation
 
@@ -106,18 +111,6 @@ ctx doc discover . --output-dir docs/dependencies
 - JavaScript projects that only declare `devDependencies` automatically fall back to those packages so you still get documentation without extra flags; pass `--include-dev` to always include tooling dependencies.
 
 Remote documentation calls support anonymous access for public repositories. Export `GH_TOKEN`, `GITHUB_TOKEN`, or `GITHUB_API_TOKEN` to authenticate when working with private sources or to raise rate limits. When targeting a custom API base (for example, a mock server in tests), any placeholder token value is sufficient.
-
-### Extract web documentation
-
-Mirror a public documentation page (and its immediate links) without cloning its repository.
-
-```shell
-ctx doc web --path https://developers.google.com/identity/sign-in/web/sign-in --depth 1
-```
-
-- `--path` accepts any HTTP/HTTPS URL.
-- `--depth` controls how many same-host link levels are followed (default `1`, meaning the initial page plus its direct links).
-- Output is sanitized, stitched into Markdown-like text, and compatible with the usual `--copy`/`--copy-only` flags.
 
 ## Helpful Flags at a Glance
 
@@ -136,6 +129,7 @@ ctx <tree|t|content|c|callchain|cc|doc> [arguments] [flags]
 | `--model <name>` | tree, content | Choose the tokenizer model. |
 | `--doc <disabled|relevant|full>` | content, callchain, doc | Control documentation enrichment. |
 | `--docs-attempt` | content, callchain | Try to fetch GitHub docs for imported modules. |
+| `--web-depth <0-3>` | doc | Control link traversal depth when capturing public web pages. |
 | `--depth <number>` | callchain | Limit traversal depth (default `1`). |
 | `--copy`, `--c` | tree, content, callchain, doc | Copy output to the clipboard after rendering. |
 | `--copy-only`, `--co` | tree, content, callchain, doc | Copy without printing to stdout. |

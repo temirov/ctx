@@ -199,3 +199,43 @@ func (clipboard *recordingClipboard) Copy(text string) error {
 	clipboard.copiedText = text
 	return clipboard.err
 }
+
+func TestIsWebDocumentationPath(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{
+			name:     "external url",
+			input:    "https://getbootstrap.com/docs/5.0/getting-started/introduction/",
+			expected: true,
+		},
+		{
+			name:     "github url",
+			input:    "https://github.com/example/project/tree/main/docs",
+			expected: false,
+		},
+		{
+			name:     "raw githubusercontent",
+			input:    "https://raw.githubusercontent.com/example/project/README.md",
+			expected: false,
+		},
+		{
+			name:     "owner repo",
+			input:    "example/project",
+			expected: false,
+		},
+	}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			result := isWebDocumentationPath(testCase.input)
+			if result != testCase.expected {
+				t.Fatalf("expected %v for %q, got %v", testCase.expected, testCase.input, result)
+			}
+		})
+	}
+}

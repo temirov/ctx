@@ -16,7 +16,7 @@ how the CLI is assembled or when you are extending the codebase.
 - `internal/output`: Toon, JSON, XML, and raw renderers that subscribe to stream events.
 - `internal/docs` and `internal/docs/githubdoc`: documentation collector plus GitHub fetcher used by `ctx doc` and docs
   attempts.
-- `internal/docs/webdoc`: HTML crawler/sanitizer used by `ctx doc web` for depth-limited same-host extraction.
+- `internal/docs/webdoc`: HTML crawler/sanitizer used by `ctx doc` whenever `--path` points to a non-GitHub HTTPS URL, providing depth-limited same-host extraction.
 - `internal/discover`: dependency detectors (Go, JavaScript, Python), registry clients, and documentation writers used by `ctx doc discover`.
 - `internal/callchain`: analyser registry and language-specific call-chain analysers for Go, Python, and JavaScript.
 - `internal/tokenizer`: token counting backends, helper process orchestration, and CLI adapters.

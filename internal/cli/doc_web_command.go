@@ -34,7 +34,7 @@ func runDocWebCommand(ctx context.Context, options docWebCommandOptions) error {
 	}
 	targetPath := strings.TrimSpace(options.Path)
 	if targetPath == "" {
-		return fmt.Errorf("doc web requires a non-empty --%s value", docWebPathFlagName)
+		return fmt.Errorf("doc command requires a non-empty --%s value for web URLs", repositoryPathFlagName)
 	}
 	if options.Depth < webdoc.MinDepth {
 		return fmt.Errorf("depth must be >= %d", webdoc.MinDepth)
