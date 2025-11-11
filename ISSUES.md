@@ -48,7 +48,7 @@ Plan the execution and consider the discovery phase (we can use an llm client or
 
 ## BugFixes (300–399)
 
-- [ ] [CT-300] `ctx doc discover` does not process JS even when package.json is right at the root of the repo. Ensure we have tests for such cases
+- [x] [CT-300] `ctx doc discover` does not process JS even when package.json is right at the root of the repo. Ensure we have tests for such cases
 ```
 17:02:06 tyemirov@computercat:~/Development/mpr-ui [improvement/MU-108-custom-element-docs] $ ll package*
 -rw-rw-r-- 1 tyemirov tyemirov 482 Nov  7 16:59 package.json
@@ -56,6 +56,7 @@ Plan the execution and consider the discovery phase (we can use an llm client or
 17:02:13 tyemirov@computercat:~/Development/mpr-ui [improvement/MU-108-custom-element-docs] $ ctx doc discover
 Dependencies processed: 0 (written: 0, skipped: 0, failed: 0)
 ```
+    - Automatically fall back to JavaScript `devDependencies` when runtime dependencies are absent and added regression coverage for the fallback plus the explicit `--include-dev` path so dev-only repos surface documentation.
 
 ## Maintenance (400–499)
 

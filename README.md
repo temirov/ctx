@@ -103,6 +103,7 @@ ctx doc discover . --output-dir docs/dependencies
 - Supports Go modules (`go.mod`), npm (`package.json`), and Python (`requirements*.txt`, `pyproject.toml`) at once.
 - Toggle ecosystems with `--ecosystems go,js,python`, include dev tooling via `--include-dev`, and capture indirect Go modules with `--include-indirect`.
 - Emit machine-readable manifests for automation with `--format json`.
+- JavaScript projects that only declare `devDependencies` automatically fall back to those packages so you still get documentation without extra flags; pass `--include-dev` to always include tooling dependencies.
 
 Remote documentation calls support anonymous access for public repositories. Export `GH_TOKEN`, `GITHUB_TOKEN`, or `GITHUB_API_TOKEN` to authenticate when working with private sources or to raise rate limits. When targeting a custom API base (for example, a mock server in tests), any placeholder token value is sufficient.
 

@@ -14,6 +14,7 @@
 ### Improvements ⚙️
 
 * Switched the default `ctx doc discover` output directory from `doc/dependencies` to `docs/dependencies` so generated bundles align with standard documentation layouts (CT-211).
+* Updated the JavaScript detector to fall back to `devDependencies` when a project has no runtime dependencies, ensuring `ctx doc discover` still surfaces documentation for repositories like `mpr-ui` without extra flags (CT-300).
 
 ## [v0.3.1]
 

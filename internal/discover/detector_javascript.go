@@ -37,6 +37,10 @@ func (detector javaScriptDetector) Detect(ctx context.Context, rootPath string, 
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return nil, fmt.Errorf("parse package.json: %w", err)
 	}
+	includeDevDependencies := options.IncludeDev
+	if !includeDevDependencies && len(manifest.Dependencies) == 0 && len(manifest.DevDependencies) > 0 {
+		includeDevDependencies = true
+	}
 	var dependencies []Dependency
 	seen := map[string]struct{}{}
 	appendDependency := func(name string, version string) {
@@ -76,7 +80,7 @@ func (detector javaScriptDetector) Detect(ctx context.Context, rootPath string, 
 	for name, version := range manifest.Dependencies {
 		appendDependency(name, version)
 	}
-	if options.IncludeDev {
+	if includeDevDependencies {
 		for name, version := range manifest.DevDependencies {
 			appendDependency(name, version)
 		}
