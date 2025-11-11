@@ -113,16 +113,17 @@ Use --depth to control traversal depth, --format for output selection, and --doc
 
 	docUse              = "doc"
 	docAlias            = "d"
-	docShortDescription = "retrieve GitHub documentation (" + docAlias + ")"
-	docLongDescription  = `Fetch and render documentation stored in a GitHub repository path.
+	docShortDescription = "retrieve documentation from GitHub or the web (" + docAlias + ")"
+	docLongDescription  = `Fetch and render documentation stored in a GitHub repository path or a public web page.
 
 Required parameters:
-  --path accepts owner/repo[/path] or https://github.com/owner/repo[...path] values.
+  --path accepts owner/repo[/path], https://github.com/owner/repo[...path], or another https:// URL to capture.
 
 Optional parameters:
-  --ref selects the git branch, tag, or commit to read.
+  --ref selects the git branch, tag, or commit to read (GitHub repositories only).
   --rules points to a documentation cleanup rule set for pruning files.
   --doc controls the amount of fetched documentation included in the output.
+  --web-depth controls link traversal depth for external pages (0–3; defaults to 1).
   --copy copies the rendered documentation to the system clipboard.`
 	docUsageExample = `  # Use explicit repository coordinates
   ctx doc --path example/project/docs
@@ -131,7 +132,10 @@ Optional parameters:
   ctx doc --path example/project --ref main
 
   # Derive coordinates from a repository URL
-  ctx doc --path https://github.com/example/project/tree/main/docs`
+  ctx doc --path https://github.com/example/project/tree/main/docs
+
+  # Capture documentation from a public site with depth 1
+  ctx doc --path https://getbootstrap.com/docs/5.0/getting-started/introduction/ --web-depth 1`
 	docDiscoverUse              = "discover [path]"
 	docDiscoverShortDescription = "generate local dependency documentation"
 	docDiscoverLongDescription  = `Scan a project for dependencies (Go modules, npm packages, Python requirements) and write curated documentation bundles to docs/dependencies.
@@ -155,17 +159,20 @@ Provide an optional path argument or --root to set the project directory. Use --
 	docDiscoverFormatDescription       = "output format (text|json)"
 	docDiscoverSummaryTemplate         = "Dependencies processed: %d (written: %d, skipped: %d, failed: %d)\n"
 
+	docWebDepthFlagName    = "web-depth"
+	docWebDepthDescription = "maximum link depth for external pages (0-3); 0 fetches only the provided page"
+
 	docsAttemptFlagName        = "docs-attempt"
 	docsAttemptFlagDescription = "attempt to retrieve GitHub documentation for imported modules"
 	docsAPIBaseFlagName        = "docs-api-base"
 	docsAPIBaseFlagDescription = "GitHub API base URL for documentation attempts"
 
-	docCoordinatesRequiredMessage     = "doc command requires repository coordinates"
-	docCoordinatesGuidanceMessage     = "Provide --path with owner/repo[/path] or a GitHub URL."
+	docCoordinatesRequiredMessage     = "doc command requires repository coordinates or an HTTPS documentation URL"
+	docCoordinatesGuidanceMessage     = "Provide --path with owner/repo[/path], a GitHub URL, or another https:// documentation URL."
 	docCoordinatesHelpMessage         = `Run "ctx doc --help" for complete flag help.`
 	docMissingCoordinatesErrorMessage = docCoordinatesRequiredMessage + ". " + docCoordinatesGuidanceMessage + " " + docCoordinatesHelpMessage
 	docMissingPathErrorMessage        = "doc command requires a documentation path. " + docCoordinatesGuidanceMessage + " " + docCoordinatesHelpMessage
-	docPathFlagDescription            = "Repository coordinates (owner/repo[/path]) or GitHub URL (tree/blob)"
+	docPathFlagDescription            = "Repository coordinates (owner/repo[/path]), GitHub URL (tree/blob), or https:// documentation link"
 	docReferenceFlagDescription       = "Git reference to fetch (branch, tag, or commit)"
 	docRulesFlagDescription           = "path to cleanup rules file for documentation pruning"
 	docAPIBaseFlagDescription         = "GitHub API base URL"
@@ -641,6 +648,7 @@ func createDocCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOn
 	var repositoryReference string
 	var rulesPath string
 	var apiBase string
+	var webDepth int = 1
 	documentationMode := types.DocumentationModeFull
 
 	docCommand := &cobra.Command{
@@ -666,6 +674,24 @@ func createDocCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOn
 			if modeErr != nil {
 				return modeErr
 			}
+			writer := command.OutOrStdout()
+			copyEnabled := copyFlag != nil && *copyFlag
+			copyOnlyEnabled := copyOnlyFlag != nil && *copyOnlyFlag
+			if copyOnlyEnabled {
+				copyEnabled = true
+			}
+			trimmedPath := strings.TrimSpace(repositoryPathSpec)
+			if isWebDocumentationPath(trimmedPath) {
+				webOptions := docWebCommandOptions{
+					Path:             trimmedPath,
+					Depth:            webDepth,
+					ClipboardEnabled: copyEnabled,
+					CopyOnly:         copyOnlyEnabled,
+					Clipboard:        clipboardProvider,
+					Writer:           writer,
+				}
+				return runDocWebCommand(command.Context(), webOptions)
+			}
 			coordinates, coordinatesErr := resolveRepositoryCoordinates(repositoryPathSpec, "", "", repositoryReference, "")
 			if coordinatesErr != nil {
 				return coordinatesErr
@@ -677,12 +703,6 @@ func createDocCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOn
 					return loadErr
 				}
 				ruleSet = loadedRuleSet
-			}
-			writer := command.OutOrStdout()
-			copyEnabled := copyFlag != nil && *copyFlag
-			copyOnlyEnabled := copyOnlyFlag != nil && *copyOnlyFlag
-			if copyOnlyEnabled {
-				copyEnabled = true
 			}
 			tokenResolver := newEnvironmentGitHubTokenResolver(
 				githubTokenEnvPrimary,
@@ -717,6 +737,7 @@ func createDocCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOn
 	docCommand.Flags().StringVar(&repositoryReference, repositoryRefFlagName, "", docReferenceFlagDescription)
 	docCommand.Flags().StringVar(&rulesPath, repositoryRulesFlagName, "", docRulesFlagDescription)
 	docCommand.Flags().StringVar(&apiBase, repositoryAPIBaseFlagName, "", docAPIBaseFlagDescription)
+	docCommand.Flags().IntVar(&webDepth, docWebDepthFlagName, 1, docWebDepthDescription)
 	docCommand.Flags().StringVar(&documentationMode, documentationFlagName, types.DocumentationModeFull, documentationFlagDescription)
 	if docFlag := docCommand.Flags().Lookup(documentationFlagName); docFlag != nil {
 		docFlag.NoOptDefVal = types.DocumentationModeFull
@@ -1796,6 +1817,30 @@ func parseGitHubRepositoryURL(raw string) (repositoryCoordinates, error) {
 	return coords, nil
 }
 
+func isWebDocumentationPath(raw string) bool {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return false
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+	default:
+		return false
+	}
+	host := strings.ToLower(parsed.Host)
+	if host == "" {
+		return false
+	}
+	if strings.Contains(host, "github.com") || strings.Contains(host, "githubusercontent.com") {
+		return false
+	}
+	return true
+}
+
 func trimDocumentsForMode(documents []githubdoc.Document, mode string) []githubdoc.Document {
 	if mode != types.DocumentationModeRelevant {
 		return documents
@@ -1849,7 +1894,7 @@ func mcpCapabilities() []mcp.Capability {
 		},
 		{
 			Name:        types.CommandDoc,
-			Description: "Retrieve GitHub documentation as Markdown. Flags: path (string), ref (string), rules (string), doc (string), copy (bool).",
+			Description: "Retrieve documentation from GitHub or external HTTPS pages as Markdown. Flags: path (string), ref (string), rules (string), doc (string), web-depth (int), copy (bool).",
 		},
 	}
 }

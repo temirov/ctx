@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -217,6 +218,34 @@ func TestStartMCPServerReportsEnvironment(t *testing.T) {
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatalf("server shutdown error: %v", err)
+	}
+}
+
+func TestExecuteDocCommandHandlesWebURL(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		fmt.Fprintf(writer, `<html><head><title>Sample Docs</title></head><body><p>Content</p></body></html>`)
+	}))
+	t.Cleanup(server.Close)
+
+	payload := docRequest{
+		RepositoryURL: server.URL,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("encode payload: %v", err)
+	}
+	response, execErr := executeDocCommand(context.Background(), mcp.CommandRequest{
+		Payload: data,
+	})
+	if execErr != nil {
+		t.Fatalf("execute doc command: %v", execErr)
+	}
+	if !strings.Contains(response.Output, "Sample Docs") {
+		t.Fatalf("expected output to include page title, got %q", response.Output)
+	}
+	if response.Format != types.FormatRaw {
+		t.Fatalf("unexpected format %s", response.Format)
 	}
 }
 

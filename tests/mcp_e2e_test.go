@@ -212,7 +212,7 @@ func assertCapabilitiesPayload(t *testing.T, address string) {
 		"tree":      "Display directory tree as JSON.",
 		"content":   "Show file contents as JSON.",
 		"callchain": "Analyze Go/Python/JavaScript call chains as JSON.",
-		"doc":       "Retrieve GitHub documentation as Markdown.",
+		"doc":       "Retrieve documentation from GitHub or external HTTPS pages as Markdown.",
 	}
 	for name, prefix := range expected {
 		description, ok := lookup[name]

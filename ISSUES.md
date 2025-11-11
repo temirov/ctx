@@ -16,9 +16,10 @@ Plan the execution and consider the discovery phase (we can use an llm client or
 - [x] [CT-101] Implement the technical tasks delivered by CT-100. Consider integration tests with real data and ensure that the documentation for the 3rd party dependncies is pulled, processed and saved indeed
     - Implemented `ctx doc discover` with Go/npm/Python detectors, registry clients, Markdown writers, configuration support, clipboard integration, and fresh CLI/runner/unit/integration tests that verify real-world flows through mocked GitHub/npm/PyPI servers.
 
-- [ ] [CT-102] Add an ability of extracting documentation from a web page. Only one flavor of CLI is allowed: a provided path and a depth. The depth by default is 1 which means all links on a page will be retrieved. We consider the initial URL as the first page and we then add relevant links on the page to the extracted documentation, sanitize them and stitch together the documentation. 
+- [x] [CT-102] Add an ability of extracting documentation from a web page. Only one flavor of CLI is allowed: a provided path and a depth. The depth by default is 1 which means all links on a page will be retrieved. We consider the initial URL as the first page and we then add relevant links on the page to the extracted documentation, sanitize them and stitch together the documentation. 
     - Use https://developers.google.com/identity/sign-in/web/sign-in as an example
     - https://getbootstrap.com/docs/5.0/getting-started/introduction/ is another example
+    - Delivered `ctx doc web` with depth-limited same-host crawling, regex-based sanitization, MCP support, tests, and README/architecture updates so external docs can be captured without cloning repositories.
 
 ## Improvements (200–299)
 
@@ -43,17 +44,26 @@ Plan the execution and consider the discovery phase (we can use an llm client or
     - Added a Cobra-driven `content --copy-only` test, new MCP negative-path tests (method validation and nested command paths), and regression coverage for size/time/mime helpers in `internal/utils` so safety nets exist before broader refactors.
 - [x] [CT-211] Change the folder to save discovered documentation from `doc` to `docs`
     - Default `ctx doc discover` output now targets `docs/dependencies`, including the runner default, CLI help, configuration scaffolding, docs, and tests verifying the new path.
-
+- [x] [CT-212] Remove the dedicated `doc web` subcommand and make `ctx doc` automatically fall back to the web fetcher when `--path` points to a non-GitHub HTTP(S) URL, preserving the depth control and MCP/clipboard integrations.
+    - Unified `ctx doc` so that HTTP(S) URLs trigger the existing web crawler (with a new `--web-depth` flag and MCP parity), retired the `doc web` subcommand, refreshed docs, and added helper/tests covering the detection path.
 
 ## BugFixes (300–399)
 
-- [ ] [CT-300] `ctx doc discover` does not process JS even when package.json is right at the root of the repo. Ensure we have tests for such cases
+- [x] [CT-300] `ctx doc discover` does not process JS even when package.json is right at the root of the repo. Ensure we have tests for such cases
 ```
 17:02:06 tyemirov@computercat:~/Development/mpr-ui [improvement/MU-108-custom-element-docs] $ ll package*
 -rw-rw-r-- 1 tyemirov tyemirov 482 Nov  7 16:59 package.json
 -rw-rw-r-- 1 tyemirov tyemirov 40K Nov  7 16:28 package-lock.json
 17:02:13 tyemirov@computercat:~/Development/mpr-ui [improvement/MU-108-custom-element-docs] $ ctx doc discover
 Dependencies processed: 0 (written: 0, skipped: 0, failed: 0)
+```
+    - Automatically fall back to JavaScript `devDependencies` when runtime dependencies are absent and added regression coverage for the fallback plus the explicit `--include-dev` path so dev-only repos surface documentation.
+- [ ] [CT-301] `go run ./...` shall work and invoke our cmd/ctx/main.go. Eliminate the duplication and make sure that it works
+```
+12:11:44 tyemirov@Vadyms-MacBook-Pro:~/Development/tyemirov/ctx - [bugfix/CT-300-js-discover-root] $ go run ./...
+go: pattern ./... matches multiple packages:
+        github.com/tyemirov/ctx
+        github.com/tyemirov/ctx/cmd/ctx
 ```
 
 ## Maintenance (400–499)

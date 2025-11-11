@@ -5,6 +5,7 @@
 ### Features ✨
 
 * Added `ctx doc discover`, a dependency-aware documentation generator that scans Go/npm/Python manifests, fetches upstream docs via the shared GitHub client, and writes Markdown bundles plus JSON manifests, complete with new configuration knobs (`doc_discover`), clipboard integration, and test-backed registry/GitHub stubs (CT-101).
+* `ctx doc` now accepts either GitHub coordinates or arbitrary HTTPS documentation URLs, automatically switching to the depth-limited web crawler (with a new `--web-depth` flag) instead of relying on a separate subcommand. External captures keep clipboard support and MCP parity (CT-102, CT-212).
 
 ### Docs 📚
 
@@ -13,6 +14,7 @@
 ### Improvements ⚙️
 
 * Switched the default `ctx doc discover` output directory from `doc/dependencies` to `docs/dependencies` so generated bundles align with standard documentation layouts (CT-211).
+* Updated the JavaScript detector to fall back to `devDependencies` when a project has no runtime dependencies, ensuring `ctx doc discover` still surfaces documentation for repositories like `mpr-ui` without extra flags (CT-300).
 
 ## [v0.3.1]
 

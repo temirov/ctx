@@ -75,6 +75,7 @@ type docRequest struct {
 	Rules         string          `json:"rules"`
 	Documentation json.RawMessage `json:"documentation"`
 	APIBase       string          `json:"apiBase"`
+	WebDepth      *int            `json:"webDepth"`
 }
 
 func mcpCommandExecutors() map[string]mcp.CommandExecutor {
@@ -228,6 +229,29 @@ func executeDocCommand(commandContext context.Context, request mcp.CommandReques
 	}
 	if pathSpec == "" && !hasExplicitCoordinates {
 		pathSpec = trimmedPath
+	}
+	webPathCandidate := strings.TrimSpace(pathSpec)
+	if webPathCandidate == "" {
+		webPathCandidate = trimmedPath
+	}
+	if isWebDocumentationPath(webPathCandidate) {
+		depth := 1
+		if payload.WebDepth != nil {
+			depth = *payload.WebDepth
+		}
+		var outputBuffer bytes.Buffer
+		options := docWebCommandOptions{
+			Path:   webPathCandidate,
+			Depth:  depth,
+			Writer: &outputBuffer,
+		}
+		if runErr := runDocWebCommand(commandContext, options); runErr != nil {
+			return mcp.CommandResponse{}, mcp.NewCommandExecutionError(http.StatusBadRequest, fmt.Errorf("execute doc web fetcher: %w", runErr))
+		}
+		return mcp.CommandResponse{
+			Output: outputBuffer.String(),
+			Format: types.FormatRaw,
+		}, nil
 	}
 	coordinates, coordinatesErr := resolveRepositoryCoordinates(pathSpec, payload.Owner, payload.Repository, payload.Reference, rootPath)
 	if coordinatesErr != nil {
