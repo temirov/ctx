@@ -13,8 +13,8 @@ import (
 
 const (
 	docCommandName                        = "doc"
-	docHelpMissingCoordinatesSnippet      = "doc command requires repository coordinates"
-	docHelpPathGuidanceSnippet            = "Provide --path with owner/repo[/path] or a GitHub URL."
+	docHelpMissingCoordinatesSnippet      = "doc command requires repository coordinates or an HTTPS documentation URL."
+	docHelpPathGuidanceSnippet            = "Provide --path with owner/repo[/path], a GitHub URL, or another https:// documentation URL."
 	docHelpUsageReminderSnippet           = `Run "ctx doc --help" for complete flag help.`
 	docHelpRequiredSectionSnippet         = "Required parameters"
 	docHelpOptionalSectionSnippet         = "Optional parameters"
@@ -23,7 +23,8 @@ const (
 	docHelpOptionalRulesSnippet           = "--rules string"
 	docHelpOptionalCopySnippet            = "--copy"
 	docHelpOptionalDocModeSnippet         = "--doc string"
-	docHelpRequiredUnifiedPathDetail      = "owner/repo[/path] or https://github.com/owner/repo[...path] values"
+	docHelpOptionalWebDepthSnippet        = "--web-depth int"
+	docHelpRequiredUnifiedPathDetail      = "owner/repo[/path], https://github.com/owner/repo[...path], or another https:// URL to capture"
 	docHelpDeprecatedOwnerFlagSnippet     = "--owner string"
 	docHelpDeprecatedRepositorySnippet    = "--repo string"
 	docHelpDeprecatedRepositoryURLSnippet = "--repo-url string"
@@ -225,6 +226,7 @@ func TestDocCommandHelpExplainsParameters(t *testing.T) {
 		docHelpOptionalRulesSnippet,
 		docHelpOptionalCopySnippet,
 		docHelpOptionalDocModeSnippet,
+		docHelpOptionalWebDepthSnippet,
 	}
 	for _, snippet := range optionalChecks {
 		if !strings.Contains(output, snippet) {
