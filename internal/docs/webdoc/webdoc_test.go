@@ -91,3 +91,50 @@ func TestFetcherSanitizesMarkup(t *testing.T) {
 		t.Fatalf("expected list items to remain, got %q", contents)
 	}
 }
+
+func TestFetcherResolvesRelativeLinksFromNestedPages(t *testing.T) {
+	t.Parallel()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/docs/index.html", func(writer http.ResponseWriter, request *http.Request) {
+		fmt.Fprintf(writer, `<html><body>Root<a href="setup/index.html">Setup</a><a href="guide.html">Guide</a></body></html>`)
+	})
+	mux.HandleFunc("/docs/setup/index.html", func(writer http.ResponseWriter, request *http.Request) {
+		fmt.Fprintf(writer, `<html><body>Setup<a href="../reference.html">Reference</a></body></html>`)
+	})
+	mux.HandleFunc("/docs/guide.html", func(writer http.ResponseWriter, request *http.Request) {
+		fmt.Fprintf(writer, `<html><body>Guide</body></html>`)
+	})
+	mux.HandleFunc("/docs/reference.html", func(writer http.ResponseWriter, request *http.Request) {
+		fmt.Fprintf(writer, `<html><body>Reference</body></html>`)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	fetcher := NewFetcher(server.Client())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	root := server.URL + "/docs/index.html"
+	pages, err := fetcher.Fetch(ctx, root, 2)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(pages) != 4 {
+		t.Fatalf("expected 4 pages, got %d", len(pages))
+	}
+	urls := map[string]struct{}{}
+	for _, page := range pages {
+		urls[page.URL] = struct{}{}
+	}
+	expected := []string{
+		server.URL + "/docs/index.html",
+		server.URL + "/docs/setup/index.html",
+		server.URL + "/docs/guide.html",
+		server.URL + "/docs/reference.html",
+	}
+	for _, link := range expected {
+		if _, ok := urls[link]; !ok {
+			t.Fatalf("expected to fetch %s", link)
+		}
+	}
+}

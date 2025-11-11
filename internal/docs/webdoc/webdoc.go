@@ -115,7 +115,7 @@ func (fetcher Fetcher) Fetch(ctx context.Context, rootURL string, depth int) ([]
 			continue
 		}
 		for _, link := range links {
-			normalized := fetcher.normalizeLink(parsedRoot, link)
+			normalized := fetcher.normalizeLink(parsedRoot, current.url, link)
 			if normalized == nil {
 				continue
 			}
@@ -173,13 +173,17 @@ func (fetcher Fetcher) retrievePage(ctx context.Context, target *url.URL) (*Page
 	}, links, nil
 }
 
-func (fetcher Fetcher) normalizeLink(root *url.URL, candidate *url.URL) *url.URL {
-	if candidate == nil {
+func (fetcher Fetcher) normalizeLink(root *url.URL, current *url.URL, candidate *url.URL) *url.URL {
+	if candidate == nil || root == nil {
 		return nil
 	}
 	resolved := candidate
 	if !candidate.IsAbs() {
-		resolved = root.ResolveReference(candidate)
+		base := current
+		if base == nil {
+			base = root
+		}
+		resolved = base.ResolveReference(candidate)
 	}
 	if !isSupportedScheme(resolved.Scheme) {
 		return nil
