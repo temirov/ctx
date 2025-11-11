@@ -21,6 +21,12 @@ Plan the execution and consider the discovery phase (we can use an llm client or
     - https://getbootstrap.com/docs/5.0/getting-started/introduction/ is another example
     - Delivered `ctx doc web` with depth-limited same-host crawling, regex-based sanitization, MCP support, tests, and README/architecture updates so external docs can be captured without cloning repositories.
 
+- [ ] [CT-103] Add an LLM support to format the documents as on of the lasts steps in `doc` command.
+    1. Prepare a prompt that asks to 
+        a) deduplicate the data and identify and remove repeated blocks of text unrelated to the documentation itself, such as footers, headers, privacy notes etc
+        b) Keep the documentation itself without changes and do not alter it, quoting it back verabitium
+    2. Use the LLM integration available in @tools/gix package to query LLMs
+
 ## Improvements (200–299)
 
 - [x] [CT-02] add subcommands --copy-only, and add an abbreviated version of it, --co, which doesnt print the output of the command to STDOUT and only copies it to clipboard
