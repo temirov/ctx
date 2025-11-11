@@ -106,6 +106,18 @@ ctx doc discover . --output-dir docs/dependencies
 
 Remote documentation calls support anonymous access for public repositories. Export `GH_TOKEN`, `GITHUB_TOKEN`, or `GITHUB_API_TOKEN` to authenticate when working with private sources or to raise rate limits. When targeting a custom API base (for example, a mock server in tests), any placeholder token value is sufficient.
 
+### Extract web documentation
+
+Mirror a public documentation page (and its immediate links) without cloning its repository.
+
+```shell
+ctx doc web --path https://developers.google.com/identity/sign-in/web/sign-in --depth 1
+```
+
+- `--path` accepts any HTTP/HTTPS URL.
+- `--depth` controls how many same-host link levels are followed (default `1`, meaning the initial page plus its direct links).
+- Output is sanitized, stitched into Markdown-like text, and compatible with the usual `--copy`/`--copy-only` flags.
+
 ## Helpful Flags at a Glance
 
 ```shell

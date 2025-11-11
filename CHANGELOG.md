@@ -5,6 +5,7 @@
 ### Features ✨
 
 * Added `ctx doc discover`, a dependency-aware documentation generator that scans Go/npm/Python manifests, fetches upstream docs via the shared GitHub client, and writes Markdown bundles plus JSON manifests, complete with new configuration knobs (`doc_discover`), clipboard integration, and test-backed registry/GitHub stubs (CT-101).
+* Introduced `ctx doc web`, a depth-limited web crawler that sanitizes HTML into Markdown-like text, follows same-host links up to the requested depth, and supports clipboard mirroring so external docs can be captured without cloning repositories (CT-102).
 
 ### Docs 📚
 

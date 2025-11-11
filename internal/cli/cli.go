@@ -155,6 +155,14 @@ Provide an optional path argument or --root to set the project directory. Use --
 	docDiscoverFormatDescription       = "output format (text|json)"
 	docDiscoverSummaryTemplate         = "Dependencies processed: %d (written: %d, skipped: %d, failed: %d)\n"
 
+	docWebUse              = "web"
+	docWebShortDescription = "extract documentation from a web page"
+	docWebLongDescription  = `Fetch a web page, follow same-host links up to the selected depth, sanitize the markup, and stitch the pages together as Markdown-like text. Depth defaults to 1, which includes the initial page plus its direct links.`
+	docWebPathFlagName     = "path"
+	docWebDepthFlagName    = "depth"
+	docWebPathDescription  = "root URL (http or https) to crawl"
+	docWebDepthDescription = "maximum link depth (0-3); 0 fetches only the provided page"
+
 	docsAttemptFlagName        = "docs-attempt"
 	docsAttemptFlagDescription = "attempt to retrieve GitHub documentation for imported modules"
 	docsAPIBaseFlagName        = "docs-api-base"
@@ -725,6 +733,7 @@ func createDocCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOn
 		apiFlag.Hidden = true
 	}
 	docCommand.AddCommand(createDocDiscoverCommand(clipboardProvider, copyFlag, copyOnlyFlag, applicationConfig))
+	docCommand.AddCommand(createDocWebCommand(clipboardProvider, copyFlag, copyOnlyFlag))
 	return docCommand
 }
 
@@ -897,6 +906,38 @@ func createDocDiscoverCommand(clipboardProvider clipboard.Copier, copyFlag *bool
 		pypiFlag.Hidden = true
 	}
 
+	return command
+}
+
+func createDocWebCommand(clipboardProvider clipboard.Copier, copyFlag *bool, copyOnlyFlag *bool) *cobra.Command {
+	var targetPath string
+	depth := 1
+
+	command := &cobra.Command{
+		Use:   docWebUse,
+		Short: docWebShortDescription,
+		Long:  docWebLongDescription,
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, arguments []string) error {
+			copyEnabled := copyFlag != nil && *copyFlag
+			copyOnlyEnabled := copyOnlyFlag != nil && *copyOnlyFlag
+			if copyOnlyEnabled {
+				copyEnabled = true
+			}
+			options := docWebCommandOptions{
+				Path:             targetPath,
+				Depth:            depth,
+				ClipboardEnabled: copyEnabled,
+				CopyOnly:         copyOnlyEnabled,
+				Clipboard:        clipboardProvider,
+				Writer:           cmd.OutOrStdout(),
+			}
+			return runDocWebCommand(cmd.Context(), options)
+		},
+	}
+	command.Flags().StringVar(&targetPath, docWebPathFlagName, "", docWebPathDescription)
+	command.Flags().IntVar(&depth, docWebDepthFlagName, 1, docWebDepthDescription)
+	_ = command.MarkFlagRequired(docWebPathFlagName)
 	return command
 }
 
